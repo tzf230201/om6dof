@@ -1,0 +1,23 @@
+[Unit]
+Description=OM6DOF hardware + command converter on Jetson AGX
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kublab
+Group=dialout
+Environment=HOME=/home/kublab
+# The AGX owns U2D2, ros2_control, and om6dof_controller. The Go2W adapter is
+# disabled because the Go2W stack remains on the Jetson NX.
+# JOINT/CARTESIAN/CYLINDRICAL all resolve in om6dof_controller; no second
+# process ever opens U2D2 or publishes final arm positions.
+ExecStart=/bin/bash -c 'set -e; source /opt/ros/humble/setup.bash; source /home/kublab/ros2_ws/install/setup.bash; unset CYCLONEDDS_URI; exec ros2 launch om6dof_teleop full_stack.launch.py start_go2w_teleop:=false'
+KillMode=control-group
+KillSignal=SIGINT
+TimeoutStopSec=20
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
