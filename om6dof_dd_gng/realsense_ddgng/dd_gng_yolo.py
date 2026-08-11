@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""DD-GNG nodes semantically labelled by intersecting YOLO detections.
+"""DD-GNG nodes labelled by YOLO names and RealSense 3D segmentation.
 
 The RealSense point cloud feeds the unchanged DD-GNG core. GNG nodes are
-projected into the RGB image, intersected with YOLOX bounding boxes, and depth
-gated against the foreground surface in each box. A matched node receives the
-YOLO class label and confidence.
+used as semantic seeds. For every YOLO detection, aligned RealSense depth
+segments the foreground surface and derives a robust camera-frame 3D bounding
+box. A DD-GNG node receives the YOLO class label only when it lies in that
+3D box.
 
 Optional ROS outputs:
-  * CompressedImage: annotated DD-GNG + YOLO preview
-  * String: JSON node labels with node index, class, confidence, xyz and uv
+  * CompressedImage: annotated DD-GNG + 3D box preview
+  * String: JSON node labels and 3D object boxes in camera coordinates
 """
 
 import argparse
@@ -63,6 +64,102 @@ def foreground_depth(depth, bbox, depth_scale, depth_band_m=0.06):
     if foreground.size < 10:
         return None
     return float(np.median(foreground))
+
+
+def segment_3d_box(depth, bbox, depth_scale, fx, fy, ppx, ppy,
+                   depth_band_m=0.12, min_points=40):
+    """Segment the near object surface in a YOLO ROI and return a 3D box.
+
+    YOLO supplies the class/name and 2D region.  Depth supplies the actual
+    foreground geometry.  Quantile bounds reject isolated depth outliers while
+    retaining a stable, camera-frame axis-aligned box in metres.
+    """
+    if depth is None:
+        return None
+    image_h, image_w = depth.shape[:2]
+    x, y, w, h = (int(value) for value in bbox)
+    inset_x, inset_y = int(w * 0.06), int(h * 0.06)
+    x0, x1 = max(0, x + inset_x), min(image_w, x + w - inset_x)
+    y0, y1 = max(0, y + inset_y), min(image_h, y + h - inset_y)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    raw = depth[y0:y1, x0:x1].astype(np.float64) * float(depth_scale)
+    valid = np.isfinite(raw) & (raw > Z_MIN) & (raw < Z_MAX)
+    if int(valid.sum()) < int(min_points):
+        return None
+    anchor = float(np.quantile(raw[valid], 0.15))
+    foreground = valid & (raw <= anchor + float(depth_band_m))
+    if int(foreground.sum()) < int(min_points):
+        return None
+    vv, uu = np.nonzero(foreground)
+    uu = uu.astype(np.float64) + x0
+    vv = vv.astype(np.float64) + y0
+    zz = raw[foreground]
+    points = np.column_stack(((uu - float(ppx)) / float(fx) * zz,
+                              (vv - float(ppy)) / float(fy) * zz,
+                              zz))
+    lower = np.quantile(points, 0.02, axis=0)
+    upper = np.quantile(points, 0.98, axis=0)
+    if not np.all(np.isfinite(lower)) or not np.all(np.isfinite(upper)):
+        return None
+    # A flat front surface is still an object volume.  Keep a small physical
+    # thickness so the projected box is visible and GNG nodes are not rejected
+    # solely because RealSense quantised every sample to one depth value.
+    center = (lower + upper) * 0.5
+    size = np.maximum(upper - lower, np.array([0.005, 0.005, 0.010]))
+    lower, upper = center - size * 0.5, center + size * 0.5
+    return {
+        "min": lower,
+        "max": upper,
+        "center": center,
+        "size": size,
+        "point_count": int(points.shape[0]),
+    }
+
+
+def box_corners(segment):
+    """Return the eight camera-frame corners of one segmented 3D box."""
+    lo, hi = segment["min"], segment["max"]
+    return np.array([
+        [lo[0], lo[1], lo[2]], [hi[0], lo[1], lo[2]],
+        [hi[0], hi[1], lo[2]], [lo[0], hi[1], lo[2]],
+        [lo[0], lo[1], hi[2]], [hi[0], lo[1], hi[2]],
+        [hi[0], hi[1], hi[2]], [lo[0], hi[1], hi[2]],
+    ], dtype=np.float64)
+
+
+def assign_node_labels_3d(node_xyz, detections, segments, padding_m=0.015):
+    """Label GNG nodes only when they are inside a named segmented 3D box."""
+    labels = [None] * len(node_xyz)
+    ranked = sorted(range(len(detections)),
+                    key=lambda index: float(detections[index].score),
+                    reverse=True)
+    for index in ranked:
+        segment = segments[index]
+        if segment is None:
+            continue
+        lower = segment["min"] - float(padding_m)
+        upper = segment["max"] + float(padding_m)
+        for node_index, xyz in enumerate(node_xyz):
+            if labels[node_index] is not None:
+                continue
+            if np.all(xyz >= lower) and np.all(xyz <= upper):
+                labels[node_index] = detections[index]
+    return labels
+
+
+def draw_projected_3d_box(image, segment, fx, fy, ppx, ppy, color):
+    """Project a camera-frame 3D box onto the aligned RGB image."""
+    corners = box_corners(segment)
+    uv = np.column_stack((corners[:, 0] / corners[:, 2] * float(fx) + float(ppx),
+                          corners[:, 1] / corners[:, 2] * float(fy) + float(ppy)))
+    uv = np.round(uv).astype(np.int32)
+    for first, second in ((0, 1), (1, 2), (2, 3), (3, 0),
+                          (4, 5), (5, 6), (6, 7), (7, 4),
+                          (0, 4), (1, 5), (2, 6), (3, 7)):
+        cv2.line(image, tuple(uv[first]), tuple(uv[second]), color, 2,
+                 cv2.LINE_AA)
+    return uv
 
 
 def assign_node_labels(node_uv, node_xyz, detections, detection_depths,
@@ -148,13 +245,17 @@ class AsyncYolo:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="OM6DOF DD-GNG + YOLO")
+    parser = argparse.ArgumentParser(description="OM6DOF DD-GNG + YOLO 3D segmentation")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--confidence", type=float, default=0.35)
     parser.add_argument("--nms-threshold", type=float, default=0.5)
     parser.add_argument("--yolo-period", type=float, default=0.5)
     parser.add_argument("--depth-tolerance", type=float, default=0.08)
+    parser.add_argument("--segment-depth-band", type=float, default=0.12,
+                        help="foreground depth band used for each 3D box (m)")
+    parser.add_argument("--segment-min-points", type=int, default=40,
+                        help="minimum valid foreground depth samples per box")
     parser.add_argument(
         "--classes", default="",
         help="optional comma-separated COCO classes; empty means all classes",
@@ -228,10 +329,10 @@ def main():
     node_buf = np.zeros((MAX_NODES, 3), dtype=np.float64)
     edge_buf = np.zeros((MAX_EDGES, 2), dtype=np.int32)
 
-    window = "OM6DOF DD-GNG YOLO"
+    window = "OM6DOF DD-GNG 3D Segmentation"
     if not args.headless:
         cv2.namedWindow(window, cv2.WINDOW_NORMAL)
-    print("[dd_gng_yolo] running" + (" headless" if args.headless else ""))
+    print("[dd_gng_yolo] 3D segmentation running" + (" headless" if args.headless else ""))
     previous_time = time.time()
     fps = 0.0
 
@@ -279,14 +380,14 @@ def main():
                 nodes[:, 0] / node_z * fx + ppx,
                 nodes[:, 1] / node_z * fy + ppy,
             ], axis=1).astype(np.int32)
-            detection_depths = [
-                foreground_depth(depth, item.bbox, depth_scale)
+            segments = [
+                segment_3d_box(
+                    depth, item.bbox, depth_scale, fx, fy, ppx, ppy,
+                    args.segment_depth_band, args.segment_min_points,
+                )
                 for item in detections
             ]
-            labels = assign_node_labels(
-                node_uv, nodes, detections, detection_depths,
-                args.depth_tolerance,
-            )
+            labels = assign_node_labels_3d(nodes, detections, segments)
 
             # Semantic edges inherit a class colour only when both endpoints
             # have the same YOLO label; other topology stays muted green.
@@ -335,17 +436,25 @@ def main():
                     "uv": [int(u), int(v)],
                 })
 
-            for detection, surface_z in zip(detections, detection_depths):
+            for detection, segment in zip(detections, segments):
                 x, y, w, h = detection.bbox
                 box_color = class_color(detection.class_id)
-                cv2.rectangle(color, (x, y), (x + w, y + h), box_color, 2)
+                if segment is not None:
+                    draw_projected_3d_box(
+                        color, segment, fx, fy, ppx, ppy, box_color,
+                    )
+                else:
+                    cv2.rectangle(color, (x, y), (x + w, y + h), box_color, 1)
                 count = label_counts.get(detection.class_name, 0)
                 text = (
                     f"{detection.class_name} {detection.score:.2f} | "
                     f"GNG nodes={count}"
                 )
-                if surface_z is not None:
-                    text += f" z={surface_z:.2f}m"
+                if segment is not None:
+                    size_cm = segment["size"] * 100.0
+                    center = segment["center"]
+                    text += (f" | {size_cm[0]:.0f}x{size_cm[1]:.0f}x"
+                             f"{size_cm[2]:.0f}cm z={center[2]:.2f}m")
                 cv2.putText(
                     color, text, (x, max(18, y - 6)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.48, box_color, 2,
@@ -357,8 +466,8 @@ def main():
             previous_time = now
             cv2.putText(
                 color,
-                f"DD-GNG YOLO nodes={node_count} labelled={len(labelled_nodes)} "
-                f"detections={len(detections)} fps={fps:.1f}",
+                f"DD-GNG 3D boxes={sum(item is not None for item in segments)} "
+                f"nodes={node_count} labelled={len(labelled_nodes)} fps={fps:.1f}",
                 (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
                 (255, 255, 255), 2, cv2.LINE_AA,
             )
@@ -369,6 +478,19 @@ def main():
                     "node_count": node_count,
                     "labelled_count": len(labelled_nodes),
                     "nodes": labelled_nodes,
+                    "boxes": [
+                        {
+                            "label": detection.class_name,
+                            "confidence": round(float(detection.score), 4),
+                            "center_m": [round(float(value), 5)
+                                         for value in segment["center"]],
+                            "size_m": [round(float(value), 5)
+                                       for value in segment["size"]],
+                            "point_count": segment["point_count"],
+                        }
+                        for detection, segment in zip(detections, segments)
+                        if segment is not None
+                    ],
                 }
                 labels_pub.publish(ros_types[1](data=json.dumps(payload)))
             if image_pub is not None:

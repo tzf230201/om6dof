@@ -34,19 +34,23 @@ install -m 0644 systemd/om6dof-dd-gng.service \
 systemctl --user daemon-reload
 ```
 
-Use **Start DD-GNG YOLO** / **Stop DD-GNG YOLO** in the Kublab web monitor.
-The web service runs `dd_gng_yolo.py`; its semantic node metadata is published
+Use **Start 3D segmentation** / **Stop 3D segmentation** in the Kublab web monitor.
+The web service runs `dd_gng_yolo.py`; its 3D semantic metadata is published
 on `/application_web_monitor/ddgng/labels`. DD-GNG and
 OM6DOF perception both own the RealSense directly, so the systemd service
 declares them as conflicting workloads; starting either one stops the other.
 
-## DD-GNG + YOLO semantic nodes
+## DD-GNG + YOLO 3D box segmentation
 
-`realsense_ddgng/dd_gng_yolo.py` combines the DD-GNG graph with YOLOX. A GNG
-node receives a COCO label when its projected pixel intersects a YOLO box and
-its 3D depth agrees with that object's foreground surface. This extra depth
-gate prevents background nodes inside a 2D box from being labelled as the
-object.
+`realsense_ddgng/dd_gng_yolo.py` combines the DD-GNG graph with YOLOX and
+aligned RealSense depth. YOLOX provides the object name and confidence. The
+depth values inside each detection segment the near foreground, then produce a
+robust camera-frame axis-aligned 3D bounding box. A GNG node receives that
+COCO label only when its XYZ position is inside the segmented 3D box.
+
+The overlay draws the projected 3D box and reports its width, height, depth,
+and centre distance. The JSON labels topic now also includes a `boxes` array
+with each named box's `center_m`, `size_m`, and foreground `point_count`.
 
 ```bash
 systemctl --user stop om6dof-dd-gng.service om6dof-perception.service

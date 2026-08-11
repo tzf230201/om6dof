@@ -6,7 +6,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dd_gng_yolo import assign_node_labels, foreground_depth
+from dd_gng_yolo import (
+    assign_node_labels,
+    assign_node_labels_3d,
+    box_corners,
+    foreground_depth,
+    segment_3d_box,
+)
 
 
 def detection(bbox, score=0.8, class_name="bottle", class_id=39):
@@ -68,3 +74,33 @@ def test_missing_roi_depth_falls_back_to_2d_intersection():
         [None],
     )
     assert labels == [item]
+
+
+def test_depth_segment_returns_robust_camera_frame_3d_box():
+    depth = np.full((100, 100), 1800, dtype=np.uint16)
+    depth[30:70, 35:65] = 500
+
+    segment = segment_3d_box(
+        depth, (30, 25, 40, 50), 0.001,
+        fx=100.0, fy=100.0, ppx=50.0, ppy=50.0,
+    )
+
+    assert segment is not None
+    assert segment["point_count"] > 500
+    assert np.isclose(segment["center"][2], 0.5, atol=0.01)
+    assert np.all(segment["size"] > 0.0)
+    assert box_corners(segment).shape == (8, 3)
+
+
+def test_nodes_are_labelled_only_inside_the_segmented_3d_box():
+    item = detection((0, 0, 1, 1))
+    segment = {
+        "min": np.array([-0.10, -0.08, 0.45]),
+        "max": np.array([0.10, 0.08, 0.55]),
+    }
+    labels = assign_node_labels_3d(
+        np.array([[0.0, 0.0, 0.50], [0.0, 0.0, 0.70], [0.2, 0.0, 0.5]]),
+        [item], [segment], padding_m=0.0,
+    )
+
+    assert labels == [item, None, None]
