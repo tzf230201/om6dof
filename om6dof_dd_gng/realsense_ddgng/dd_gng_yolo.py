@@ -36,6 +36,10 @@ from ddgng_realsense import (
     load_lib,
 )
 from om6dof_perception.yolox_detector import YoloXDetector
+from om6dof_perception.realsense_low_light import (
+    configure_depth_sensor,
+    load_low_light_config,
+)
 
 
 DEFAULT_MODEL = os.path.expanduser(
@@ -314,6 +318,7 @@ def main():
     config.enable_stream(rs.stream.depth, W, H, rs.format.z16, FPS)
     config.enable_stream(rs.stream.color, W, H, rs.format.bgr8, FPS)
     profile = pipe.start(config)
+    low_light = configure_depth_sensor(profile, rs, load_low_light_config())
     align = rs.align(rs.stream.color)
     depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
     intr = profile.get_stream(
@@ -332,7 +337,7 @@ def main():
     window = "OM6DOF DD-GNG 3D Segmentation"
     if not args.headless:
         cv2.namedWindow(window, cv2.WINDOW_NORMAL)
-    print("[dd_gng_yolo] 3D segmentation running" + (" headless" if args.headless else ""))
+    print("[dd_gng_yolo] 3D segmentation running; " + low_light + (" headless" if args.headless else ""))
     previous_time = time.time()
     fps = 0.0
 

@@ -36,6 +36,10 @@ import time
 import cv2
 import numpy as np
 import pyrealsense2 as rs
+from om6dof_perception.realsense_low_light import (
+    configure_depth_sensor,
+    load_low_light_config,
+)
 
 import rclpy
 from rclpy.node import Node
@@ -346,10 +350,13 @@ class PerceptionNode(Node):
                     cfg.enable_stream(rs.stream.depth, 640, 480,
                                       rs.format.z16, 30)
                     profile = pipe.start(cfg)
+                    low_light = configure_depth_sensor(
+                        profile, rs, load_low_light_config()
+                    )
                     self.depth_scale = (profile.get_device()
                                         .first_depth_sensor()
                                         .get_depth_scale())
-                    self.get_logger().info("realsense started")
+                    self.get_logger().info(f"realsense started; {low_light}")
                 except Exception as e:
                     self.get_logger().warn(f"camera open failed: {e}")
                     pipe = None

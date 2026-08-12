@@ -64,3 +64,17 @@ The labels topic is JSON containing each matched node's index, YOLO class and
 confidence, camera-frame XYZ coordinate, and projected UV pixel. Use
 `--classes bottle,cup` to restrict labelling or `--hide-node-labels` to retain
 semantic colours without drawing text beside every matched node.
+
+## Low-light RealSense depth
+
+DD-GNG reads the shared low-light configuration when it starts:
+
+```text
+~/.config/om6dof-realsense/low_light.json
+```
+
+Enable **RealSense low-light mode** in the web monitor, then start DD-GNG. It
+uses the camera's IR emitter and configured laser power when the device exposes
+those controls. The installed D405 does not expose those controls, so the mode
+uses auto exposure. YOLOX object names still use the RGB camera, so a small
+white LED is required if names must remain available in a dark scene.
