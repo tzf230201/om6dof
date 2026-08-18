@@ -17,6 +17,7 @@
 #include "dynamixel_hardware_interface/dynamixel_hardware_interface.hpp"
 
 #include <chrono>
+#include <csignal>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -26,6 +27,7 @@
 #include <unordered_map>
 #include <iomanip>
 #include <sstream>
+#include <stdexcept>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -111,6 +113,31 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
   } else {
     RCLCPP_INFO(logger_, "error_timeout_ms parameter not found, using default value of 500ms");
   }
+
+  if (info_.hardware_parameters.find("consecutive_failure_shutdown_threshold") !=
+    info_.hardware_parameters.end())
+  {
+    try {
+      consecutive_failure_shutdown_threshold_ =
+        std::stoi(info_.hardware_parameters["consecutive_failure_shutdown_threshold"]);
+      if (consecutive_failure_shutdown_threshold_ <= 0) {
+        throw std::invalid_argument("value must be greater than zero");
+      }
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR(
+        logger_,
+        "Invalid consecutive_failure_shutdown_threshold: %s; using default value 10",
+        e.what());
+      consecutive_failure_shutdown_threshold_ = 10;
+    }
+  } else {
+    RCLCPP_INFO(
+      logger_,
+      "consecutive_failure_shutdown_threshold not found, using default value 10");
+  }
+  RCLCPP_INFO(
+    logger_, "Dynamixel communication fail-safe threshold: %d consecutive failures",
+    consecutive_failure_shutdown_threshold_);
 
   // Add new parameter for torque initialization
   bool disable_torque_at_init = false;
@@ -236,7 +263,7 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     bool requires_ping = (type == "controller" || type == "dxl" || type == "sensor");
     if (requires_ping) {
       bool success = false;
-      for (int attempt = 0; attempt < 10; ++attempt) {
+      for (int attempt = 0; attempt < consecutive_failure_shutdown_threshold_; ++attempt) {
         if (dxl_comm_->InitDxlComm(comm_id, id) == DxlError::OK) {
           success = true;
           break;
@@ -629,22 +656,44 @@ hardware_interface::return_type DynamixelHardware::read(
   } else if (dxl_status_ == DXL_OK || dxl_status_ == COMM_ERROR || dxl_status_ == HW_ERROR) {
     dxl_comm_err_ = CheckError(dxl_comm_->ReadMultiDxlData(period_ms));
     if (dxl_comm_err_ != DxlError::OK && dxl_comm_err_ != DxlError::DXL_HARDWARE_ERROR) {
+      ++consecutive_read_failures_;
       if (!is_read_in_error_) {
         is_read_in_error_ = true;
         read_error_duration_ = rclcpp::Duration(0, 0);
       }
       read_error_duration_ = read_error_duration_ + period;
 
-      RCLCPP_ERROR_STREAM(
-        logger_,
+      RCLCPP_ERROR_STREAM_THROTTLE(
+        logger_, clock_, 5000,
         "Dynamixel Read Fail (Duration: " << read_error_duration_.seconds() * 1000 << "ms/" <<
-          err_timeout_ms_ << "ms)");
+          err_timeout_ms_ << "ms, consecutive attempts: " << consecutive_read_failures_ << "/" <<
+          consecutive_failure_shutdown_threshold_ << ")");
+
+      if (!fail_safe_triggered_ &&
+        consecutive_read_failures_ >= consecutive_failure_shutdown_threshold_)
+      {
+        fail_safe_triggered_ = true;
+        RCLCPP_FATAL(
+          logger_,
+          "Dynamixel communication failed %d consecutive times. Stopping the OM6DOF stack; "
+          "manual restart is required.",
+          consecutive_read_failures_);
+        std::raise(SIGTERM);
+        return hardware_interface::return_type::ERROR;
+      }
 
       if (read_error_duration_.seconds() * 1000 >= err_timeout_ms_) {
         return hardware_interface::return_type::ERROR;
       }
       return hardware_interface::return_type::OK;
     }
+    if (consecutive_read_failures_ > 0) {
+      RCLCPP_INFO_STREAM_THROTTLE(
+        logger_, clock_, 5000,
+        "Dynamixel communication recovered after " << consecutive_read_failures_ <<
+          " consecutive failures");
+    }
+    consecutive_read_failures_ = 0;
     is_read_in_error_ = false;
     read_error_duration_ = rclcpp::Duration(0, 0);
   }
@@ -696,8 +745,8 @@ hardware_interface::return_type DynamixelHardware::write(
   } else {
     write_error_duration_ = write_error_duration_ + period;
 
-    RCLCPP_ERROR_STREAM(
-      logger_,
+    RCLCPP_ERROR_STREAM_THROTTLE(
+      logger_, clock_, 5000,
       "Dynamixel Write Fail (Duration: " << write_error_duration_.seconds() * 1000 << "ms/" <<
         err_timeout_ms_ << "ms)");
 
@@ -716,7 +765,7 @@ DxlError DynamixelHardware::CheckError(DxlError dxl_comm_err)
   // check comm error
   if (dxl_comm_err != DxlError::OK) {
     RCLCPP_ERROR_STREAM_THROTTLE(
-      logger_, clock_, 1000,
+      logger_, clock_, 5000,
       "Communication Fail --> " << Dynamixel::DxlErrorToString(dxl_comm_err));
     dxl_status_ = COMM_ERROR;
     return dxl_comm_err;

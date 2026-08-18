@@ -4,6 +4,10 @@
   <xacro:arg name="baud_rate" default="1000000"/>
   <xacro:arg name="use_fake_hardware" default="false"/>
 
+  <!-- Runtime communication fail-safe settings are kept in one editable file. -->
+  <xacro:property name="hardware_safety"
+    value="${xacro.load_yaml('$(find om6dof_bringup)/config/hardware_safety.yaml')}"/>
+
   <xacro:include filename="$(find om6dof_description)/urdf/om6dof.urdf.xacro"/>
   <xacro:include filename="$(find om6dof_bringup)/urdf/om6dof.ros2_control.xacro"/>
 
@@ -11,5 +15,6 @@
     name="OM6DOFSystem"
     port_name="$(arg port_name)"
     baudrate="$(arg baud_rate)"
+    consecutive_failure_shutdown_threshold="${hardware_safety['consecutive_failure_shutdown_threshold']}"
     use_fake_hardware="$(arg use_fake_hardware)"/>
 </robot>

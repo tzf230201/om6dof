@@ -1,0 +1,3 @@
+# Number of consecutive failed U2D2/Dynamixel read attempts that stops the
+# complete OM6DOF stack. A successful read resets the counter to zero.
+consecutive_failure_shutdown_threshold: 10

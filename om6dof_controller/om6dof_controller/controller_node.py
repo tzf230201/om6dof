@@ -74,6 +74,10 @@ DEFAULT_JOINT_UPPER = (
 class OM6DOFController(Node):
     """Convert canonical six-axis jog commands into safe joint positions."""
 
+    # Class-level default so the attribute exists on every instance,
+    # including the bare nodes the tests construct without __init__.
+    last_coordinate_mode = MODE_CARTESIAN
+
     def __init__(self) -> None:
         super().__init__("om6dof_controller")
 
@@ -118,6 +122,8 @@ class OM6DOFController(Node):
         self.declare_parameter("pose_target_velocity", 0.5)
         self.declare_parameter("pose_target_tolerance", 0.01)
         self.declare_parameter("pose_target_timeout_seconds", 20.0)
+        self.declare_parameter("pose_profile_duration_seconds", 4.0)
+        self.declare_parameter("pose_profile_accel_seconds", 2.0)
 
         self.declare_parameter("ik_enabled", True)
         self.declare_parameter("ik_base_link", "world")
@@ -125,8 +131,8 @@ class OM6DOFController(Node):
         self.declare_parameter("ik_urdf_pkg", "om6dof_description")
         self.declare_parameter("ik_damping", 0.05)
         self.declare_parameter("max_cartesian_linear_velocity", 0.10)
-        self.declare_parameter("max_cartesian_angular_velocity", 1.0)
-        self.declare_parameter("max_cylindrical_theta_velocity", 0.5)
+        self.declare_parameter("max_cartesian_angular_velocity", 1.1)
+        self.declare_parameter("max_cylindrical_theta_velocity", 0.65)
         self.declare_parameter("cylindrical_origin_xy", [0.012, 0.0])
         self.declare_parameter("cylindrical_min_radius", 0.03)
         self.declare_parameter("ik_position_gain", 4.0)
@@ -206,6 +212,12 @@ class OM6DOFController(Node):
         self.pose_target_timeout = float(
             self.get_parameter("pose_target_timeout_seconds").value
         )
+        self.pose_profile_duration = float(
+            self.get_parameter("pose_profile_duration_seconds").value
+        )
+        self.pose_profile_accel = float(
+            self.get_parameter("pose_profile_accel_seconds").value
+        )
 
         self.max_cartesian_linear_velocity = float(
             self.get_parameter("max_cartesian_linear_velocity").value
@@ -260,6 +272,8 @@ class OM6DOFController(Node):
             self.pose_target_velocity,
             self.pose_target_tolerance,
             self.pose_target_timeout,
+            self.pose_profile_duration,
+            self.pose_profile_accel,
         ])
         if (
             not np.all(np.isfinite(coordinate_scalars))
@@ -276,6 +290,9 @@ class OM6DOFController(Node):
             or self.pose_target_velocity <= 0.0
             or self.pose_target_tolerance <= 0.0
             or self.pose_target_timeout <= 0.0
+            or self.pose_profile_duration <= 0.0
+            or self.pose_profile_accel <= 0.0
+            or self.pose_profile_accel > self.pose_profile_duration / 2.0
             or self.cylindrical_origin_xy.shape != (2,)
             or not np.all(np.isfinite(self.cylindrical_origin_xy))
         ):
@@ -289,6 +306,9 @@ class OM6DOFController(Node):
         self.switch_in_progress = False
         self.switch_target: Optional[bool] = None
         self.pending_manual_mode = MODE_JOINT
+        # Remember the last coordinate-space mode so REST -> READY can hand
+        # control back to the same interface that was active before resting.
+        self.last_coordinate_mode = MODE_CARTESIAN
         self.remote_enabled_on_start = bool(
             self.get_parameter("remote_enabled_on_start").value
         )
@@ -305,6 +325,10 @@ class OM6DOFController(Node):
         self.last_tick = time.monotonic()
 
         self.pose_target: Optional[list[float]] = None
+        self.pose_phase_targets: list[list[float]] = []
+        self.pose_phase_index = 0
+        self.pose_phase_start: Optional[list[float]] = None
+        self.pose_phase_started_at = 0.0
         self.pose_operation: Optional[str] = None
         self.pose_target_until = 0.0
         self.post_pose_mode = MODE_JOINT
@@ -510,6 +534,8 @@ class OM6DOFController(Node):
             self._publish_state()
             return True
         self.motion_mode = mode
+        if mode in (MODE_CARTESIAN, MODE_CYLINDRICAL):
+            self.last_coordinate_mode = mode
         self.pose_target = None
         self.pose_operation = None
         self._clear_stream_command_locked()
@@ -550,15 +576,62 @@ class OM6DOFController(Node):
         self._clear_stream_command_locked()
         self.ik_target_pos = None
         self.ik_target_rotation = None
-        self.pose_target = clamp_positions(
-            target, self.joint_lower, self.joint_upper
-        )
+        self.pose_target = clamp_positions(target, self.joint_lower, self.joint_upper)
+        # Every READY/STARTUP transition first moves the six arm servos to
+        # their zero-radian pose. The gripper has its own action controller.
+        zero_pose = clamp_positions([0.0] * 6, self.joint_lower, self.joint_upper)
+        self.pose_phase_targets = [zero_pose, self.pose_target]
+        self.pose_phase_index = 0
+        self.pose_phase_start = list(self.command_positions)
+        self.pose_phase_started_at = now
         self.pose_operation = operation
         self.pose_target_until = now + self.pose_target_timeout
         self.post_pose_mode = post_mode
         self._publish_state()
-        self.get_logger().info(f"{operation} target -> {self.pose_target}")
+        self.get_logger().info(
+            f"{operation} profile: current -> zero -> {self.pose_target}; "
+            f"{getattr(self, 'pose_profile_duration', 4.0):.1f}s per phase "
+            f"({getattr(self, 'pose_profile_accel', 2.0):.1f}s accel/decel)"
+        )
         return True
+
+    def _pose_profile_fraction(self, elapsed: float) -> float:
+        """Normalized trapezoid/triangle position profile with symmetric ramps."""
+        duration = getattr(self, "pose_profile_duration", 4.0)
+        accel = getattr(self, "pose_profile_accel", 2.0)
+        t = max(0.0, min(duration, elapsed))
+        cruise = duration - 2.0 * accel
+        denominator = accel * (duration - accel)
+        if t <= accel:
+            return 0.5 * t * t / denominator
+        if t <= accel + cruise:
+            return (0.5 * accel + (t - accel)) / (duration - accel)
+        remaining = duration - t
+        return 1.0 - 0.5 * remaining * remaining / denominator
+
+    def _start_next_pose_phase_locked(self, feedback: Sequence[float], now: float) -> bool:
+        self.pose_phase_index += 1
+        if self.pose_phase_index >= len(self.pose_phase_targets):
+            return False
+        self.pose_phase_start = clamp_positions(
+            feedback, self.joint_lower, self.joint_upper
+        )
+        self.pose_phase_started_at = now
+        self.command_positions = list(self.pose_phase_start)
+        return True
+
+    def _ready_resume_mode_locked(self) -> str:
+        """Coordinate mode to hand back after a READY move.
+
+        READY used to drop into JOINT, which left every coordinate-space
+        interface -- the gamepad especially -- unable to drive until the
+        operator picked a mode by hand. TOGGLE_REST_READY already resumed
+        the remembered mode; plain READY now matches it.
+        """
+        resume = self.last_coordinate_mode
+        if resume not in (MODE_CARTESIAN, MODE_CYLINDRICAL):
+            resume = MODE_CARTESIAN
+        return resume
 
     def _schedule_ready_after_enable_locked(self, post_mode: str) -> bool:
         now = time.monotonic()
@@ -576,6 +649,43 @@ class OM6DOFController(Node):
         return self._schedule_pose_locked(MODE_READY, self.ready_pose, post_mode)
 
     def _on_operation_mode(self, msg: String) -> None:
+        raw_mode = str(msg.data).strip().upper()
+        if raw_mode == "TOGGLE_REST_READY":
+            with self.lock:
+                if self.startup_pose is None:
+                    self.get_logger().warn(
+                        "REST/READY toggle rejected: startup pose has not been captured"
+                    )
+                    return
+                if not self.remote_enabled or not self.remote_controller_active:
+                    self.get_logger().warn(
+                        "REST/READY toggle rejected: remote controller is not active"
+                    )
+                    return
+                vector = self._joint_vector_locked()
+                if vector is None:
+                    self.get_logger().warn(
+                        "REST/READY toggle rejected: /joint_states is stale"
+                    )
+                    return
+                rest_distance = float(np.linalg.norm(
+                    np.asarray(vector) - np.asarray(self.startup_pose)
+                ))
+                ready_distance = float(np.linalg.norm(
+                    np.asarray(vector) - np.asarray(self.ready_pose)
+                ))
+                if rest_distance <= ready_distance:
+                    resume_mode = self.last_coordinate_mode
+                    if resume_mode not in (MODE_CARTESIAN, MODE_CYLINDRICAL):
+                        resume_mode = MODE_CARTESIAN
+                    self._schedule_pose_locked(
+                        MODE_READY, self.ready_pose, resume_mode
+                    )
+                else:
+                    self._schedule_pose_locked(
+                        MODE_STARTUP, self.startup_pose, MODE_JOINT
+                    )
+            return
         try:
             mode = normalize_operation_mode(msg.data)
         except ValueError as exc:
@@ -602,12 +712,15 @@ class OM6DOFController(Node):
                 self._set_motion_mode_locked(mode, "operation_mode")
                 return
             if mode == MODE_READY:
+                resume = self._ready_resume_mode_locked()
                 if self.remote_enabled and self.remote_controller_active:
                     self._schedule_pose_locked(
-                        MODE_READY, self.ready_pose, MODE_JOINT
+                        MODE_READY, self.ready_pose, resume
                     )
                 else:
-                    self.pending_manual_mode = MODE_JOINT
+                    # Carried through the enable handshake, which schedules
+                    # the pose once ownership lands.
+                    self.pending_manual_mode = resume
                     self._request_controller_mode_locked(True, "READY")
                 return
             if mode == MODE_STARTUP:
@@ -638,23 +751,15 @@ class OM6DOFController(Node):
                 )
                 return
             if self.pose_target is not None:
-                if not np.any(np.abs(values) > 1.0e-9):
-                    return
-                feedback = self._joint_vector_locked()
-                if feedback is not None:
-                    self.command_positions = clamp_positions(
-                        feedback, self.joint_lower, self.joint_upper
+                # READY/STARTUP is a guarded two-phase motion. Do not let
+                # held joystick axes cancel the final zero->target phase.
+                if np.any(np.abs(values) > 1.0e-9):
+                    self.get_logger().warn(
+                        f"{self.pose_operation or 'pose'} ignores control_cmd "
+                        "until its profile completes",
+                        throttle_duration_sec=2.0,
                     )
-                operation = self.pose_operation or "pose"
-                self.pose_target = None
-                self.pose_operation = None
-                self.motion_mode = MODE_JOINT
-                self.ik_target_pos = None
-                self.ik_target_rotation = None
-                self._publish_state()
-                self.get_logger().info(
-                    f"{operation} interrupted by a non-zero control_cmd"
-                )
+                return
             self.control_velocity = values
             self.last_control_cmd = time.monotonic()
 
@@ -1060,41 +1165,48 @@ class OM6DOFController(Node):
                     timeout_operation = self.pose_operation or "pose"
                     self.pose_target = None
                     self.pose_operation = None
+                    self.pose_phase_targets = []
+                    self.pose_phase_start = None
                     self.motion_mode = MODE_JOINT
                     self.command_positions = clamp_positions(
                         feedback, self.joint_lower, self.joint_upper
                     )
                     self._publish_state()
                 else:
-                    self.command_positions = step_toward(
-                        self.command_positions,
-                        self.pose_target,
-                        self.pose_target_velocity * dt,
+                    phase_target = self.pose_phase_targets[self.pose_phase_index]
+                    phase_start = self.pose_phase_start or list(feedback)
+                    fraction = self._pose_profile_fraction(
+                        now - self.pose_phase_started_at
                     )
-                    if (
-                        all(
-                            abs(target - actual) <= self.pose_target_tolerance
-                            for target, actual in zip(
-                                self.pose_target, feedback
+                    self.command_positions = [
+                        start + (target - start) * fraction
+                        for start, target in zip(phase_start, phase_target)
+                    ]
+                    phase_finished = (
+                        now - self.pose_phase_started_at
+                        >= self.pose_profile_duration
+                    )
+                    # Advance on the configured profile time. The zero phase
+                    # remains part of every READY/STARTUP transition, but it
+                    # intentionally does not wait for sub-tolerance feedback.
+                    if phase_finished:
+                        if self._start_next_pose_phase_locked(feedback, now):
+                            self.get_logger().info(
+                                f"{self.pose_operation} zero phase reached; "
+                                "starting final pose phase"
                             )
-                        )
-                        and all(
-                            abs(target - requested)
-                            <= self.pose_target_tolerance
-                            for target, requested in zip(
-                                self.pose_target, self.command_positions
-                            )
-                        )
-                    ):
-                        reached_operation = self.pose_operation or "pose"
-                        next_mode = self.post_pose_mode
-                        self.pose_target = None
-                        self.pose_operation = None
-                        self.motion_mode = next_mode
-                        self._clear_stream_command_locked()
-                        if next_mode != MODE_JOINT:
-                            self._seed_ik_anchor_locked(feedback)
-                        self._publish_state()
+                        else:
+                            reached_operation = self.pose_operation or "pose"
+                            next_mode = self.post_pose_mode
+                            self.pose_target = None
+                            self.pose_operation = None
+                            self.pose_phase_targets = []
+                            self.pose_phase_start = None
+                            self.motion_mode = next_mode
+                            self._clear_stream_command_locked()
+                            if next_mode != MODE_JOINT:
+                                self._seed_ik_anchor_locked(feedback)
+                            self._publish_state()
             else:
                 stream_fresh = bool(
                     self.last_control_cmd

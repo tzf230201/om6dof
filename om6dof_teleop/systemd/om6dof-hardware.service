@@ -16,8 +16,9 @@ ExecStart=/bin/bash -c 'set -e; source /opt/ros/humble/setup.bash; source /home/
 KillMode=control-group
 KillSignal=SIGINT
 TimeoutStopSec=20
-Restart=always
-RestartSec=5
+# A communication fail-safe intentionally exits the stack. Keep it stopped
+# until the operator uses the web GUI restart button or systemctl restart.
+Restart=no
 
 [Install]
 WantedBy=multi-user.target

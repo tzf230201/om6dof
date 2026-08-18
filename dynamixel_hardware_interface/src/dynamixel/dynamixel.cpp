@@ -1756,6 +1756,23 @@ DxlError Dynamixel::ProcessReadCommunication(
   bool is_fast)
 {
   int dxl_comm_result;
+  // This function runs at the controller update rate. Do not write hundreds
+  // of identical lines per second when the bus is intermittent; the caller
+  // still records the current communication state and consecutive count.
+  const auto log_communication_failure =
+    [this, is_sync, is_fast](const char * phase, int error_code) {
+      static auto last_log_time = std::chrono::steady_clock::time_point{};
+      const auto now = std::chrono::steady_clock::now();
+      if (now - last_log_time < std::chrono::seconds(5)) {
+        return;
+      }
+      last_log_time = now;
+      fprintf(
+        stderr, "%s %s Fail [Dxl Size : %ld] [Error code : %d]\n",
+        is_sync ? (is_fast ? "FastSyncRead" : "SyncRead") :
+        (is_fast ? "FastBulkRead" : "BulkRead"),
+        phase, read_data_list_.size(), error_code);
+    };
 
   // Send packet
   if (is_sync) {
@@ -1767,10 +1784,7 @@ DxlError Dynamixel::ProcessReadCommunication(
       return DxlError::SYNC_READ_FAIL;
     }
     if (dxl_comm_result != COMM_SUCCESS) {
-      fprintf(
-        stderr, "%s Tx Fail [Dxl Size : %ld] [Error code : %d]\n",
-        is_fast ? "FastSyncRead" : "SyncRead",
-        read_data_list_.size(), dxl_comm_result);
+      log_communication_failure("Tx", dxl_comm_result);
       return DxlError::SYNC_READ_FAIL;
     }
   } else {
@@ -1783,10 +1797,7 @@ DxlError Dynamixel::ProcessReadCommunication(
       return DxlError::BULK_READ_FAIL;
     }
     if (dxl_comm_result != COMM_SUCCESS) {
-      fprintf(
-        stderr, "%s Tx Fail [Dxl Size : %ld] [Error code : %d]\n",
-        is_fast ? "FastBulkRead" : "BulkRead",
-        read_data_list_.size(), dxl_comm_result);
+      log_communication_failure("Tx", dxl_comm_result);
       return DxlError::BULK_READ_FAIL;
     }
   }
@@ -1809,10 +1820,7 @@ DxlError Dynamixel::ProcessReadCommunication(
       return DxlError::SYNC_READ_FAIL;
     }
     if (dxl_comm_result != COMM_SUCCESS) {
-      fprintf(
-        stderr, "%s Rx Fail [Dxl Size : %ld] [Error code : %d]\n",
-        is_fast ? "FastSyncRead" : "SyncRead",
-        read_data_list_.size(), dxl_comm_result);
+      log_communication_failure("Rx", dxl_comm_result);
       return DxlError::SYNC_READ_FAIL;
     }
   } else {
@@ -1825,10 +1833,7 @@ DxlError Dynamixel::ProcessReadCommunication(
       return DxlError::BULK_READ_FAIL;
     }
     if (dxl_comm_result != COMM_SUCCESS) {
-      fprintf(
-        stderr, "%s Rx Fail [Dxl Size : %ld] [Error code : %d]\n",
-        is_fast ? "FastBulkRead" : "BulkRead",
-        read_data_list_.size(), dxl_comm_result);
+      log_communication_failure("Rx", dxl_comm_result);
       return DxlError::BULK_READ_FAIL;
     }
   }

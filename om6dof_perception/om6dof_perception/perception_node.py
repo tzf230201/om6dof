@@ -37,7 +37,9 @@ import cv2
 import numpy as np
 import pyrealsense2 as rs
 from om6dof_perception.realsense_low_light import (
+    configure_color_sensor,
     configure_depth_sensor,
+    enhance_low_light_bgr,
     load_low_light_config,
 )
 
@@ -345,18 +347,27 @@ class PerceptionNode(Node):
                 try:
                     pipe = rs.pipeline()
                     cfg = rs.config()
+                    low_light_config = load_low_light_config()
+                    camera_fps = 5 if low_light_config["enabled"] else 30
                     cfg.enable_stream(rs.stream.color, 640, 480,
-                                      rs.format.rgb8, 30)
+                                      rs.format.rgb8, camera_fps)
                     cfg.enable_stream(rs.stream.depth, 640, 480,
-                                      rs.format.z16, 30)
+                                      rs.format.z16, camera_fps)
                     profile = pipe.start(cfg)
-                    low_light = configure_depth_sensor(
-                        profile, rs, load_low_light_config()
+                    depth_low_light = configure_depth_sensor(
+                        profile, rs, low_light_config
+                    )
+                    color_low_light = configure_color_sensor(
+                        profile, rs, low_light_config
                     )
                     self.depth_scale = (profile.get_device()
                                         .first_depth_sensor()
                                         .get_depth_scale())
-                    self.get_logger().info(f"realsense started; {low_light}")
+                    self.get_logger().info(
+                        "realsense started; "
+                        f"{camera_fps} FPS; {depth_low_light}; "
+                        f"{color_low_light}"
+                    )
                 except Exception as e:
                     self.get_logger().warn(f"camera open failed: {e}")
                     pipe = None
@@ -368,8 +379,11 @@ class PerceptionNode(Node):
                 color, depth = frames.get_color_frame(), frames.get_depth_frame()
                 if not color or not depth:
                     continue
+                rgb = np.asanyarray(color.get_data()).copy()
+                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                bgr = enhance_low_light_bgr(bgr, low_light_config)
                 with self.frame_lock:
-                    self.rgb = np.asanyarray(color.get_data()).copy()
+                    self.rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
                     self.depth = np.asanyarray(depth.get_data()).copy()
                     self.intr = (depth.profile.as_video_stream_profile()
                                  .intrinsics)

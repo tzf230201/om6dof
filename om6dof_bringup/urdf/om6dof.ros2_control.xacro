@@ -21,6 +21,7 @@
       prefix:=''
       port_name:=/dev/ttyUSB0
       baudrate:=1000000
+      consecutive_failure_shutdown_threshold:=10
       use_fake_hardware:=false">
 
     <ros2_control name="${name}" type="system">
@@ -38,6 +39,7 @@
           <param name="port_name">${port_name}</param>
           <param name="baud_rate">${baudrate}</param>
           <param name="error_timeout_ms">500</param>
+          <param name="consecutive_failure_shutdown_threshold">${consecutive_failure_shutdown_threshold}</param>
           <!-- Plain SyncRead from the start. FastSyncRead is tighter on bus
                timing and throws -3001 SYNC_READ_FAIL on the first cycle after
                activation + sporadically under CPU load. -->

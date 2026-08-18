@@ -186,6 +186,9 @@ private:
   std::map<std::pair<uint8_t /*comm_id*/, uint8_t /*id*/>, bool /*enable*/> dxl_torque_state_;
   std::vector<std::pair<uint8_t, uint8_t>> torque_enabled_comm_id_id_;
   double err_timeout_ms_;
+  int consecutive_failure_shutdown_threshold_{10};
+  int consecutive_read_failures_{0};
+  bool fail_safe_triggered_{false};
   rclcpp::Duration read_error_duration_{0, 0};
   rclcpp::Duration write_error_duration_{0, 0};
   bool is_read_in_error_{false};

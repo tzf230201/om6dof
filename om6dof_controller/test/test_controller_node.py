@@ -13,6 +13,7 @@ from om6dof_controller.control_math import (
     MODE_CYLINDRICAL,
     MODE_JOINT,
     MODE_READY,
+    MODE_STARTUP,
 )
 from om6dof_controller.controller_node import (
     DEFAULT_JOINT_LOWER,
@@ -268,7 +269,44 @@ def test_ready_and_startup_are_transient_joint_pose_operations():
     assert node.motion_mode == MODE_JOINT
 
 
-def test_nonzero_joint_command_interrupts_pose_but_zero_does_not():
+def test_ready_hands_back_a_coordinate_mode_not_joint():
+    """READY must leave the arm drivable by coordinate-space interfaces.
+
+    Handing back JOINT locked the gamepad out after every READY, because
+    its mapping is Cartesian and it refuses JOINT. TOGGLE_REST_READY
+    already resumed the remembered mode; plain READY has to match it.
+    """
+    node = _controller(remote_enabled=True)
+    node.last_coordinate_mode = MODE_CYLINDRICAL
+    node._on_operation_mode(String(data="READY"))
+    assert node.pose_operation == MODE_READY
+    assert node.post_pose_mode == MODE_CYLINDRICAL
+
+    # An unset or non-coordinate memory falls back to CARTESIAN rather
+    # than passing JOINT through and reintroducing the lockout.
+    node = _controller(remote_enabled=True)
+    node.last_coordinate_mode = MODE_JOINT
+    node._on_operation_mode(String(data="READY"))
+    assert node.post_pose_mode == MODE_CARTESIAN
+
+
+def test_rest_ready_toggle_selects_the_opposite_nearest_pose():
+    node = _controller(remote_enabled=True)
+    node._set_motion_mode_locked(MODE_CYLINDRICAL, "test")
+    node.joint_positions = dict(zip(node.joint_names, node.startup_pose))
+    node._on_operation_mode(String(data="TOGGLE_REST_READY"))
+    assert node.pose_operation == MODE_READY
+    assert node.pose_target == pytest.approx(node.ready_pose)
+    assert node.post_pose_mode == MODE_CYLINDRICAL
+
+    node.joint_positions = dict(zip(node.joint_names, node.ready_pose))
+    node._on_operation_mode(String(data="TOGGLE_REST_READY"))
+    assert node.pose_operation == MODE_STARTUP
+    assert node.pose_target == pytest.approx(node.startup_pose)
+    assert node.post_pose_mode == MODE_JOINT
+
+
+def test_joint_commands_do_not_interrupt_guarded_pose_profile():
     node = _controller(remote_enabled=True)
     node._on_operation_mode(String(data="READY"))
 
@@ -277,12 +315,12 @@ def test_nonzero_joint_command_interrupts_pose_but_zero_does_not():
     assert node.last_control_cmd == 0.0
 
     node._on_control_cmd(Float64MultiArray(data=[0.2, 0, 0, 0, 0, 0]))
-    assert node.pose_target is None
-    assert node.pose_operation is None
+    assert node.pose_target is not None
+    assert node.pose_operation == MODE_READY
     assert node.motion_mode == MODE_JOINT
-    assert node.control_velocity == pytest.approx([0.2, 0, 0, 0, 0, 0])
-    assert node.last_control_cmd > 0.0
-    assert any("interrupted" in message for message in node._logger.infos)
+    assert node.control_velocity == pytest.approx([0.0] * 6)
+    assert node.last_control_cmd == 0.0
+    assert any("ignores control_cmd" in message for message in node._logger.warnings)
 
 
 def test_autonomous_restores_trajectory_controller():
