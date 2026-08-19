@@ -6,7 +6,8 @@ phosphobot's manipulator drivers open the servo bus themselves and speak
 Dynamixel. Doing that for the OM6DOF would mean fighting
 ``om6dof-hardware.service`` for ``/dev/ttyUSB0`` -- only one process may
 hold it -- and discarding everything ``om6dof_controller`` provides: IK,
-velocity ceilings, pose profiles, and the JOINT/CARTESIAN/CYLINDRICAL
+velocity ceilings, pose profiles, and the JOINT/CARTESIAN/CYLINDRICAL/
+SEMI_CYLINDRICAL
 modes.
 
 So phosphobot talks HTTP to this node, and this node talks ROS. The
@@ -256,7 +257,7 @@ def make_handler(node: OM6DOFBridge):
             if path == "/mode":
                 mode = str(body.get("mode", "")).strip().upper()
                 allowed = {
-                    "JOINT", "CARTESIAN", "CYLINDRICAL",
+                    "JOINT", "CARTESIAN", "CYLINDRICAL", "SEMI_CYLINDRICAL",
                     "READY", "STARTUP", "AUTONOMOUS", "TOGGLE_REST_READY",
                 }
                 if mode not in allowed:

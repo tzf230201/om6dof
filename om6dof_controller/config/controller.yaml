@@ -10,7 +10,7 @@ om6dof_controller:
     publish_rate_hz: 50.0
     joint_state_timeout_seconds: 1.0
     control_cmd_timeout_seconds: 0.3
-    max_joint_command_velocity: 1.2
+    max_joint_command_velocity: 1.4
 
     ready_pose: [0.0, -0.6806, 1.3613, 0.0, 0.8901, 0.0]
     pose_target_velocity: 0.5
@@ -26,9 +26,9 @@ om6dof_controller:
     ik_tip_link: end_effector_link
     ik_urdf_pkg: om6dof_description
     ik_damping: 0.05
-    max_cartesian_linear_velocity: 0.10
-    max_cartesian_angular_velocity: 1.1
-    max_cylindrical_theta_velocity: 0.65
+    max_cartesian_linear_velocity: 0.17
+    max_cartesian_angular_velocity: 1.95
+    max_cylindrical_theta_velocity: 1.10
     cylindrical_origin_xy: [0.012, 0.0]
     cylindrical_min_radius: 0.03
     ik_position_gain: 4.0

@@ -12,9 +12,27 @@ MODE_AUTONOMOUS = "AUTONOMOUS"
 MODE_JOINT = "JOINT"
 MODE_CARTESIAN = "CARTESIAN"
 MODE_CYLINDRICAL = "CYLINDRICAL"
+# Cylindrical position, but the wrist is held at absolute angles instead of
+# drifting: yaw rides along with theta so the tool keeps its heading
+# relative to the radial direction, while pitch and roll stay referenced
+# to zero in the base frame.
+MODE_SEMI_CYLINDRICAL = "SEMI_CYLINDRICAL"
+# Pitch is held clear of +/-90 degrees, where the Z-Y-X decomposition stops
+# separating roll from yaw and the wrist target would become ambiguous.
+SEMI_PITCH_LIMIT = math.pi / 2 - 0.05
 MODE_READY = "READY"
 MODE_STARTUP = "STARTUP"
-MOTION_MODES = (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL)
+MOTION_MODES = (
+    MODE_JOINT,
+    MODE_CARTESIAN,
+    MODE_CYLINDRICAL,
+    MODE_SEMI_CYLINDRICAL,
+)
+# Modes driven through IK rather than joint-by-joint, and the subset that
+# integrates position in cylindrical coordinates. Naming them once keeps a
+# new mode from silently missing one of the branches that test for them.
+COORDINATE_MODES = (MODE_CARTESIAN, MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL)
+CYLINDRICAL_MODES = (MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL)
 OPERATION_MODES = (
     MODE_AUTONOMOUS,
     *MOTION_MODES,
@@ -40,6 +58,11 @@ def normalize_operation_mode(value: str) -> str:
         "CYLINDRICAL": MODE_CYLINDRICAL,
         "SILINDER": MODE_CYLINDRICAL,
         "SILINDRIS": MODE_CYLINDRICAL,
+        "SEMI": MODE_SEMI_CYLINDRICAL,
+        "SEMI_CYL": MODE_SEMI_CYLINDRICAL,
+        "SEMI_CYLINDER": MODE_SEMI_CYLINDRICAL,
+        "SEMI_CYLINDRICAL": MODE_SEMI_CYLINDRICAL,
+        "SEMI_SILINDER": MODE_SEMI_CYLINDRICAL,
         "READY": MODE_READY,
         "STARTUP": MODE_STARTUP,
         "START": MODE_STARTUP,
@@ -178,3 +201,59 @@ def integrate_cylindrical_position(
         float(origin[1]) + new_radius * math.sin(new_theta),
         float(current[2]) + float(vertical_velocity) * safe_dt,
     ]), new_theta
+
+
+def rotation_from_zyx(roll: float, pitch: float, yaw: float) -> np.ndarray:
+    """Build a rotation from intrinsic Z-Y-X angles (yaw, then pitch, then roll).
+
+    This is the convention the semi-cylindrical mode is described in: yaw
+    about the base vertical, pitch about the resulting lateral axis, roll
+    about the tool axis.
+    """
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    return np.array([
+        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+        [-sp, cp * sr, cp * cr],
+    ])
+
+
+def rotation_to_zyx(matrix: Sequence[Sequence[float]]) -> tuple:
+    """Decompose a rotation into (roll, pitch, yaw), inverse of the above.
+
+    At pitch = +/-90 degrees roll and yaw stop being separable. Rather than
+    divide by a vanishing cosine and hand the control loop a NaN, yaw is
+    pinned to zero there and the whole rotation folded into roll -- which
+    still reconstructs the same matrix.
+    """
+    array = np.asarray(matrix, dtype=float)
+    sp = max(-1.0, min(1.0, -float(array[2, 0])))
+    pitch = math.asin(sp)
+    if abs(sp) > 1.0 - 1e-9:
+        return (math.atan2(-array[1, 2], array[1, 1]), pitch, 0.0)
+    roll = math.atan2(array[2, 1], array[2, 2])
+    yaw = math.atan2(array[1, 0], array[0, 0])
+    return (roll, pitch, yaw)
+
+
+def semi_cylindrical_rotation(
+    theta: float, roll: float, pitch: float, yaw_offset: float
+) -> np.ndarray:
+    """Orientation for MODE_SEMI_CYLINDRICAL at cylindrical angle ``theta``.
+
+    Yaw is measured relative to theta, so sweeping around the cylinder axis
+    carries the heading along and leaves pitch and roll untouched.
+    """
+    return rotation_from_zyx(roll, pitch, theta + yaw_offset)
+
+
+def wrap_angle(value: float) -> float:
+    """Fold an angle into [-pi, pi).
+
+    The semi-cylindrical targets are integrated every cycle, so without this
+    a slow continuous roll would grow without bound and eventually lose
+    precision.
+    """
+    return math.remainder(float(value), 2.0 * math.pi)

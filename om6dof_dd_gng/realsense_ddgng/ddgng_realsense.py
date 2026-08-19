@@ -67,6 +67,12 @@ def parse_args():
         "--ros-topic", default="",
         help="publish the annotated JPEG as sensor_msgs/CompressedImage",
     )
+    parser.add_argument(
+        "--jpeg-quality", type=int, default=50,
+        help="JPEG quality for --ros-topic (1-100). The web monitor forwards "
+             "this JPEG untouched, so it sets the preview's bandwidth: 80 "
+             "costs about 52 kB per 640x480 frame, 50 about 25 kB",
+    )
     return parser.parse_args()
 
 
@@ -181,7 +187,8 @@ def main():
 
             if ros_publisher is not None:
                 ok, jpeg = cv2.imencode(
-                    ".jpg", color, [cv2.IMWRITE_JPEG_QUALITY, 80]
+                    ".jpg", color,
+                    [cv2.IMWRITE_JPEG_QUALITY, max(1, min(100, args.jpeg_quality))]
                 )
                 if ok:
                     msg = CompressedImage()

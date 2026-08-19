@@ -54,6 +54,18 @@ from .yolox_detector import YoloXDetector, resolve_coco_class
 CAMERA_FRAME = "camera_color_optical_frame"
 
 
+def _clamp_quality(value, default=80):
+    """Keep a JPEG quality inside the range cv2.imencode accepts.
+
+    A bad parameter must not silently produce an unreadable stream, and
+    imencode does not validate: quality 0 or 300 both encode to garbage.
+    """
+    try:
+        return max(1, min(100, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
 def bbox_iou(first, second):
     """Intersection-over-union for two ``(x, y, w, h)`` boxes."""
     ax, ay, aw, ah = (float(value) for value in first)
@@ -223,6 +235,15 @@ class PerceptionNode(Node):
             "web_stream_topic",
             "/application_web_monitor/perception/image/compressed",
         )
+        self.declare_parameter("debug_image_jpeg_quality", 80)
+        # The browser preview is bandwidth-bound, not detail-bound: at quality
+        # 80 a 640x480 frame costs ~52 kB, so 20 Hz alone saturates ~1 MB/s.
+        # Quality 50 halves that (~25 kB) and the annotations stay legible.
+        # The debug topic keeps its own quality for anything doing analysis.
+        self.declare_parameter("web_stream_jpeg_quality", 50)
+        # 0 keeps the capture width. Lower it to shrink the preview further;
+        # 480 costs about 16 kB per frame.
+        self.declare_parameter("web_stream_max_width", 0)
 
         self.model_path = str(self.get_parameter("yolo_model_path").value)
         self.yolo = YoloXDetector(
@@ -237,6 +258,12 @@ class PerceptionNode(Node):
         self.rate = float(self.get_parameter("frame_rate_hz").value)
         self.web_stream_topic = str(
             self.get_parameter("web_stream_topic").value).strip()
+        self.debug_quality = _clamp_quality(
+            self.get_parameter("debug_image_jpeg_quality").value)
+        self.web_quality = _clamp_quality(
+            self.get_parameter("web_stream_jpeg_quality").value)
+        self.web_max_width = max(
+            0, int(self.get_parameter("web_stream_max_width").value))
 
         target_description = str(
             self.get_parameter("target_description").value
@@ -625,16 +652,47 @@ class PerceptionNode(Node):
             (255, 255, 255),
             2,
         )
-        ok, jpg = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        if ok:
-            msg = CompressedImage()
-            msg.header.stamp = stamp
-            msg.header.frame_id = CAMERA_FRAME
-            msg.format = "jpeg"
-            msg.data = jpg.tobytes()
-            self.pub_debug.publish(msg)
-            if self.pub_web is not None:
-                self.pub_web.publish(msg)
+        ok, jpg = cv2.imencode(
+            ".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, self.debug_quality])
+        if not ok:
+            return
+        msg = self._compressed(jpg, stamp)
+        self.pub_debug.publish(msg)
+        if self.pub_web is not None:
+            self.pub_web.publish(self._web_frame(bgr, stamp, msg))
+
+    def _compressed(self, jpg, stamp):
+        msg = CompressedImage()
+        msg.header.stamp = stamp
+        msg.header.frame_id = CAMERA_FRAME
+        msg.format = "jpeg"
+        msg.data = jpg.tobytes()
+        return msg
+
+    def _web_frame(self, bgr, stamp, debug_msg):
+        """Encode the annotated frame again, sized for the browser preview.
+
+        The web monitor forwards whatever JPEG arrives, so the only place the
+        preview's cost can be set is here. When the web settings match the
+        debug ones there is nothing to gain, so the debug frame is reused and
+        the second encode never happens.
+        """
+        width = bgr.shape[1]
+        needs_resize = 0 < self.web_max_width < width
+        if not needs_resize and self.web_quality == self.debug_quality:
+            return debug_msg
+
+        image = bgr
+        if needs_resize:
+            height = round(bgr.shape[0] * self.web_max_width / width)
+            image = cv2.resize(
+                bgr,
+                (self.web_max_width, max(1, height)),
+                interpolation=cv2.INTER_AREA,
+            )
+        ok, jpg = cv2.imencode(
+            ".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, self.web_quality])
+        return self._compressed(jpg, stamp) if ok else debug_msg
 
 
 def main(args=None):

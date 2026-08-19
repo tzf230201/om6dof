@@ -278,6 +278,12 @@ def parse_args():
         "--hide-node-labels", action="store_true",
         help="colour matched nodes but omit per-node label text",
     )
+    parser.add_argument(
+        "--jpeg-quality", type=int, default=50,
+        help="JPEG quality for --ros-topic (1-100). The web monitor forwards "
+             "this JPEG untouched, so it sets the preview's bandwidth: 80 "
+             "costs about 52 kB per 640x480 frame, 50 about 25 kB",
+    )
     return parser.parse_args()
 
 
@@ -513,7 +519,8 @@ def main():
                 labels_pub.publish(ros_types[1](data=json.dumps(payload)))
             if image_pub is not None:
                 ok, jpeg = cv2.imencode(
-                    ".jpg", color, [cv2.IMWRITE_JPEG_QUALITY, 80]
+                    ".jpg", color,
+                    [cv2.IMWRITE_JPEG_QUALITY, max(1, min(100, args.jpeg_quality))]
                 )
                 if ok:
                     msg = ros_types[0]()

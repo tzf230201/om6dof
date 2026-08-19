@@ -33,22 +33,29 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool, Float64MultiArray, String
 
 from .control_math import (
+    COORDINATE_MODES,
+    CYLINDRICAL_MODES,
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
     MODE_CYLINDRICAL,
     MODE_JOINT,
     MODE_READY,
+    MODE_SEMI_CYLINDRICAL,
     MODE_STARTUP,
     MOTION_MODES,
+    SEMI_PITCH_LIMIT,
     clamp_positions,
     integrate_cylindrical_position,
     limit_norm,
     normalize_operation_mode,
     rotation_error,
     rotation_from_rotvec,
+    rotation_to_zyx,
+    semi_cylindrical_rotation,
     step_toward,
     validated_control_command,
     validated_joint_positions,
+    wrap_angle,
 )
 
 
@@ -77,6 +84,11 @@ class OM6DOFController(Node):
     # Class-level default so the attribute exists on every instance,
     # including the bare nodes the tests construct without __init__.
     last_coordinate_mode = MODE_CARTESIAN
+    # Absolute wrist angles for MODE_SEMI_CYLINDRICAL. Yaw is stored as an
+    # offset from theta, so sweeping the cylinder carries it along.
+    semi_roll = 0.0
+    semi_pitch = 0.0
+    semi_yaw_offset = 0.0
 
     def __init__(self) -> None:
         super().__init__("om6dof_controller")
@@ -114,7 +126,7 @@ class OM6DOFController(Node):
         self.declare_parameter("publish_rate_hz", 50.0)
         self.declare_parameter("joint_state_timeout_seconds", 1.0)
         self.declare_parameter("control_cmd_timeout_seconds", 0.3)
-        self.declare_parameter("max_joint_command_velocity", 1.2)
+        self.declare_parameter("max_joint_command_velocity", 1.4)
         self.declare_parameter("joint_lower", list(DEFAULT_JOINT_LOWER))
         self.declare_parameter("joint_upper", list(DEFAULT_JOINT_UPPER))
         self.declare_parameter("joint_limit_margin", 0.02)
@@ -130,9 +142,9 @@ class OM6DOFController(Node):
         self.declare_parameter("ik_tip_link", "end_effector_link")
         self.declare_parameter("ik_urdf_pkg", "om6dof_description")
         self.declare_parameter("ik_damping", 0.05)
-        self.declare_parameter("max_cartesian_linear_velocity", 0.10)
-        self.declare_parameter("max_cartesian_angular_velocity", 1.1)
-        self.declare_parameter("max_cylindrical_theta_velocity", 0.65)
+        self.declare_parameter("max_cartesian_linear_velocity", 0.17)
+        self.declare_parameter("max_cartesian_angular_velocity", 1.95)
+        self.declare_parameter("max_cylindrical_theta_velocity", 1.10)
         self.declare_parameter("cylindrical_origin_xy", [0.012, 0.0])
         self.declare_parameter("cylindrical_min_radius", 0.03)
         self.declare_parameter("ik_position_gain", 4.0)
@@ -519,6 +531,21 @@ class OM6DOFController(Node):
             math.atan2(dy, dx) if radius >= self.cylindrical_min_radius
             else float(values[0])
         )
+        seed_roll, seed_pitch, seed_yaw = rotation_to_zyx(
+            self.ik_target_rotation
+        )
+        self.semi_roll = seed_roll
+        # Clamped here too, not just while driving: seeding straight from a
+        # near-vertical wrist would otherwise store a pitch past the limit and
+        # sit in the singular configuration the limit exists to avoid. The
+        # cost is a small corrective move on entry from such a pose, which is
+        # the lesser evil.
+        self.semi_pitch = max(
+            -SEMI_PITCH_LIMIT, min(SEMI_PITCH_LIMIT, seed_pitch)
+        )
+        self.semi_yaw_offset = wrap_angle(
+            seed_yaw - self.cylindrical_theta_hint
+        )
         self.ik_collision_blocked = False
         return True
 
@@ -534,7 +561,7 @@ class OM6DOFController(Node):
             self._publish_state()
             return True
         self.motion_mode = mode
-        if mode in (MODE_CARTESIAN, MODE_CYLINDRICAL):
+        if mode in COORDINATE_MODES:
             self.last_coordinate_mode = mode
         self.pose_target = None
         self.pose_operation = None
@@ -629,7 +656,7 @@ class OM6DOFController(Node):
         the remembered mode; plain READY now matches it.
         """
         resume = self.last_coordinate_mode
-        if resume not in (MODE_CARTESIAN, MODE_CYLINDRICAL):
+        if resume not in COORDINATE_MODES:
             resume = MODE_CARTESIAN
         return resume
 
@@ -676,7 +703,7 @@ class OM6DOFController(Node):
                 ))
                 if rest_distance <= ready_distance:
                     resume_mode = self.last_coordinate_mode
-                    if resume_mode not in (MODE_CARTESIAN, MODE_CYLINDRICAL):
+                    if resume_mode not in COORDINATE_MODES:
                         resume_mode = MODE_CARTESIAN
                     self._schedule_pose_locked(
                         MODE_READY, self.ready_pose, resume_mode
@@ -702,7 +729,7 @@ class OM6DOFController(Node):
                     self.pending_manual_mode = MODE_JOINT
                     self._request_controller_mode_locked(True, "operation_mode")
                 return
-            if mode in (MODE_CARTESIAN, MODE_CYLINDRICAL):
+            if mode in COORDINATE_MODES:
                 if not self.remote_enabled or not self.remote_controller_active:
                     self.get_logger().warn(
                         f"{mode} rejected: request JOINT first to take remote "
@@ -924,6 +951,26 @@ class OM6DOFController(Node):
         if command:
             self.command_pub.publish(Float64MultiArray(data=command))
 
+    def _semi_joint_nudge_locked(self, velocity) -> Optional[np.ndarray]:
+        """Joint-space bias for SEMI_CYLINDRICAL, or None when there is none.
+
+        In this mode the pitch and yaw channels do not rotate the wrist
+        through IK; they offset joint 5 and joint 6 directly, which is what
+        the operator reaches for when the tool needs a small tilt or twist
+        that the coordinate frame makes awkward.
+        """
+        if self.motion_mode != MODE_SEMI_CYLINDRICAL:
+            return None
+        limit = self.max_joint_velocity
+        joint5 = max(-limit, min(limit, float(velocity[4])))
+        joint6 = max(-limit, min(limit, float(velocity[5])))
+        if abs(joint5) < 1e-9 and abs(joint6) < 1e-9:
+            return None
+        nudge = np.zeros(6)
+        nudge[4] = joint5
+        nudge[5] = joint6
+        return nudge
+
     def _coordinate_step_locked(
         self,
         feedback_positions: Sequence[float],
@@ -975,7 +1022,7 @@ class OM6DOFController(Node):
                 self.ik_target_pos = (
                     self.ik_target_pos + linear_feedforward * dt
                 )
-            elif self.motion_mode == MODE_CYLINDRICAL:
+            elif self.motion_mode in CYLINDRICAL_MODES:
                 radial_velocity = max(
                     -self.max_cartesian_linear_velocity,
                     min(self.max_cartesian_linear_velocity, float(velocity[0])),
@@ -1013,28 +1060,13 @@ class OM6DOFController(Node):
             else:
                 return list(self.command_positions)
 
-            angular_feedforward = limit_norm(
-                velocity[3:], self.max_cartesian_angular_velocity
-            )
-            if (
-                self.ik_tool_frame_rotation
-                and float(np.linalg.norm(angular_feedforward)) > 1e-9
-            ):
-                angular_feedforward = self.ik.ee_to_base_angular(
-                    q_command, angular_feedforward
-                )
-            if float(np.linalg.norm(angular_feedforward)) > 1e-9:
-                self.ik_target_rotation = rotation_from_rotvec(
-                    angular_feedforward * dt
-                ) @ self.ik_target_rotation
-
             lead = self.ik_target_pos - feedback_position
             lead_distance = float(np.linalg.norm(lead))
             if lead_distance > self.ik_max_target_lead:
                 self.ik_target_pos = feedback_position + lead * (
                     self.ik_max_target_lead / lead_distance
                 )
-                if self.motion_mode == MODE_CYLINDRICAL:
+                if self.motion_mode in CYLINDRICAL_MODES:
                     dx = float(
                         self.ik_target_pos[0] - self.cylindrical_origin_xy[0]
                     )
@@ -1043,6 +1075,76 @@ class OM6DOFController(Node):
                     )
                     if math.hypot(dx, dy) > 1e-9:
                         self.cylindrical_theta_hint = math.atan2(dy, dx)
+
+            # Orientation is resolved after the lead clamp, because that
+            # clamp can pull the target back and recompute theta. Doing it
+            # earlier made yaw track a theta the arm never reached, so the
+            # heading crept ahead of the sweep whenever the clamp engaged.
+            if self.motion_mode == MODE_SEMI_CYLINDRICAL:
+                # Absolute angles, not an incremental twist: the stick moves
+                # roll/pitch/yaw targets that are then held, so the wrist does
+                # not drift as theta sweeps. Rates stay in the base frame here
+                # -- converting them to the tool frame would reintroduce the
+                # coupling this mode exists to remove.
+                # Only roll steers the wrist here. Pitch and yaw are joint
+                # nudges in this mode (joint 5 and joint 6), applied further
+                # down; leaving them on the orientation target as well would
+                # have the IK and the nudge pulling the same joints apart.
+                rates = limit_norm(
+                    np.array([float(velocity[3]), 0.0, 0.0]),
+                    self.max_cartesian_angular_velocity,
+                )
+                if float(np.linalg.norm(rates)) > 1e-9:
+                    if self.ik_tool_frame_rotation:
+                        rates = self.ik.ee_to_base_angular(q_command, rates)
+                    # Turn the rotation, then read the absolute angles back
+                    # out of it. Integrating the Euler angles directly instead
+                    # put the yaw axis on the world vertical, 60 degrees off
+                    # the Cartesian one on a downward-pointing wrist, so the
+                    # tool swept a cone rather than spinning in place.
+                    turned = (
+                        rotation_from_rotvec(rates * dt) @ self.ik_target_rotation
+                    )
+                    turned_roll, turned_pitch, turned_yaw = rotation_to_zyx(turned)
+                    self.semi_roll = turned_roll
+                    self.semi_pitch = max(
+                        -SEMI_PITCH_LIMIT, min(SEMI_PITCH_LIMIT, turned_pitch)
+                    )
+                    self.semi_yaw_offset = wrap_angle(
+                        turned_yaw - self.cylindrical_theta_hint
+                    )
+                previous_rotation = self.ik_target_rotation
+                self.ik_target_rotation = semi_cylindrical_rotation(
+                    self.cylindrical_theta_hint,
+                    self.semi_roll,
+                    self.semi_pitch,
+                    self.semi_yaw_offset,
+                )
+                # The downstream term expects an angular velocity, so derive
+                # it from how far the target actually moved -- mirroring what
+                # the cylindrical branch does for position. Taking the raw
+                # stick rates instead would ignore the yaw that theta just
+                # contributed.
+                angular_feedforward = limit_norm(
+                    rotation_error(self.ik_target_rotation, previous_rotation)
+                    / dt,
+                    self.max_cartesian_angular_velocity,
+                )
+            else:
+                angular_feedforward = limit_norm(
+                    velocity[3:], self.max_cartesian_angular_velocity
+                )
+                if (
+                    self.ik_tool_frame_rotation
+                    and float(np.linalg.norm(angular_feedforward)) > 1e-9
+                ):
+                    angular_feedforward = self.ik.ee_to_base_angular(
+                        q_command, angular_feedforward
+                    )
+                if float(np.linalg.norm(angular_feedforward)) > 1e-9:
+                    self.ik_target_rotation = rotation_from_rotvec(
+                        angular_feedforward * dt
+                    ) @ self.ik_target_rotation
 
             position_error = self.ik_target_pos - command_position
             orientation_error = rotation_error(
@@ -1057,6 +1159,24 @@ class OM6DOFController(Node):
                     rotation_from_rotvec(-excess) @ self.ik_target_rotation
                 )
                 orientation_error *= 0.35 / orientation_norm
+                if self.motion_mode == MODE_SEMI_CYLINDRICAL:
+                    # Anti-windup. The semi-cylindrical target is rebuilt from
+                    # these angles every cycle, so without writing the clamped
+                    # rotation back they would keep integrating past whatever
+                    # the wrist can actually reach: pitch would sit at its own
+                    # travel limit while the arm had barely moved, and the
+                    # stick would appear dead. When the arm is keeping up the
+                    # clamp never fires and this is an exact no-op.
+                    clamped_roll, clamped_pitch, clamped_yaw = rotation_to_zyx(
+                        self.ik_target_rotation
+                    )
+                    self.semi_roll = clamped_roll
+                    self.semi_pitch = max(
+                        -SEMI_PITCH_LIMIT, min(SEMI_PITCH_LIMIT, clamped_pitch)
+                    )
+                    self.semi_yaw_offset = wrap_angle(
+                        clamped_yaw - self.cylindrical_theta_hint
+                    )
 
             linear_command = (
                 linear_feedforward + self.ik_position_gain * position_error
@@ -1064,7 +1184,11 @@ class OM6DOFController(Node):
             angular_command = (
                 angular_feedforward + self.ik_rotation_gain * orientation_error
             )
-            if float(np.linalg.norm(np.concatenate([
+            # Computed before the idle check: a joint nudge on its own
+            # produces no Cartesian command, so the early return would have
+            # skipped it and the stick would do nothing.
+            joint_nudge = self._semi_joint_nudge_locked(velocity)
+            if joint_nudge is None and float(np.linalg.norm(np.concatenate([
                 linear_command, angular_command
             ]))) < 1e-8:
                 return list(self.command_positions)
@@ -1078,6 +1202,8 @@ class OM6DOFController(Node):
             if peak > self.max_joint_velocity:
                 joint_velocity *= self.max_joint_velocity / peak
             raw_candidate = q_command + joint_velocity * dt
+            if joint_nudge is not None:
+                raw_candidate = raw_candidate + joint_nudge * dt
             candidate = np.asarray(
                 clamp_positions(
                     raw_candidate, self.joint_lower, self.joint_upper
@@ -1098,7 +1224,7 @@ class OM6DOFController(Node):
                 self.ik_collision_blocked = True
                 return list(self.command_positions)
             self.ik_collision_blocked = False
-            if hit_limit:
+            if hit_limit or joint_nudge is not None:
                 self._seed_ik_anchor_locked(candidate)
             return candidate.tolist()
         except Exception as exc:
@@ -1230,9 +1356,7 @@ class OM6DOFController(Node):
                         + float(velocity[index]) * dt
                         for index in range(6)
                     ]
-                elif self.motion_mode in (
-                    MODE_CARTESIAN, MODE_CYLINDRICAL
-                ):
+                elif self.motion_mode in COORDINATE_MODES:
                     velocity = self.control_velocity.copy()
                     if self.motion_mode == MODE_CARTESIAN:
                         velocity[:3] = limit_norm(

@@ -1,3 +1,4 @@
+import math
 import threading
 import time
 from types import SimpleNamespace
@@ -8,6 +9,13 @@ from controller_manager_msgs.srv import SwitchController
 from std_msgs.msg import Float64MultiArray, String
 
 from om6dof_controller.control_math import (
+    MODE_SEMI_CYLINDRICAL,
+    SEMI_PITCH_LIMIT,
+    rotation_error,
+    rotation_from_zyx,
+    rotation_to_zyx,
+    semi_cylindrical_rotation,
+    wrap_angle,
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
     MODE_CYLINDRICAL,
@@ -343,3 +351,286 @@ def test_invalid_control_command_is_rejected(values):
     node._on_control_cmd(Float64MultiArray(data=values))
     assert node.last_control_cmd == 0.0
     assert node._logger.warnings
+
+
+class _FollowingIK(_IdentityIK):
+    """A wrist that reaches whatever was last asked of it.
+
+    Needed to exercise limits that only bite when the arm is keeping up --
+    with a lagging wrist the anti-windup clamp stops the angles first.
+    """
+
+    def __init__(self, node):
+        self.node = node
+
+    def fk_pose(self, q):
+        values = np.asarray(q, dtype=float)
+        rotation = self.node.ik_target_rotation
+        if rotation is None:
+            rotation = np.eye(3)
+        return values[:3].copy(), np.asarray(rotation, dtype=float).copy()
+
+    def ee_to_base_angular(self, q, angular):
+        # The real IK rotates a tool-frame rate into the base frame.
+        # _IdentityIK returns it unchanged, which cannot tell a tool-frame
+        # command apart from a base-frame one -- exactly the distinction the
+        # stick-axis test exists to check.
+        rotation = self.node.ik_target_rotation
+        if rotation is None:
+            rotation = np.eye(3)
+        return np.asarray(rotation, dtype=float) @ np.asarray(angular, dtype=float)
+
+
+class _TiltedIK(_IdentityIK):
+    """An IK whose tool is not axis-aligned, so seeding has to do real work."""
+
+    ROTATION = rotation_from_zyx(0.35, -0.42, 1.1)
+
+    def fk_pose(self, q):
+        values = np.asarray(q, dtype=float)
+        return values[:3].copy(), self.ROTATION.copy()
+
+
+def test_entering_semi_cylindrical_does_not_move_the_wrist():
+    """Seeding must reproduce the pose the arm is already holding.
+
+    The mode drives absolute wrist angles. If they started at zero instead
+    of at the current orientation, selecting the mode would snap the wrist
+    on a real arm before the operator touched anything.
+    """
+    node = _controller(remote_enabled=True)
+    node.ik = _TiltedIK()
+    assert node._seed_ik_anchor_locked(node.command_positions)
+
+    rebuilt = semi_cylindrical_rotation(
+        node.cylindrical_theta_hint,
+        node.semi_roll,
+        node.semi_pitch,
+        node.semi_yaw_offset,
+    )
+    assert np.allclose(rebuilt, _TiltedIK.ROTATION, atol=1e-9)
+
+
+def test_semi_cylindrical_yaw_offset_is_measured_from_theta():
+    """Yaw is stored relative to theta, which is what makes it follow."""
+    node = _controller(remote_enabled=True)
+    node.ik = _TiltedIK()
+    node._seed_ik_anchor_locked(node.command_positions)
+
+    _, _, absolute_yaw = rotation_to_zyx(_TiltedIK.ROTATION)
+    expected = math.remainder(
+        absolute_yaw - node.cylindrical_theta_hint, 2.0 * math.pi
+    )
+    assert math.isclose(node.semi_yaw_offset, expected, abs_tol=1e-9)
+
+
+def test_semi_cylindrical_pitch_is_clamped_when_seeding_near_vertical():
+    """Entering the mode from a near-vertical wrist must not seed a singularity.
+
+    This is the only way pitch can reach the limit now. The stick cannot get
+    there: pitch and yaw became joint 5 / joint 6 offsets, and roll is a
+    rotation about the body X axis, which by construction changes only the
+    roll term of a Z-Y-X decomposition and leaves pitch untouched -- measured,
+    not assumed.
+    """
+    class _NearVerticalIK(_IdentityIK):
+        ROTATION = rotation_from_zyx(0.2, math.pi / 2 - 0.001, 0.4)
+
+        def fk_pose(self, q):
+            values = np.asarray(q, dtype=float)
+            return values[:3].copy(), self.ROTATION.copy()
+
+    node = _controller(remote_enabled=True)
+    node.ik = _NearVerticalIK()
+    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
+    assert node._seed_ik_anchor_locked(node.command_positions)
+
+    assert math.isfinite(node.semi_pitch)
+    assert math.isfinite(node.semi_roll)
+    assert math.isfinite(node.semi_yaw_offset)
+    assert abs(node.semi_pitch) <= SEMI_PITCH_LIMIT + 1e-9, (
+        f"seeded pitch {node.semi_pitch:+.4f} sits past the limit"
+    )
+
+
+def test_semi_cylindrical_roll_does_not_disturb_pitch():
+    """Rolling must leave the wrist's tilt alone, so the tool spins in place."""
+    node = _semi_node()
+    pitch_before = node.semi_pitch
+    roll_before = node.semi_roll
+    _drive(node, 3, 5.0, steps=300)
+    assert not node._logger.errors, node._logger.errors
+    # Non-vacuous: roll really turned, so "pitch held" is a statement about
+    # the decomposition and not about nothing happening.
+    # 0.2 rad is roughly where the fixture's joint limits stop the roll; well
+    # clear of zero, which is all this guard needs to rule out.
+    assert abs(wrap_angle(node.semi_roll - roll_before)) > 0.2
+    assert math.isclose(node.semi_pitch, pitch_before, abs_tol=1e-6)
+
+
+def test_semi_cylindrical_sweep_carries_yaw_and_leaves_the_tilt_alone():
+    """The defining behaviour, end to end through the control step.
+
+    Commanding only theta must rotate the wrist target's heading by the same
+    amount and leave pitch and roll exactly where the operator put them.
+    """
+    node = _controller(remote_enabled=True)
+    node.ik = _TiltedIK()
+    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
+    node._seed_ik_anchor_locked(node.command_positions)
+
+    roll_before, pitch_before, yaw_before = rotation_to_zyx(
+        node.ik_target_rotation
+    )
+    theta_before = node.cylindrical_theta_hint
+
+    # theta only: index 1 of the coordinate velocity is the angular sweep.
+    node.control_velocity = np.array([0.0, 0.4, 0.0, 0.0, 0.0, 0.0])
+    node.last_control_cmd = time.monotonic()
+    for _ in range(25):
+        node._coordinate_step_locked(
+            node.command_positions, node.control_velocity, 0.02
+        )
+
+    assert not node._logger.errors, node._logger.errors
+    roll_after, pitch_after, yaw_after = rotation_to_zyx(
+        node.ik_target_rotation
+    )
+    swept = node.cylindrical_theta_hint - theta_before
+    assert abs(swept) > 1e-3, "theta did not actually move"
+    assert math.isclose(roll_after, roll_before, abs_tol=1e-6)
+    assert math.isclose(pitch_after, pitch_before, abs_tol=1e-6)
+    assert math.isclose(
+        math.remainder(yaw_after - yaw_before, 2.0 * math.pi),
+        math.remainder(swept, 2.0 * math.pi),
+        abs_tol=1e-6,
+    )
+
+
+def test_semi_cylindrical_angles_cannot_wind_up_past_the_arm():
+    """The stored angles must not run away from what the arm is holding.
+
+    They are rebuilt into the target every cycle, so the orientation-error
+    clamp that bounds the incremental modes was being discarded here. The
+    angles then integrated freely, pitch reached its own limit while the
+    wrist had barely moved, and the stick went dead -- which is what "roll
+    and pitch keep getting stuck" actually was.
+    """
+    node = _controller(remote_enabled=True)
+    node.ik = _TiltedIK()  # orientation never changes: a wrist that cannot keep up
+    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
+    node._seed_ik_anchor_locked(node.command_positions)
+
+    node.control_velocity = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+    node.last_control_cmd = time.monotonic()
+    for _ in range(120):
+        node._coordinate_step_locked(
+            node.command_positions, node.control_velocity, 0.02
+        )
+
+    achieved_pitch = rotation_to_zyx(_TiltedIK.ROTATION)[1]
+    lead = abs(node.semi_pitch - achieved_pitch)
+    # The same 0.35 rad ceiling the incremental modes get, plus one step of
+    # slack for the integration that happens before the clamp is applied.
+    assert lead <= 0.35 + 0.05, f"pitch led the arm by {lead:.3f} rad"
+    assert abs(node.semi_pitch) < SEMI_PITCH_LIMIT - 0.1, (
+        "pitch reached its travel limit while the wrist never moved"
+    )
+
+
+def test_semi_cylindrical_stick_turns_the_tool_like_cartesian_does():
+    """The stick must rotate about the tool's axis, not the world vertical.
+
+    Absolute angles describe where the wrist is *held*; they should not also
+    dictate what the stick turns around. Interpreting the rates as base-frame
+    Euler rates put the yaw axis 60 degrees away from the Cartesian one on a
+    typical downward-pointing wrist, so pressing yaw swept the tool through a
+    cone instead of spinning it in place.
+    """
+    node = _controller(remote_enabled=True)
+    node.ik = _TiltedIK()
+    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
+    node._seed_ik_anchor_locked(node.command_positions)
+    node.ik = _FollowingIK(node)
+
+    before = node.ik_target_rotation.copy()
+    # Roll is the only channel left steering the wrist: pitch and yaw became
+    # joint 5 / joint 6 offsets.
+    node.control_velocity = np.array([0.0, 0.0, 0.0, 0.35, 0.0, 0.0])
+    node.last_control_cmd = time.monotonic()
+    node._coordinate_step_locked(
+        node.command_positions, node.control_velocity, 0.02
+    )
+    produced = rotation_error(node.ik_target_rotation, before) / 0.02
+    expected = before @ np.array([0.35, 0.0, 0.0])
+
+    produced_axis = produced / np.linalg.norm(produced)
+    expected_axis = expected / np.linalg.norm(expected)
+    assert np.allclose(produced_axis, expected_axis, atol=1e-6), (
+        f"axis {produced_axis} is not the tool axis {expected_axis}"
+    )
+
+
+def _semi_node():
+    node = _controller(remote_enabled=True)
+    node.ik = _TiltedIK()
+    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
+    node._seed_ik_anchor_locked(node.command_positions)
+    node.ik = _FollowingIK(node)
+    node.last_control_cmd = time.monotonic()
+    return node
+
+
+def _drive(node, index, rate, steps=30, dt=0.02):
+    before = list(node.command_positions)
+    velocity = np.zeros(6)
+    velocity[index] = rate
+    node.control_velocity = velocity
+    for _ in range(steps):
+        node.command_positions = node._coordinate_step_locked(
+            node.command_positions, node.control_velocity, dt
+        )
+    return np.asarray(node.command_positions) - np.asarray(before)
+
+
+def test_semi_cylindrical_pitch_stick_offsets_joint5_only():
+    """Y/A nudge joint 5 directly instead of steering the wrist through IK."""
+    node = _semi_node()
+    delta = _drive(node, 4, 0.5)
+    assert not node._logger.errors, node._logger.errors
+    assert abs(delta[4]) > 0.05, f"joint5 barely moved: {delta[4]:+.4f}"
+    others = [abs(delta[i]) for i in range(6) if i != 4]
+    assert max(others) < 1e-6, f"other joints moved: {np.round(delta, 5)}"
+
+
+def test_semi_cylindrical_yaw_stick_offsets_joint6_only():
+    """LT/RT nudge joint 6 directly."""
+    node = _semi_node()
+    delta = _drive(node, 5, 0.5)
+    assert not node._logger.errors, node._logger.errors
+    assert abs(delta[5]) > 0.05, f"joint6 barely moved: {delta[5]:+.4f}"
+    others = [abs(delta[i]) for i in range(6) if i != 5]
+    assert max(others) < 1e-6, f"other joints moved: {np.round(delta, 5)}"
+
+
+def test_semi_cylindrical_joint_nudges_are_not_undone_by_ik():
+    """The offset has to stick once the stick is released.
+
+    Without re-seeding the IK anchor, the next cycles would read the nudge as
+    an orientation error and drive it straight back out.
+    """
+    node = _semi_node()
+    _drive(node, 4, 0.5)
+    held = node.command_positions[4]
+    _drive(node, 4, 0.0, steps=50)  # let go and let the loop settle
+    assert abs(node.command_positions[4] - held) < 1e-6, (
+        "IK pulled joint 5 back to where it was"
+    )
+
+
+def test_semi_cylindrical_joint_nudges_respect_joint_limits():
+    node = _semi_node()
+    _drive(node, 4, 5.0, steps=400)
+    _drive(node, 5, 5.0, steps=400)
+    assert node.command_positions[4] <= node.joint_upper[4] + 1e-9
+    assert node.command_positions[5] <= node.joint_upper[5] + 1e-9
