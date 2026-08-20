@@ -2,6 +2,7 @@ import os
 import time
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
@@ -81,6 +82,21 @@ def generate_launch_description():
         package="controller_manager", executable="spawner",
         arguments=["gripper_controller", "--controller-manager", "/controller_manager"],
     )
+    # Only exists in current-control mode: it claims the effort command
+    # interfaces, which the position description does not declare. Loaded
+    # inactive, so bringing the stack up in current mode still leaves the arm
+    # under the position loop until something deliberately activates this.
+    # Without it the gravity compensation node published to a controller that
+    # was not there, and the arm never felt a thing.
+    forward_effort_spawner = Node(
+        package="controller_manager", executable="spawner",
+        arguments=[
+            "forward_effort_controller",
+            "--controller-manager", "/controller_manager",
+            "--inactive",
+        ],
+        condition=IfCondition(current_control),
+    )
     forward_position_spawner = Node(
         package="controller_manager", executable="spawner",
         arguments=[
@@ -92,7 +108,8 @@ def generate_launch_description():
     start_motion_controllers = RegisterEventHandler(
         OnProcessExit(
             target_action=joint_state_spawner,
-            on_exit=[arm_spawner, gripper_spawner, forward_position_spawner],
+            on_exit=[arm_spawner, gripper_spawner, forward_position_spawner,
+                     forward_effort_spawner],
         )
     )
     stop_launch_if_hardware_exits = RegisterEventHandler(

@@ -3,8 +3,13 @@ project(om6dof_description)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY config launch meshes urdf
+install(DIRECTORY config launch meshes rviz urdf
   DESTINATION share/${PROJECT_NAME})
+
+install(PROGRAMS
+  scripts/com_markers.py
+  scripts/static_joint_states.py
+  DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake_xmllint REQUIRED)

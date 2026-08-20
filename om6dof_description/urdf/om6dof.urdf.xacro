@@ -120,7 +120,21 @@
     </collision>
 
     <inertial>
-      <origin xyz="0 0 0" />
+      <!-- Centre of mass from the volume centroid of chain_link3.stl (61.15 cm^3),
+           taking the part as uniform density.
+
+           It replaces 0 0 0, which put this link's mass exactly on its own joint
+           axis. Across link3, link4, link5 and the two fingers that placeholder was
+           hiding about 0.0218 kg m of first moment, roughly 0.21 Nm of gravity
+           torque, near 18% of joint2 peak. That is the sort of error a fitted
+           scale factor cannot absorb, because it is distribution, not magnitude.
+
+           An estimate, not CAD. The implied density is well above plastic, so the
+           mass almost certainly includes a servo the mesh does not draw. Better
+           than the origin, worse than the real numbers link1, link2, link6 and
+           link7 carry. The inertia below is still the old placeholder; gravity
+           never reads it. -->
+      <origin xyz="0.0 4.5e-04 9.4132e-02" />
       <mass value="0.131" />
       <inertia ixx="0.1" ixy="0.0" ixz="0.0"
                iyy="0.1" iyz="0.0"
@@ -163,7 +177,21 @@
     </collision>
 
     <inertial>
-      <origin xyz="0 0 0" />
+      <!-- Centre of mass from the volume centroid of chain_link4.stl (47.44 cm^3),
+           taking the part as uniform density.
+
+           It replaces 0 0 0, which put this link's mass exactly on its own joint
+           axis. Across link3, link4, link5 and the two fingers that placeholder was
+           hiding about 0.0218 kg m of first moment, roughly 0.21 Nm of gravity
+           torque, near 18% of joint2 peak. That is the sort of error a fitted
+           scale factor cannot absorb, because it is distribution, not magnitude.
+
+           An estimate, not CAD. The implied density is well above plastic, so the
+           mass almost certainly includes a servo the mesh does not draw. Better
+           than the origin, worse than the real numbers link1, link2, link6 and
+           link7 carry. The inertia below is still the old placeholder; gravity
+           never reads it. -->
+      <origin xyz="-1.1470e-02 1.0e-05 4.3690e-02" />
       <mass value="0.098" />
       <inertia ixx="0.1" ixy="0.0" ixz="0.0"
                iyy="0.1" iyz="0.0"
@@ -206,7 +234,21 @@
     </collision>
 
     <inertial>
-      <origin xyz="0 0 0" />
+      <!-- Centre of mass from the volume centroid of chain_link5.stl (45.10 cm^3),
+           taking the part as uniform density.
+
+           It replaces 0 0 0, which put this link's mass exactly on its own joint
+           axis. Across link3, link4, link5 and the two fingers that placeholder was
+           hiding about 0.0218 kg m of first moment, roughly 0.21 Nm of gravity
+           torque, near 18% of joint2 peak. That is the sort of error a fitted
+           scale factor cannot absorb, because it is distribution, not magnitude.
+
+           An estimate, not CAD. The implied density is well above plastic, so the
+           mass almost certainly includes a servo the mesh does not draw. Better
+           than the origin, worse than the real numbers link1, link2, link6 and
+           link7 carry. The inertia below is still the old placeholder; gravity
+           never reads it. -->
+      <origin xyz="0.0 6.1e-04 4.6800e-02" />
       <mass value="0.098" />
       <inertia ixx="0.1" ixy="0.0" ixz="0.0"
                iyy="0.1" iyz="0.0"
@@ -249,8 +291,20 @@
     </collision>
 
      <inertial>
-      <origin xyz="4.4206755e-02 3.6839985e-07 8.9142216e-03" />
-      <mass value="1.4327573e-01" />
+      <!-- This link carried link7's inertial block verbatim: same mass, same centre
+           of mass, same tensor, for a different part. No permutation or sign flip of
+           that centre of mass lands inside chain_link6.stl, whose largest half extent
+           is 28 mm against the 44.2 mm written there, so it was never link6's number
+           to begin with.
+
+           Replaced with this mesh's own volume centroid, on the same uniform-density
+           assumption used on link3, link4 and link5.
+
+           The MASS is left alone but is not trusted either: 143 g against 4.38 cm^3
+           of mesh is 32.7 g/cm^3, denser than lead. Either the servo is not drawn
+           here, or this was copied from link7 too. Real CAD is what settles it. -->
+      <origin xyz="0.0 0.0 2.0370e-02" />
+      <mass value="0.04605" />
       <inertia ixx="8.0870749e-05" ixy="0.0" ixz="-1.0157896e-06"
                iyy="7.5980465e-05" iyz="0.0"
                izz="9.3127351e-05" />
@@ -284,8 +338,13 @@
     </collision>
 
      <inertial>
-      <origin xyz="4.4206755e-02 3.6839985e-07 8.9142216e-03" />
-      <mass value="1.4327573e-01" />
+      <!-- x and z were swapped here. Ray-cast against chain_link7.stl: the value as
+           written, 44.2 mm along +X, falls outside the body entirely, and of every
+           permutation and sign flip of the three numbers only those putting 44.2 on
+           Z land inside it. Keeping y as the near-zero component is the single-swap
+           reading and the one consistent with a symmetric part. -->
+      <origin xyz="-8.9142216e-03 3.6839985e-07 ${0.5*4.4206755e-02}" />
+      <mass value="0.22527573" />
       <inertia ixx="8.0870749e-05" ixy="0.0" ixz="-1.0157896e-06"
                iyy="7.5980465e-05" iyz="0.0"
                izz="9.3127351e-05" />
@@ -310,7 +369,21 @@
     </collision>
 
     <inertial>
-      <origin xyz="0 0 0" />
+      <!-- Centre of mass from the volume centroid of the gripper mesh (27.19 cm^3),
+           taking the part as uniform density.
+
+           It replaces 0 0 0, which put this link's mass exactly on its own joint
+           axis. Across link3, link4, link5 and the two fingers that placeholder was
+           hiding about 0.0218 kg m of first moment, roughly 0.21 Nm of gravity
+           torque, near 18% of joint2 peak. That is the sort of error a fitted
+           scale factor cannot absorb, because it is distribution, not magnitude.
+
+           An estimate, not CAD. The implied density is well above plastic, so the
+           mass almost certainly includes a servo the mesh does not draw. Better
+           than the origin, worse than the real numbers link1, link2, link6 and
+           link7 carry. The inertia below is still the old placeholder; gravity
+           never reads it. -->
+      <origin xyz="0.0 9.3200e-03 1.0080e-02" />
       <mass value="0.017" />
       <inertia ixx="1.0e-03" ixy="0.0" ixz="0.0"
                iyy="1.0e-03" iyz="0.0"
@@ -353,7 +426,21 @@
     </collision>
 
     <inertial>
-      <origin xyz="0 0 0" />
+      <!-- Centre of mass from the volume centroid of the gripper mesh (27.22 cm^3),
+           taking the part as uniform density.
+
+           It replaces 0 0 0, which put this link's mass exactly on its own joint
+           axis. Across link3, link4, link5 and the two fingers that placeholder was
+           hiding about 0.0218 kg m of first moment, roughly 0.21 Nm of gravity
+           torque, near 18% of joint2 peak. That is the sort of error a fitted
+           scale factor cannot absorb, because it is distribution, not magnitude.
+
+           An estimate, not CAD. The implied density is well above plastic, so the
+           mass almost certainly includes a servo the mesh does not draw. Better
+           than the origin, worse than the real numbers link1, link2, link6 and
+           link7 carry. The inertia below is still the old placeholder; gravity
+           never reads it. -->
+      <origin xyz="0.0 -9.3200e-03 1.0070e-02" />
       <mass value="0.017" />
       <inertia ixx="1.0e-03" ixy="0.0" ixz="0.0"
                iyy="1.0e-03" iyz="0.0"

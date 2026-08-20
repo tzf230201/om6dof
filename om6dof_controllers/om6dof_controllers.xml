@@ -1,0 +1,47 @@
+<library path="om6dof_controllers">
+
+  <class name="om6dof_controllers/TrajectoryController"
+         type="om6dof_controllers::TrajectoryController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>
+      Follows a joint trajectory on the OM6DOF arm. Accepts trajectories over a
+      FollowJointTrajectory action or a plain topic, samples them with cubic
+      interpolation, and writes either position commands or effort commands
+      (PD plus gravity feed-forward).
+    </description>
+  </class>
+
+  <class name="om6dof_controllers/GravityCompensationController"
+         type="om6dof_controllers::GravityCompensationController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>
+      Writes the joint efforts that cancel gravity, computed from the robot
+      description with KDL, plus an optional Coulomb/viscous friction
+      feed-forward. Holds no position setpoint of its own, so the arm becomes
+      free to lead by hand.
+    </description>
+  </class>
+
+  <class name="om6dof_controllers/LeaderArmController"
+         type="om6dof_controllers::LeaderArmController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>
+      Lead-by-hand leader arm. Claims both position and effort: it freezes the
+      position setpoint while the arm is still so it holds itself up, tracks the
+      measured position while a person moves it so nothing springs back, and
+      caps the current from the gravity model so it feels light. Replaces
+      arm_controller while active.
+    </description>
+  </class>
+
+  <class name="om6dof_controllers/SpringActuatorController"
+         type="om6dof_controllers::SpringActuatorController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>
+      Turns each joint into a virtual spring-damper about a rest position,
+      optionally on top of gravity compensation. The rest position can be
+      captured on activation or streamed in over a topic.
+    </description>
+  </class>
+
+</library>

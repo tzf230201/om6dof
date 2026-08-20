@@ -87,13 +87,34 @@ class GravityCompensation(Node):
         self.declare_parameter("joint_upper", [2.8, 2.1, 2.1, 2.8, 2.1, 2.8])
         self.declare_parameter("compensate_friction", True)
 
+        # Which joints may receive current at all. The default is joint2 alone
+        # because that is the only joint tested on hardware; widening this is
+        # a deliberate act, not something that happens by loading a file.
+        self.declare_parameter("enabled_joints", ["joint2"])
+        # I_cmd = sign * alpha * G(q) / Kt, then amperes -> register ticks.
+        # Kt here is the initial approximation, not a calibrated value; alpha
+        # is the per-joint correction meant to absorb the difference once it
+        # has been identified. Neither hides missing payload physics: the
+        # payload lives in the URDF, where it belongs.
+        self.declare_parameter("torque_constants_nm_per_a",
+                               [0.61, 0.61, 0.61, 0.61, 0.40, 0.40])
+        self.declare_parameter("alpha", [1.0] * 6)
+        self.declare_parameter("joint_signs", [1.0] * 6)
+
         path = str(self.get_parameter("model_file").value).strip()
-        if not path:
-            raise RuntimeError(
-                "model_file is required: the YAML written by "
-                "om6dof_gravity_comp.identify")
-        self.model = load_yaml(path)
-        self._check_model()
+        if path:
+            self.model = load_yaml(path)
+            self._check_model()
+        else:
+            # Model-only operation: pure G(q) from the URDF, no identified
+            # friction. Without this the node refused to start at all until an
+            # identification run existed for every joint, which made the whole
+            # six-joint posture path unreachable even though the gravity model
+            # itself was ready.
+            self.model = {"joints": {}}
+            self.get_logger().info(
+                "no model_file: running model-only, gravity from the URDF "
+                "with no friction compensation")
 
         self.stribeck = any(
             "stribeck" in (entry.get("coefficients") or {})
@@ -118,6 +139,22 @@ class GravityCompensation(Node):
             # A gravity term fitted where gravity barely varies is noise; it
             # must not be pushed into a motor.
             self.identifiable[joint] = bool(entry.get("gravity_identifiable", False))
+
+        enabled = [str(v) for v in self.get_parameter("enabled_joints").value]
+        unknown = sorted(set(enabled) - set(JOINT_NAMES))
+        if unknown:
+            raise RuntimeError(f"enabled_joints names no such joint: {unknown}")
+        self.enabled = np.array([j in enabled for j in JOINT_NAMES], dtype=bool)
+        self.kt = np.array(
+            self.get_parameter("torque_constants_nm_per_a").value, float)
+        if np.any(self.kt <= 0.0):
+            raise RuntimeError("torque_constants_nm_per_a must all be positive")
+        self.alpha = np.array(self.get_parameter("alpha").value, float)
+        self.signs = np.array(self.get_parameter("joint_signs").value, float)
+        for name, value in (("alpha", self.alpha), ("joint_signs", self.signs),
+                            ("torque_constants_nm_per_a", self.kt)):
+            if value.shape != (6,):
+                raise RuntimeError(f"{name} must have six entries")
 
         self.gravity = self._load_gravity_model()
         self.joint_lower = np.array(self.get_parameter("joint_lower").value, float)
@@ -188,19 +225,33 @@ class GravityCompensation(Node):
 
     def _announce(self) -> None:
         scale = float(self.get_parameter("scale").value)
-        unusable = [j for j in JOINT_NAMES if not self.identifiable[j]]
+        live = [j for j, on in zip(JOINT_NAMES, self.enabled) if on]
         self.get_logger().info(
             f"gravity compensation loaded, scale={scale:.2f}, "
             f"friction={'on' if self.get_parameter('compensate_friction').value else 'off'}")
-        if unusable:
+        self.get_logger().info(
+            f"joints that may receive current: {', '.join(live) or 'none'}; "
+            "every other joint is held at exactly zero")
+        model_only = [j for j, on in zip(JOINT_NAMES, self.enabled)
+                      if on and self.coefficients[j] is None]
+        if model_only:
+            self.get_logger().info(
+                f"{', '.join(model_only)} run straight off the URDF gravity "
+                "model: posture-dependent torque, no friction term, so they "
+                "resist a push more than an identified joint would")
+        blind = [j for j, on in zip(JOINT_NAMES, self.enabled)
+                 if on and self.coefficients[j] is not None
+                 and not self.identifiable[j]]
+        if blind:
             self.get_logger().warn(
-                f"no usable gravity term for {', '.join(unusable)}; those "
-                "joints get friction compensation only")
-        self.get_logger().warn(
-            "This model has only been shown to hold while the joints are "
-            "moving. At rest it has not been validated and scored as low as "
-            "R2 = -0.62 on a second recording. Raise scale only with a hand "
-            "on the arm.")
+                f"{', '.join(blind)} have a fitted model whose gravity term "
+                "was not identifiable; they get friction compensation only")
+        if any(self.coefficients[j] is not None for j in JOINT_NAMES):
+            self.get_logger().warn(
+                "The fitted part of this model has only been shown to hold "
+                "while the joints are moving. At rest it has not been "
+                "validated and scored as low as R2 = -0.62 on a second "
+                "recording. Raise scale only with a hand on the arm.")
         if scale <= 0.0:
             self.get_logger().info(
                 "scale is 0.0, so every command is zero. Set it with: "
@@ -283,8 +334,17 @@ class GravityCompensation(Node):
         command = np.zeros(6)
         friction_on = bool(self.get_parameter("compensate_friction").value)
         for index, joint in enumerate(JOINT_NAMES):
+            if not self.enabled[index]:
+                continue
             coefficients = self.coefficients[joint]
             if coefficients is None:
+                # No identification for this joint: use the model directly.
+                # Same posture, same G(q) -- what is missing is only the
+                # friction term, so the arm resists a push more than a fully
+                # identified joint would. That is the safe direction to err.
+                command[index] = (
+                    self.signs[index] * self.alpha[index] * nominal[index]
+                    / self.kt[index] * 1000.0 / CURRENT_TICK_MA)
                 continue
             values = dict(zip(self.features, coefficients))
             term = 0.0
@@ -300,7 +360,7 @@ class GravityCompensation(Node):
                     term += values["stribeck"] * math.copysign(
                         math.exp(-abs(qd[index]) / self.stribeck_scale),
                         qd[index]) if qd[index] != 0.0 else 0.0
-            command[index] = term
+            command[index] = (self.signs[index] * self.alpha[index] * term)
 
         if not np.all(np.isfinite(command)):
             return self._halt("model produced a non-finite command")

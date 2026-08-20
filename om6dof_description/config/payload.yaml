@@ -2,7 +2,7 @@
 # and the length of cable that moves with the arm.
 #
 # WHY THIS FILE EXISTS
-#   The URDF describes the bare arm: 0.826 kg in total. Anything bolted to the
+#   The URDF describes the bare arm: 0.811 kg in total. Anything bolted to the
 #   wrist afterwards is real load that gravity acts on, and it acts at the far
 #   end of the longest lever in the machine. Leaving it out does not make the
 #   arm lighter, it makes the gravity model wrong -- and the missing torque
@@ -36,8 +36,19 @@ payload:
   # --- MEASURE THIS: camera + bracket + moving cable, on a kitchen scale [kg]
   mass: 0.08
 
-  # --- MEASURE THIS: centre of mass from the four-screw centre [m]
-  com: [0.0, 0.0, 0.0]
+  # Centre of mass from the four-screw centre [m].
+  #
+  # Computed, not weighed: the volume centroid of d405_wrist_cam.stl (58.04 cm^3
+  # total) taken as one uniform body. The mesh separates into two shells --
+  # 38.73 cm^3 centred at y = 52.1 mm and 19.32 cm^3 at y = 34.5 mm -- so the
+  # true y lands somewhere in 34..52 mm depending on how mass splits between the
+  # camera and its bracket. 46.3 mm is the uniform-density answer.
+  #
+  # Worth keeping in proportion: at 0.08 kg this offset is 0.0037 kg m of first
+  # moment, about a sixth of what the link3/4/5 placeholders were hiding. Weigh
+  # the assembly and measure this properly if the gravity fit still leaves
+  # residue after those.
+  com: [-0.0018, 0.0463, 0.0005]
 
   # How far up the wrist the bracket foot sits, along link7 +Z, measured from
   # the M3 hole centre at z = 34 mm that the bolt pattern lands on. Zero puts

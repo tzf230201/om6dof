@@ -1,0 +1,247 @@
+# Parameters for the three om6dof_controllers plugins.
+#
+# This file is meant to be handed to the running controller_manager, either by
+# adding it to the ros2_control_node's parameter files in om6dof_bringup or by
+# passing it to the spawner:
+#
+#   ros2 run controller_manager spawner om6dof_gravity_compensation_controller \
+#     -c /controller_manager --param-file <this file>
+#
+# Everything sits under one `/**:` wildcard key, the same shape
+# om6dof_bringup/config/controllers.yaml uses, so it binds no matter which
+# namespace controller_manager was launched under. Repeating `/**:` as a
+# top-level key inside a single file is a duplicate-key collision -- keep it to
+# the one key with everything nested under it.
+/**:
+  controller_manager:
+    ros__parameters:
+      om6dof_trajectory_controller:
+        type: om6dof_controllers/TrajectoryController
+
+      om6dof_gravity_compensation_controller:
+        type: om6dof_controllers/GravityCompensationController
+
+      om6dof_spring_actuator_controller:
+        type: om6dof_controllers/SpringActuatorController
+
+      om6dof_leader_arm_controller:
+        type: om6dof_controllers/LeaderArmController
+
+  # ----- trajectory following -----
+  # Position mode works against the standard description. Effort mode needs
+  # om6dof.ros2_control.current.xacro, and needs `gains.p`/`gains.d` and
+  # `effort_scale` filled in first.
+  om6dof_trajectory_controller:
+    ros__parameters:
+      joints:
+        - joint1
+        - joint2
+        - joint3
+        - joint4
+        - joint5
+        - joint6
+
+      command_interface: position
+
+      constraints:
+        goal_time: 1.0
+        stopped_velocity_tolerance: 0.01
+        joint1: {trajectory: 0.35, goal: 0.02}
+        joint2: {trajectory: 0.35, goal: 0.02}
+        joint3: {trajectory: 0.35, goal: 0.02}
+        joint4: {trajectory: 0.35, goal: 0.02}
+        joint5: {trajectory: 0.35, goal: 0.02}
+        joint6: {trajectory: 0.35, goal: 0.02}
+
+      state_publish_rate: 50.0
+      action_monitor_rate: 20.0
+
+      # Only read in effort mode.
+      gravity_feedforward: false
+      gains:
+        p: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        d: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      effort_scale: [1.0]
+      max_effort: [0.0]
+
+      base_link: link1
+      tip_link: end_effector_link
+
+  # ----- gravity compensation -----
+  # Configured for this rig: Operating Mode 5, where the effort command
+  # interface is the servo's Goal Current and acts as a CURRENT LIMIT on its own
+  # position loop, not as a commanded torque. Under these semantics the output
+  # is a magnitude, it never drops to zero, and activation eases down from the
+  # ceiling instead of up from nothing. Read the "Read this before energising
+  # anything" section of README.md before running this on hardware.
+  om6dof_gravity_compensation_controller:
+    ros__parameters:
+      joints:
+        - joint1
+        - joint2
+        - joint3
+        - joint4
+        - joint5
+        - joint6
+
+      command_semantics: current_limit
+
+      base_link: link1
+      tip_link: end_effector_link
+      gravity: [0.0, 0.0, -9.80665]
+
+      # ---- from ~/om6dof_identification/identified_gravity_friction.yaml,
+      # ---- fitted 2026-08-20. Units there are raw Dynamixel current ticks
+      # ---- (2.69 mA each) per unit of the KDL URDF-nominal gravity torque,
+      # ---- which is exactly the model this controller computes.
+
+      # Only joints 2 and 3 were identifiable (r2 ~0.93). Joint 5 fitted with a
+      # gravity correlation of -0.13 and is flagged gravity_identifiable:false;
+      # joints 1, 4 and 6 barely moved, which is expected -- they are yaw/roll
+      # axes whose gravity torque measures around 1e-7 Nm at any pose, so there
+      # is genuinely nothing to compensate. Those four sit at gain 0.0 and so
+      # run at a constant limit of `headroom` (floored by min_effort).
+      gain: [0.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+
+      # Newton-metres to command units. The datasheet route would have given
+      # ~609 for a W350, more than double the measured 285.
+      #
+      # STALE as of 2026-08-21: these were fitted against a gravity model that
+      # was missing 0.114 kg of off-chain mass (gripper fingers, D405) and had
+      # placeholder centres of mass on link3/4/5. Both are fixed, and g(q) moved
+      # a long way. Re-run the identification before trusting these.
+      effort_scale: [1.0, 285.4, 384.7, 1.0, 1.0, 1.0]
+
+      # THE THREE NUMBERS THAT DECIDE HOW THE ARM FEELS, all in current ticks.
+      #
+      # min_effort is the safety floor: the limit never goes below it, so a
+      # joint can never be told it may pull nothing. It must be > 0.
+      #
+      # headroom is how much current the position loop gets on top of what
+      # merely holding the pose costs. Small headroom = light and backdrivable;
+      # large headroom = stiff. This is the knob to tune first.
+      #
+      # max_effort is the ceiling, and also where the ramp starts, so at
+      # activation the arm is held at least as firmly as it is now. joint2 needs
+      # about 340 ticks at its worst pose (1.19 Nm x 285), so its ceiling has to
+      # clear that plus headroom; joint3 needs about 165.
+      #
+      # These are starting points, not measured comfort values. Tune headroom
+      # against how the arm actually feels, watching ~/commanded_effort.
+      min_effort:  [80.0, 120.0, 120.0, 80.0, 80.0, 80.0]
+      headroom:    [80.0, 100.0, 100.0, 80.0, 80.0, 80.0]
+      max_effort:  [300.0, 500.0, 400.0, 300.0, 300.0, 300.0]
+
+      # Coulomb in newton-metres, converted from the fitted ticks by dividing by
+      # effort_scale: joint2 27.396/285.4 = 0.096, joint3 47.279/384.7 = 0.123.
+      # It widens the limit by however much current the joint needs to break its
+      # own stiction. `viscous` came out NEGATIVE on every joint in that fit
+      # (-12, -44, -7.6), which would mean friction adding energy rather than
+      # removing it, so it stays at zero. deadzone matches the identification's
+      # velocity_deadzone of 0.02.
+      friction:
+        coulomb: [0.0, 0.096, 0.123, 0.0, 0.0, 0.0]
+        viscous: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        deadzone: 0.02
+
+      # Signed torque offset from the identification (-40.7 ticks on joint2,
+      # +24.7 on joint3). It has no meaning for a current limit and is ignored
+      # under these semantics -- kept at zero so it does not look configured.
+      bias: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+      # Written on deactivation and on a bad state read. Left unset it defaults
+      # to max_effort under current_limit semantics, which is the fail-safe
+      # direction: hand the joints back fully able to hold themselves.
+      # deactivate_effort: [300.0, 500.0, 400.0, 300.0, 300.0, 300.0]
+
+      # How long the ease-down from max_effort to the computed limit takes.
+      ramp_seconds: 2.0
+      publish_rate: 20.0
+
+  # ----- leader arm -----
+  # Replaces arm_controller while active: it claims position AND effort, so it
+  # cannot run beside a JointTrajectoryController. Switch, do not stack.
+  om6dof_leader_arm_controller:
+    ros__parameters:
+      joints:
+        - joint1
+        - joint2
+        - joint3
+        - joint4
+        - joint5
+        - joint6
+
+      base_link: link1
+      tip_link: end_effector_link
+      gravity: [0.0, 0.0, -9.80665]
+
+      # Same measured model as the gravity controller; see its section.
+      gain: [0.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+      effort_scale: [1.0, 285.4, 384.7, 1.0, 1.0, 1.0]
+      friction:
+        coulomb: [0.0, 0.096, 0.123, 0.0, 0.0, 0.0]
+        viscous: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        deadzone: 0.02
+
+      # max_effort is load-bearing here, literally: it must stay ABOVE what
+      # holding the arm costs (joint2 reaches ~340 ticks at its worst pose). If
+      # gravity can move the arm, the motion gate below reads that as the
+      # operator, the setpoint follows the sag, and the arm walks to the floor.
+      # Never tune the arm's feel with this -- use headroom.
+      min_effort:  [30.0, 60.0, 60.0, 30.0, 30.0, 30.0]
+      headroom:    [40.0, 40.0, 40.0, 40.0, 40.0, 40.0]
+      max_effort:  [300.0, 500.0, 400.0, 300.0, 300.0, 300.0]
+
+      # How far the position setpoint is allowed to lag the arm, in radians.
+      # This is the knob for how heavy the arm feels to the hand, and it is the
+      # only error the servo's position loop ever sees.
+      #
+      # Too small and the loop cannot generate enough current to carry the arm:
+      # it sinks, the band follows it down, and the arm walks to the floor. Too
+      # large and it droops noticeably before catching, and pushes back harder.
+      # Size it up from here until the arm holds still when released, then stop.
+      #
+      # This replaced a velocity-threshold gate, which had to guess whether
+      # motion came from a hand or from gravity, and made the shoulder feel
+      # stuck: error built up unopposed until the joint broke away.
+      setpoint_deadband: [0.03, 0.03, 0.03, 0.03, 0.03, 0.03]
+
+      ramp_seconds: 1.0
+      publish_rate: 50.0
+
+  # ----- virtual spring -----
+  om6dof_spring_actuator_controller:
+    ros__parameters:
+      joints:
+        - joint1
+        - joint2
+        - joint3
+        - joint4
+        - joint5
+        - joint6
+
+      # Newton-metres per radian, and newton-metre-seconds per radian. Start
+      # soft: a stiff virtual spring on a backdrivable arm oscillates.
+      stiffness: [0.5, 0.5, 0.5, 0.3, 0.3, 0.3]
+      damping: [0.05, 0.05, 0.05, 0.03, 0.03, 0.03]
+
+      # Where the spring pulls to. Left unset, so the pose captured at
+      # activation is also the rest pose until something publishes on
+      # ~/rest_position. Note this has to stay commented out rather than be
+      # written as an empty list: rcl cannot infer a type for `[]` and the
+      # controller manager aborts on it.
+      # rest_position: [0.0, -0.68, 1.36, 0.0, 0.89, 0.0]
+      capture_rest_on_activate: true
+      rest_slew_rate: 0.5
+
+      gravity_compensation: true
+      gravity_gain: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      base_link: link1
+      tip_link: end_effector_link
+      gravity: [0.0, 0.0, -9.80665]
+
+      effort_scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      max_effort: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+      ramp_seconds: 2.0
+      publish_rate: 20.0
