@@ -410,4 +410,76 @@
     </inertial>
   </link>
 
+  <!-- ==================== wrist payload (RealSense D405) ====================
+       Measured values live in config/payload.yaml, never here, so one edit
+       reaches every consumer: robot_state_publisher, the IK solver, and the
+       gravity model all render this same file.
+
+       Parent is end_effector_link deliberately. It is the tip of the chain the
+       gravity model builds (link1 -> end_effector_link), so the payload's
+       centre of mass needs no rotation to reach the frame the mass is folded
+       into: the number measured is the number used. It is also a point that
+       can be found on the real robot: the tool point between the fingers.
+
+       The inertial block appears only once a mass has been measured. With
+       mass still 0.0 the link is a bare frame, visible in TF as a mounting
+       reference, contributing exactly nothing to the dynamics.
+  -->
+  <xacro:property name="payload_cfg"
+                  value="${xacro.load_yaml('$(find om6dof_description)/config/payload.yaml')}"/>
+  <xacro:property name="payload" value="${payload_cfg['payload']}"/>
+  <xacro:property name="payload_mass" value="${float(payload['mass'])}"/>
+
+  <!-- ============ wrist camera: D405 + ALOHA bracket, one body ============
+       Pose derived from the meshes, not estimated. d405_wrist_cam.stl carries
+       four M3 holes on a 12 x 16 mm grid in the plane y = 27.20, centred on
+       (-19.1, 27.2, 75.5). chain_link7.stl has a flat face at x = -35.3 mm
+       with the same grid as 16 (y) x 12 (z), centred on (y,z) = (0, 34).
+       Only one pairing of those grids fits, which fixes the rotation; the
+       remaining 180 degree choice about the bolt axis was settled against a
+       photograph of the real arm.
+
+       The X offset is -38.0 mm, not the -35.3 mm the hole plane sits at.
+       -35.3 is the counterbore floor the M3 heads drop into; link7's real
+       outer surface is at -37.8, and the bracket foot rests on that surface.
+       Measured on the hardware, not derived: mating the hole planes would
+       sink the foot 2.5 mm into the wrist. At -38.0 the foot clears the
+       outer surface by 0.20 mm with no interpenetration.
+
+       This link's origin is the CENTRE OF THE FOUR SCREWS, deliberately.
+       That is a point you can find with a ruler on the real robot, so the
+       payload centre of mass in config/payload.yaml is measured from
+       something real rather than from a CAD origin nobody can see.
+       The visual is therefore shifted by -(-19.1, 27.2, 75.5) mm to bring the
+       mesh's own frame onto that point.
+  -->
+  <joint name="d405_payload_joint" type="fixed">
+    <origin xyz="-0.038 0.0 ${0.0340 + float(payload['mount_offset_z'])}"
+            rpy="${pi} ${-pi/2} ${-pi/2}"/>
+    <parent link="link7"/>
+    <child link="d405_payload_link"/>
+  </joint>
+
+  <link name="d405_payload_link">
+    <visual>
+      <origin xyz="0.0191 -0.0272 -0.0755" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://om6dof_description/meshes/d405_wrist_cam.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <xacro:if value="${payload_mass > 0.0}">
+      <!-- Solid sphere: valid for any mass, and gravity reads none of it. -->
+      <xacro:property name="payload_i"
+                      value="${0.4 * payload_mass * float(payload['inertia_radius'])**2}"/>
+      <inertial>
+        <origin xyz="${payload['com'][0]} ${payload['com'][1]} ${payload['com'][2]}"
+                rpy="0 0 0"/>
+        <mass value="${payload_mass}"/>
+        <inertia ixx="${payload_i}" ixy="0.0" ixz="0.0"
+                 iyy="${payload_i}" iyz="0.0" izz="${payload_i}"/>
+      </inertial>
+    </xacro:if>
+  </link>
+
 </robot>

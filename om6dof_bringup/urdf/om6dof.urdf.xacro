@@ -3,13 +3,25 @@
   <xacro:arg name="port_name" default="/dev/ttyUSB0"/>
   <xacro:arg name="baud_rate" default="1000000"/>
   <xacro:arg name="use_fake_hardware" default="false"/>
+  <!-- Off by default. True swaps in the description that exposes an effort
+       command interface and puts the servos in current-based position mode,
+       which is what gravity compensation needs to reach a motor. The arm
+       becomes softer the moment it is loaded, so switch it deliberately. -->
+  <xacro:arg name="current_control" default="false"/>
 
   <!-- Runtime communication fail-safe settings are kept in one editable file. -->
   <xacro:property name="hardware_safety"
     value="${xacro.load_yaml('$(find om6dof_bringup)/config/hardware_safety.yaml')}"/>
 
   <xacro:include filename="$(find om6dof_description)/urdf/om6dof.urdf.xacro"/>
-  <xacro:include filename="$(find om6dof_bringup)/urdf/om6dof.ros2_control.xacro"/>
+  <!-- Exactly one of these: both define om6dof_ros2_control, so including
+       both would redefine the macro. -->
+  <xacro:unless value="$(arg current_control)">
+    <xacro:include filename="$(find om6dof_bringup)/urdf/om6dof.ros2_control.xacro"/>
+  </xacro:unless>
+  <xacro:if value="$(arg current_control)">
+    <xacro:include filename="$(find om6dof_bringup)/urdf/om6dof.ros2_control.current.xacro"/>
+  </xacro:if>
 
   <xacro:om6dof_ros2_control
     name="OM6DOFSystem"

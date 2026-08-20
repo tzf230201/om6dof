@@ -38,6 +38,7 @@ from .control_math import (
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
     MODE_CYLINDRICAL,
+    MODE_FLOAT,
     MODE_JOINT,
     MODE_READY,
     MODE_SEMI_CYLINDRICAL,
@@ -127,6 +128,11 @@ class OM6DOFController(Node):
         self.declare_parameter("joint_state_timeout_seconds", 1.0)
         self.declare_parameter("control_cmd_timeout_seconds", 0.3)
         self.declare_parameter("max_joint_command_velocity", 1.4)
+        # Lead-through follow rate. A hand pushes the arm slowly; an arm
+        # falling under its own weight accelerates past this, and the
+        # command then stops chasing it so the servo catches the arm
+        # instead of following it all the way down.
+        self.declare_parameter("float_follow_velocity", 0.35)
         self.declare_parameter("joint_lower", list(DEFAULT_JOINT_LOWER))
         self.declare_parameter("joint_upper", list(DEFAULT_JOINT_UPPER))
         self.declare_parameter("joint_limit_margin", 0.02)
@@ -490,6 +496,23 @@ class OM6DOFController(Node):
         self.control_velocity = np.zeros(6)
         self.last_control_cmd = 0.0
 
+    def _float_follow_velocity(self) -> float:
+        """How fast the lead-through command may chase the arm.
+
+        Read live rather than cached at startup: finding a value that feels
+        light without following a sag means trying a few while holding the
+        arm, and a restart between attempts loses both the pose and the feel.
+        """
+        try:
+            value = float(self.get_parameter("float_follow_velocity").value)
+        except (TypeError, ValueError):
+            return 0.35
+        if not math.isfinite(value) or value <= 0.0:
+            return 0.35
+        # Capped at the joint ceiling; past that the command is no longer the
+        # thing limiting the arm anyway.
+        return min(value, self.max_joint_velocity)
+
     def _seed_ik_anchor_locked(
         self, joint_positions: Optional[Sequence[float]] = None
     ) -> bool:
@@ -737,6 +760,23 @@ class OM6DOFController(Node):
                     )
                     return
                 self._set_motion_mode_locked(mode, "operation_mode")
+                return
+            if mode == MODE_FLOAT:
+                if not self.remote_enabled or not self.remote_controller_active:
+                    self.get_logger().warn(
+                        "FLOAT rejected: request JOINT first to take remote "
+                        "ownership"
+                    )
+                    return
+                self.motion_mode = MODE_FLOAT
+                self.pose_target = None
+                self.pose_operation = None
+                self._clear_stream_command_locked()
+                self.get_logger().warn(
+                    "FLOAT: the arm is now free to push by hand. It holds "
+                    "where friction holds it, which is not everywhere."
+                )
+                self._publish_state()
                 return
             if mode == MODE_READY:
                 resume = self._ready_resume_mode_locked()
@@ -1333,6 +1373,20 @@ class OM6DOFController(Node):
                             if next_mode != MODE_JOINT:
                                 self._seed_ik_anchor_locked(feedback)
                             self._publish_state()
+            elif self.motion_mode == MODE_FLOAT:
+                # Chase the measurement so the servo's position error, and so
+                # its holding torque, stay near zero. Rate limited: a hand
+                # moves the arm slowly, a fall does not, and refusing to chase
+                # the fast case is what makes the servo catch the arm rather
+                # than follow it to the bench.
+                target = clamp_positions(
+                    feedback, self.joint_lower, self.joint_upper
+                )
+                self.command_positions = step_toward(
+                    self.command_positions,
+                    target,
+                    self._float_follow_velocity() * dt,
+                )
             else:
                 stream_fresh = bool(
                     self.last_control_cmd

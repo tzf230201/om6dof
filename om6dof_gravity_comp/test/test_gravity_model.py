@@ -3,8 +3,11 @@ import math
 import numpy as np
 import pytest
 
+from urdf_parser_py.urdf import URDF
+
 from om6dof_gravity_comp.gravity_model import (
     GravityModel,
+    _lumped_tip_inertia,
     friction_compensation,
 )
 
@@ -120,3 +123,62 @@ def test_friction_compensation_pushes_with_the_motion_and_fades_at_rest():
     assert np.allclose(friction_compensation([0.0, 0.0], scalars, thresholds), 0.0)
     saturated = friction_compensation([10.0, 10.0], scalars, thresholds)
     assert saturated == pytest.approx(scalars)
+
+
+# A branch hanging off the last chain link, with its COM offset inside its
+# own frame -- the case the first version of the lumping got wrong.
+BRANCH_URDF = """<?xml version="1.0"?>
+<robot name="branch">
+  <link name="base"/>
+  <link name="arm">
+    <inertial><origin xyz="0 0 0"/><mass value="1.0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/></inertial>
+  </link>
+  <link name="tip"/>
+  <link name="finger">
+    <inertial><origin xyz="0 0 0.01"/><mass value="0.02"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/></inertial>
+  </link>
+  <joint name="j1" type="revolute">
+    <parent link="base"/><child link="arm"/>
+    <origin xyz="0 0 0"/><axis xyz="0 1 0"/>
+    <limit lower="-3" upper="3" effort="10" velocity="1"/>
+  </joint>
+  <joint name="j_tip" type="fixed">
+    <parent link="arm"/><child link="tip"/><origin xyz="0 0 0.5"/>
+  </joint>
+  <joint name="j_finger" type="fixed">
+    <parent link="arm"/><child link="finger"/><origin xyz="0 0 0.2"/>
+  </joint>
+</robot>
+"""
+
+
+def test_branch_mass_is_placed_in_the_tip_frame_not_its_own():
+    """A branch COM must be carried into the tip frame before it is lumped.
+
+    Using the branch link's own inertial origin directly put the gripper
+    44 mm too far out on the real arm, inflating every torque it contributes.
+    """
+    robot = URDF.from_xml_string(BRANCH_URDF)
+    joints = robot.get_chain("base", "tip", joints=True, links=False)
+    links = robot.get_chain("base", "tip", joints=False, links=True)
+    mass, com = _lumped_tip_inertia(robot, joints, links)
+
+    assert mass == pytest.approx(0.02)
+    # finger sits 0.2 along arm, its own COM another 0.01 -> 0.21 from arm;
+    # the tip frame is 0.5 along arm, so 0.21 - 0.5 = -0.29 in tip frame.
+    assert com.z() == pytest.approx(-0.29, abs=1e-9)
+    assert com.x() == pytest.approx(0.0, abs=1e-12)
+
+
+def test_branch_mass_actually_changes_the_torque():
+    """Guards the lumping from quietly becoming a no-op."""
+    with_branch = GravityModel(BRANCH_URDF, base_link="base", tip_link="tip")
+    without = GravityModel(BRANCH_URDF, base_link="base", tip_link="tip",
+                           include_offchain_mass=False)
+    # Away from zero: at q = 0 the branch sits directly above the joint axis,
+    # so its lever arm vanishes and the comparison would prove nothing.
+    q = [0.6]
+    assert abs(with_branch.torques(q)[0] - without.torques(q)[0]) > 1e-3
+    assert with_branch.total_mass() == pytest.approx(without.total_mass() + 0.02)

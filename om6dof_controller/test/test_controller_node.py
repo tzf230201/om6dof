@@ -9,6 +9,7 @@ from controller_manager_msgs.srv import SwitchController
 from std_msgs.msg import Float64MultiArray, String
 
 from om6dof_controller.control_math import (
+    MODE_FLOAT,
     MODE_SEMI_CYLINDRICAL,
     SEMI_PITCH_LIMIT,
     rotation_error,
@@ -634,3 +635,90 @@ def test_semi_cylindrical_joint_nudges_respect_joint_limits():
     _drive(node, 5, 5.0, steps=400)
     assert node.command_positions[4] <= node.joint_upper[4] + 1e-9
     assert node.command_positions[5] <= node.joint_upper[5] + 1e-9
+
+
+def _float_node(follow=0.35):
+    node = _controller(remote_enabled=True)
+    node._float_follow_velocity = lambda: follow
+    node._on_operation_mode(String(data="FLOAT"))
+    return node
+
+
+def test_float_requires_remote_ownership():
+    """Handing the arm to a person must not bypass taking control of it."""
+    node = _controller(remote_enabled=False)
+    node._float_follow_velocity = lambda: 0.35
+    node._on_operation_mode(String(data="FLOAT"))
+    assert node.motion_mode != MODE_FLOAT
+
+
+def test_float_is_entered_by_name_and_by_alias():
+    assert _float_node().motion_mode == MODE_FLOAT
+    node = _controller(remote_enabled=True)
+    node._float_follow_velocity = lambda: 0.35
+    node._on_operation_mode(String(data="teach"))
+    assert node.motion_mode == MODE_FLOAT
+
+
+def test_float_command_follows_a_hand_moving_the_arm():
+    """Pushed slowly, the command tracks the arm so the servo stops resisting."""
+    node = _float_node()
+    start = list(node.command_positions)
+    # A hand nudges joint 2 by 2 degrees; feedback reports the new place.
+    moved = list(start)
+    moved[1] += math.radians(2.0)
+    node.joint_positions = dict(zip(node.joint_names, moved))
+    node.last_joint_state = time.monotonic()
+
+    for _ in range(60):
+        node.last_tick = time.monotonic() - 0.02
+        node._tick()
+
+    assert node.command_positions[1] == pytest.approx(moved[1], abs=1e-4)
+
+
+def test_float_does_not_chase_a_falling_joint():
+    """A fall outruns the follow rate, so the command lags and the servo holds.
+
+    Chasing it would mean the goal descends with the arm and nothing ever
+    catches it.
+    """
+    node = _float_node()
+    start = list(node.command_positions)
+    dropped = list(start)
+    dropped[1] += 1.2  # far more than a hand moves in one tick
+    node.joint_positions = dict(zip(node.joint_names, dropped))
+    node.last_joint_state = time.monotonic()
+
+    elapsed = 0.02
+    node.last_tick = time.monotonic() - elapsed
+    node._tick()
+
+    moved = abs(node.command_positions[1] - start[1])
+    # dt is measured inside the tick, so allow for it being a shade over the
+    # sleep; the point is that 1.2 rad of fall produced millimetres of chase.
+    assert moved <= 0.35 * elapsed * 1.5, (
+        f"command chased {moved:.4f} rad in one tick"
+    )
+    assert moved > 0.0
+    assert moved < 0.05, "the command tracked most of the fall"
+
+
+def test_float_follow_rate_takes_effect_without_a_restart():
+    """The rate must be tunable live, or the advice to tune it is useless.
+
+    It was cached at startup, so `ros2 param set` changed the parameter and
+    nothing else -- the arm kept the value it booted with.
+    """
+    steps = {}
+    for label, follow in (("slow", 0.2), ("fast", 1.2)):
+        node = _float_node(follow=follow)
+        start = list(node.command_positions)
+        moved = list(start)
+        moved[1] += 1.0
+        node.joint_positions = dict(zip(node.joint_names, moved))
+        node.last_joint_state = time.monotonic()
+        node.last_tick = time.monotonic() - 0.02
+        node._tick()
+        steps[label] = abs(node.command_positions[1] - start[1])
+    assert steps["fast"] > steps["slow"] * 3, steps

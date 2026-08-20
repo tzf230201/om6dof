@@ -1,3 +1,5 @@
+import os
+import time
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
@@ -8,10 +10,37 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
+
+# The dashboard needs a way to bring the stack up in current-control mode
+# without editing a systemd unit it cannot write. A flag file is the whole
+# mechanism: the GUI writes it, then triggers the restart it is already
+# allowed to trigger, and this reads it. Missing file means position mode.
+CURRENT_CONTROL_FLAG = os.path.expanduser("~/.config/om6dof/current_control")
+
+# The flag expires, so position mode is what every restart lands in unless the
+# GUI asked for current control moments earlier. A latching flag meant a leader
+# session enabled once kept every later boot -- including a reboot days on --
+# in current-based mode, silently inheriting a setting nobody remembered
+# choosing. Expiry rather than delete-on-read because both this file and
+# full_stack.launch.py read the flag during one launch, and a consuming read
+# would give whichever ran second the opposite answer.
+CURRENT_CONTROL_TTL_S = 180.0
+
+
+def current_control_default() -> str:
+    try:
+        with open(CURRENT_CONTROL_FLAG) as handle:
+            requested = handle.read().strip().lower() == "true"
+        age = time.time() - os.path.getmtime(CURRENT_CONTROL_FLAG)
+    except OSError:
+        return "false"
+    return "true" if requested and age <= CURRENT_CONTROL_TTL_S else "false"
+
 def generate_launch_description():
     port_name = LaunchConfiguration("port_name")
     baud_rate = LaunchConfiguration("baud_rate")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
+    current_control = LaunchConfiguration("current_control")
     package_share = FindPackageShare("om6dof_bringup")
 
     robot_description = ParameterValue(
@@ -21,6 +50,7 @@ def generate_launch_description():
             " port_name:=", port_name,
             " baud_rate:=", baud_rate,
             " use_fake_hardware:=", use_fake_hardware,
+            " current_control:=", current_control,
         ]),
         value_type=str,
     )
@@ -78,6 +108,12 @@ def generate_launch_description():
         DeclareLaunchArgument("port_name", default_value="/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT5NUUIQ-if00-port0"),
         DeclareLaunchArgument("baud_rate", default_value="1000000"),
         DeclareLaunchArgument("use_fake_hardware", default_value="false"),
+        # Off by default. True loads the description with an effort command
+        # interface and the servos in current-based position mode, which is
+        # what lets gravity compensation reach a motor. The arm goes softer
+        # as soon as it comes up, so it is opt-in.
+        DeclareLaunchArgument("current_control",
+                              default_value=current_control_default()),
         state_publisher,
         control_node,
         joint_state_spawner,

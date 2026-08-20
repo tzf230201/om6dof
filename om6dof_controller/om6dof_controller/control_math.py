@@ -22,6 +22,11 @@ MODE_SEMI_CYLINDRICAL = "SEMI_CYLINDRICAL"
 SEMI_PITCH_LIMIT = math.pi / 2 - 0.05
 MODE_READY = "READY"
 MODE_STARTUP = "STARTUP"
+# Lead-through: the position command tracks the measured position, so the
+# servo's own error term stays near zero and the arm can be pushed by hand.
+# Not a motion mode -- nothing streams into it, and it has no target form --
+# so it stays out of MOTION_MODES and the mode cycle.
+MODE_FLOAT = "FLOAT"
 MOTION_MODES = (
     MODE_JOINT,
     MODE_CARTESIAN,
@@ -38,6 +43,7 @@ OPERATION_MODES = (
     *MOTION_MODES,
     MODE_READY,
     MODE_STARTUP,
+    MODE_FLOAT,
 )
 
 
@@ -65,6 +71,10 @@ def normalize_operation_mode(value: str) -> str:
         "SEMI_SILINDER": MODE_SEMI_CYLINDRICAL,
         "READY": MODE_READY,
         "STARTUP": MODE_STARTUP,
+        "FLOAT": MODE_FLOAT,
+        "LEAD": MODE_FLOAT,
+        "LEADTHROUGH": MODE_FLOAT,
+        "TEACH": MODE_FLOAT,
         "START": MODE_STARTUP,
     }
     try:

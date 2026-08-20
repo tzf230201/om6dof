@@ -20,6 +20,13 @@
       forward_position_controller:
         type: forward_command_controller/ForwardCommandController
 
+      # Only usable with om6dof.ros2_control.current.xacro, which is the one
+      # that exposes an effort command interface. Loading it against the
+      # standard description fails at startup rather than doing anything
+      # surprising.
+      forward_effort_controller:
+        type: forward_command_controller/ForwardCommandController
+
       gripper_controller:
         type: position_controllers/GripperActionController
 
@@ -75,3 +82,16 @@
         - position
       command_interfaces:
         - position
+
+  # ----- current command controller (for leader-arm compensation) -----
+  # Loaded inactive; om6dof_gravity_comp publishes here once armed.
+  forward_effort_controller:
+    ros__parameters:
+      joints:
+        - joint1
+        - joint2
+        - joint3
+        - joint4
+        - joint5
+        - joint6
+      interface_name: effort

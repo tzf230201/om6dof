@@ -60,6 +60,12 @@ class GravityCompNode(Node):
         self.declare_parameter("joint_state_topic", "/joint_states")
         self.declare_parameter("torque_topic", "/om6dof/gravity_torque")
         self.declare_parameter("current_topic", "/om6dof/gravity_current_ma")
+        # The effort interface on this driver is neither Nm nor mA: the
+        # XM430 model file declares "Present Current"/"Goal Current" with
+        # scale 1.0 and unit "raw", so it carries the register value
+        # directly. Anything that ever commands effort has to send that,
+        # which is why it is published alongside the physical units.
+        self.declare_parameter("raw_topic", "/om6dof/gravity_effort_raw")
         self.declare_parameter("publish_rate_hz", 50.0)
         # Straight from ROBOTIS's controller for this hardware: joints 2 and 3
         # carry the arm and drag the most, the wrist barely at all.
@@ -91,6 +97,8 @@ class GravityCompNode(Node):
             Float64MultiArray, self._p("torque_topic"), 10)
         self.pub_current = self.create_publisher(
             Float64MultiArray, self._p("current_topic"), 10)
+        self.pub_raw = self.create_publisher(
+            Float64MultiArray, self._p("raw_topic"), 10)
         self.create_subscription(
             JointState, self._p("joint_state_topic"), self._on_joint_state, 20)
         period = 1.0 / max(1.0, float(self._p("publish_rate_hz")))
@@ -166,11 +174,17 @@ class GravityCompNode(Node):
         # Guard the division: a zero constant in a params file would otherwise
         # publish infinities straight at whatever reads this next.
         safe = np.where(np.abs(constants) < 1e-6, np.nan, constants)
-        current_ma = torque / safe * 1000.0 / unit
+        current_ma = torque / safe * 1000.0        # Nm / (Nm/A) -> A -> mA
+
+        # Raw register units are what the effort interface speaks, and what
+        # the measured effort in /joint_states is already in, so this is the
+        # figure the two can actually be compared on.
+        raw = np.nan_to_num(current_ma) / unit     # mA -> register units
 
         self.pub_torque.publish(Float64MultiArray(data=torque.tolist()))
         self.pub_current.publish(
             Float64MultiArray(data=np.nan_to_num(current_ma).tolist()))
+        self.pub_raw.publish(Float64MultiArray(data=raw.tolist()))
 
 
 def main(args=None) -> None:

@@ -3,7 +3,7 @@ project(om6dof_description)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY launch meshes urdf
+install(DIRECTORY config launch meshes urdf
   DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)

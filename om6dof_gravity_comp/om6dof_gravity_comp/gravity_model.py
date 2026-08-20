@@ -52,28 +52,82 @@ def _rigid_body_inertia(link) -> PyKDL.RigidBodyInertia:
     )
 
 
-def _lumped_tip_inertia(
-    robot, chain_links: Sequence[str], tip_link: str
-) -> Tuple[float, PyKDL.Vector]:
-    """Mass hanging off the chain that the chain itself does not carry.
+def _frame_of(joint) -> PyKDL.Frame:
+    origin = getattr(joint, "origin", None)
+    xyz = origin.xyz if (origin and origin.xyz) else [0.0, 0.0, 0.0]
+    rpy = origin.rpy if (origin and origin.rpy) else [0.0, 0.0, 0.0]
+    return PyKDL.Frame(
+        PyKDL.Rotation.RPY(*[float(v) for v in rpy]),
+        PyKDL.Vector(*[float(v) for v in xyz]),
+    )
 
-    The gripper fingers branch off the wrist, so a chain that stops at the
-    tool tip would ignore them. They are real load on joints 2 and 3, so
-    their mass is folded into the tip as a single equivalent point.
+
+def _lumped_tip_inertia(
+    robot, chain_joint_names: Sequence[str], chain_links: Sequence[str]
+) -> Tuple[float, PyKDL.Vector]:
+    """Branch mass folded into the tip segment, expressed in the tip frame.
+
+    The gripper fingers hang off the wrist, so a chain that stops at the tool
+    tip ignores them even though they are real load on joints 2 and 3.
+
+    Getting the frame right matters more than it looks. A link's inertial
+    origin is given in *that link's* frame, so using it directly puts the mass
+    at the tip's origin instead of where the finger actually is -- here that
+    was 44 mm too far out along the wrist. Each branch COM is therefore
+    carried up to the chain and then back down into the tip frame before the
+    masses are combined.
+
+    Movable branch joints are evaluated at zero. For this gripper that costs
+    nothing: the fingers are prismatic along opposite Y, so their combined
+    centre stays on the centreline whatever the opening.
     """
+    parent_map = {joint.child: joint for joint in robot.joints}
+    chain_set = set(chain_links)
+
+    # Pose of every chain link relative to the chain's tip frame.
+    to_tip: dict = {}
+    cumulative = PyKDL.Frame()
+    for name in chain_joint_names:
+        joint = robot.joint_map[name]
+        cumulative = cumulative * _frame_of(joint)
+        to_tip[joint.child] = PyKDL.Frame(cumulative)
+    tip_frame = PyKDL.Frame(cumulative)
+    tip_inverse = tip_frame.Inverse()
+    for link, frame in to_tip.items():
+        to_tip[link] = tip_inverse * frame
+    if chain_links:
+        to_tip.setdefault(chain_links[0], tip_inverse)
+
     total = 0.0
     moment = PyKDL.Vector(0, 0, 0)
     for name, link in robot.link_map.items():
-        if name in chain_links:
+        if name in chain_set:
             continue
         inertial = getattr(link, "inertial", None)
         if inertial is None or not inertial.mass:
             continue
+
+        # Walk up to the chain, composing as we go.
+        transform = PyKDL.Frame()
+        cursor = name
+        while cursor not in chain_set:
+            joint = parent_map.get(cursor)
+            if joint is None:
+                transform = None
+                break
+            transform = _frame_of(joint) * transform
+            cursor = joint.parent
+        if transform is None or cursor not in to_tip:
+            continue
+
         origin = getattr(inertial, "origin", None)
         xyz = origin.xyz if (origin and origin.xyz) else [0.0, 0.0, 0.0]
+        local = PyKDL.Vector(*[float(v) for v in xyz])
+        in_tip = to_tip[cursor] * (transform * local)
         mass = float(inertial.mass)
         total += mass
-        moment += PyKDL.Vector(*[float(v) for v in xyz]) * mass
+        moment += in_tip * mass
+
     if total <= 0.0:
         return 0.0, PyKDL.Vector(0, 0, 0)
     return total, moment / total
@@ -97,7 +151,7 @@ def build_chain(
     link_names = robot.get_chain(base_link, tip_link, joints=False, links=True)
 
     extra_mass, extra_com = (
-        _lumped_tip_inertia(robot, link_names, tip_link)
+        _lumped_tip_inertia(robot, joint_names, link_names)
         if include_offchain_mass else (0.0, PyKDL.Vector(0, 0, 0))
     )
 

@@ -1,0 +1,52 @@
+# Tool payload carried at the wrist -- the Intel RealSense D405, its bracket,
+# and the length of cable that moves with the arm.
+#
+# WHY THIS FILE EXISTS
+#   The URDF describes the bare arm: 0.826 kg in total. Anything bolted to the
+#   wrist afterwards is real load that gravity acts on, and it acts at the far
+#   end of the longest lever in the machine. Leaving it out does not make the
+#   arm lighter, it makes the gravity model wrong -- and the missing torque
+#   then gets blamed on the current limit or hidden inside a fudge factor.
+#
+# WHAT GRAVITY ACTUALLY USES
+#   mass and com only. Gravity torque is the gradient of potential energy, so
+#   the rotational inertia below never enters G(q); it is a physically valid
+#   placeholder so the URDF stays well formed. Measure mass and com carefully;
+#   do not lose sleep over the inertia.
+#
+# FRAMES -- read before measuring
+#   The bracket's own position is NOT guesswork and is not configured here:
+#   it is fixed in the URDF at the bolted interface, which was read straight
+#   out of the two meshes. The bracket has four M3 holes on a 12 x 16 mm grid
+#   on its y=0 face; chain_link7.stl has a flat face at x = -35.3 mm carrying
+#   the same 16 x 12 mm M3 grid. Only one pairing fits, so the bracket pose
+#   follows from geometry rather than from anybody's estimate.
+#
+#   com   centre of mass of camera + bracket + moving cable, measured from
+#         the CENTRE OF THE FOUR MOUNTING SCREWS, in the d405_payload_link
+#         frame. That frame's axes are drawn in RViz; the origin sits exactly
+#         between the four screw heads, so you can measure to it directly.
+#
+# UNTIL MEASURED
+#   mass 0.0 means no payload, and the model is then bit-for-bit identical to
+#   the one that existed before this file. Zero is honest: it says unknown
+#   rather than inventing a number that would look like data.
+
+payload:
+  # --- MEASURE THIS: camera + bracket + moving cable, on a kitchen scale [kg]
+  mass: 0.08
+
+  # --- MEASURE THIS: centre of mass from the four-screw centre [m]
+  com: [0.0, 0.0, 0.0]
+
+  # How far up the wrist the bracket foot sits, along link7 +Z, measured from
+  # the M3 hole centre at z = 34 mm that the bolt pattern lands on. Zero puts
+  # the foot exactly on that hole centre, which is what the hardware does.
+  # Nudge it only if the model's foot sits lower or higher than the real one;
+  # it moves the visual and the payload together, so the mass stays where the
+  # hardware is.
+  mount_offset_z: 0.00
+
+  # Placeholder only: a solid sphere of this radius, so the tensor is always
+  # physically valid whatever mass you enter. Gravity does not read it.
+  inertia_radius: 0.02
