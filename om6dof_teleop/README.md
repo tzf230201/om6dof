@@ -1,5 +1,10 @@
 # om6dof_teleop
 
+> **Control-profile compatibility:** this package drives the normal position
+> profile. It does not provide GUIDE for the Mode 0 leader arm. Never launch its
+> full hardware stack while `om6dof_leader_controller` owns U2D2. See the
+> [leader-arm gravity-compensation record](../docs/leader_arm_gravity_compensation.md).
+
 Go2W remote-input adapter for OM6DOF. This package translates joystick samples
 into the generic command contract exposed by `om6dof_controller`; it does not
 perform kinematics, switch ros2_control controllers, publish final joint

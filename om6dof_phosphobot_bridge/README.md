@@ -1,5 +1,10 @@
 # om6dof_phosphobot_bridge
 
+> **Control-profile compatibility:** the bridge closes a position-command loop
+> and belongs to the normal OM6DOF profile. It must not publish arm position
+> commands into the isolated Mode 0 leader stack. See the
+> [leader-arm gravity-compensation record](../docs/leader_arm_gravity_compensation.md).
+
 Exposes the OM6DOF arm to [phosphobot](https://phospho.ai) over HTTP, without
 giving it the servo bus.
 

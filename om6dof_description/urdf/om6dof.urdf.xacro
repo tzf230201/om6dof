@@ -569,4 +569,83 @@
     </xacro:if>
   </link>
 
+  <!-- ============ D405 optical frame: d405_link, d405_depth_optical_frame ============
+       Everything above (d405_payload_link) places the ALOHA bracket + camera as one fused
+       STL. This section locates two more frames INSIDE that assembly: the camera's own body
+       frame (d405_link) and the depth optical frame tf2/RViz/librealsense-adjacent code
+       expects (z forward into the scene, x right, y down; REP 103 optical convention).
+
+       METHOD, splitting the fused mesh:
+       d405_wrist_cam.stl decomposes into exactly two disjoint shells by connected components
+       (union-find over shared vertices, since the bracket and camera don't touch): 19.32 cm^3
+       (the bracket) and 38.73 cm^3. The second is byte-for-byte the same geometry as
+       meshes/d405.stl: same 4630 triangles, same 38.73 cm^3, same triangle order, so that
+       file is the bare D405 camera body on its own, and the assembly contains one unmodified,
+       rigidly-placed copy of it. Kabsch/SVD alignment of that shell's 13890 vertices against
+       d405.stl's own vertices (both already in matching order, so vertex i corresponds to
+       vertex i, no nearest-neighbour search needed) recovers the placement to sub-micron
+       residual (max 5.9e-6 mm over 13890 points): not a noisy fit, effectively reading the
+       exact rigid transform back out of the file. A point given in d405.stl's own frame (mm)
+       maps through a fitted rotation R and translation t to the same point in the raw
+       d405_wrist_cam.stl frame (mm): the same frame the visual mesh origin above is stated in.
+       Composing t with that visual origin's shift (+19.1,-27.2,-75.5 mm, the same constant
+       used above) gives d405_link's origin in the d405_payload_link frame; R (pure rotation,
+       untouched by translation) gives its orientation directly. (Script: SVD/Kabsch alignment
+       of the two meshes, run once during this integration; not checked in.)
+
+       ORIENTATION SIGN, which way d405_link's +Z points:
+       d405.stl's own frame does not self-label which flat 42x42 end is the lens side and
+       which is the connector side: both end caps are otherwise plain, and the only
+       asymmetric feature found (two holes 18 mm apart, symmetric about the centerline, at
+       one extreme) could honestly be either the two imager lenses (18 mm matches the D405
+       baseline, Table 3-49 of the Intel D400 datasheet, doc 337029-017) or the two M3x0.5
+       mounting inserts on the back panel (Figure 4-9, same document). Rather than guess, the
+       sign was fixed by the one fact that has to hold regardless of mesh cosmetics: a wrist
+       camera must look away from the arm, roughly toward end_effector_link (link7 +Z), not
+       back into it. Of the two candidate directions +/-Z of d405.stl's own frame, local +Z
+       lands 25.0 deg off link7's +Z once carried through this whole chain; the other
+       candidate lands 155.0 deg off, looking back into the arm. So local +Z of d405.stl is
+       "forward" (into the scene), which also fixes local Z=0 as the front glass plane (the
+       housing only occupies local z in [-23, 0] mm).
+       This is the same kind of 180 degree call the bracket rotation above settled with a
+       photograph; no such photograph of the assembled camera exists here, so this is the next
+       best evidence available. If the world-frame point cloud is later seen to rotate or
+       drift as the wrist reorients, rather than sitting still (which is the actual M2
+       acceptance test), suspect this sign first.
+
+       DEPTH ORIGIN, where along that axis:
+       Table 4-16 (Figure 4-4) gives the D405 "Depth Start Point" as 3.7 mm behind the front
+       cover glass, i.e. 3.7 mm in local -Z from d405_link's origin. Table 4-21 places the
+       left imager 9 mm off the housing centerline (half of the 18 mm baseline), but which
+       side is "left" is not recoverable from this mesh (both end faces are bilaterally
+       symmetric in it; unlike the bracket rotation there is no photo of the assembled camera
+       to check against). That 9 mm is left off (optical frame kept on the centerline) rather
+       than guessing its sign: it only shifts the drawn TF pose in RViz, never the
+       reconstructed point cloud, because the perception node deprojects with librealsense's
+       own live intrinsics (fx, fy, ppx, ppy read from the camera at runtime), not this static
+       offset.
+
+       d405_depth_optical_frame's rotation relative to d405_link is left as identity: baseline
+       (d405.stl local X) lands within 0.012 deg of link7's own +Y axis, and forward (local Z)
+       within 25 deg of link7's +Z, exactly what X-right/Y-down/Z-forward should look like if
+       d405.stl's mesh axes were already authored in that convention, which is plausible for a
+       mesh sourced for URDF/ROS use. Like the 9 mm above, this is not verified against the
+       real hardware's markings.
+  -->
+  <joint name="d405_link_joint" type="fixed">
+    <origin xyz="0.010093 0.047231 0.000046" rpy="-1.134465 1.570590 -1.570798"/>
+    <parent link="d405_payload_link"/>
+    <child link="d405_link"/>
+  </joint>
+  <link name="d405_link"/>
+
+  <joint name="d405_depth_optical_joint" type="fixed">
+    <!-- -0.0037 m: Table 4-16 "Depth Start Point" for D405, 3.7 mm behind the front cover
+         glass (local -Z, back toward the sensor); see the derivation above. -->
+    <origin xyz="0 0 -0.0037" rpy="0 0 0"/>
+    <parent link="d405_link"/>
+    <child link="d405_depth_optical_frame"/>
+  </joint>
+  <link name="d405_depth_optical_frame"/>
+
 </robot>

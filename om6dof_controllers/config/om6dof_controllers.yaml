@@ -175,16 +175,40 @@
       tip_link: end_effector_link
       gravity: [0.0, 0.0, -9.80665]
 
-      # Same measured model as the gravity controller; see its section.
       gain: [0.0, 1.0, 1.0, 0.0, 0.0, 0.0]
-      effort_scale: [1.0, 285.4, 384.7, 1.0, 1.0, 1.0]
+
+      # PROVISIONAL, and the reason matters.
+      #
+      # The identification of 2026-08-20 measured 285.4 and 384.7 ticks per Nm,
+      # but against a gravity model that has since changed: off-chain mass folded
+      # in, placeholder centres of mass replaced, link6 and link7 corrected. The
+      # measured currents are still true, so the scale can in principle be
+      # carried across by the ratio of old model to new.
+      #
+      # It cannot be carried cleanly. Over 4000 random poses that ratio is not
+      # constant -- joint2 spreads 0.43 to 0.90, joint3 0.25 to 1.04 -- which
+      # means the model's SHAPE changed, not just its size, and no single factor
+      # fixes that. These are the least-squares best single scales (x0.653 and
+      # x0.608): closer than the stale numbers, still wrong pose by pose.
+      #
+      # Re-run the identification in om6dof_gravity_comp. Until then the arm is
+      # usable but not calibrated.
+      effort_scale: [1.0, 186.4, 233.9, 1.0, 1.0, 1.0]
+
+      # Coulomb in Nm, from the fitted ticks divided by the scale above:
+      # joint2 27.396/186.4, joint3 47.279/233.9. Carries the same caveat.
+      # `viscous` came out negative in that fit, which would mean friction adding
+      # energy, so it stays at zero.
       friction:
-        coulomb: [0.0, 0.096, 0.123, 0.0, 0.0, 0.0]
+        coulomb: [0.0, 0.147, 0.202, 0.0, 0.0, 0.0]
         viscous: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         deadzone: 0.02
 
       # max_effort is load-bearing here, literally: it must stay ABOVE what
-      # holding the arm costs (joint2 reaches ~340 ticks at its worst pose). If
+      # holding the arm costs. Swept over the new model, joint2 peaks at
+      # 1.636 Nm -> 305 ticks and joint3 at 0.809 Nm -> 189 ticks, so 500 and
+      # 400 clear them with room. (The old model said 1.19 Nm for joint2; it was
+      # 37% light, which is what the missing mass was worth.) If
       # gravity can move the arm, the motion gate below reads that as the
       # operator, the setpoint follows the sag, and the arm walks to the floor.
       # Never tune the arm's feel with this -- use headroom.

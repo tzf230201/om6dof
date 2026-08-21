@@ -1,0 +1,29 @@
+# Parameters for topo_gng_node (M2 environment graph + M3 YOLO labelling; the
+# robot graph and self-body mask are M4 -- see README.md and the task notes).
+topo_gng_node:
+  ros__parameters:
+    pixel_step: 6          # matches realsense_ddgng/ddgng_realsense.py's PIXEL_STEP
+    max_nodes: 500          # matches realsense_ddgng/ddgng_realsense.py's MAX_NODES
+    updates: 300            # DynamicGrowingNeuralGas::partialFit updates per captured frame
+    z_min: 0.2               # metres; matches ddgng_realsense.py's Z_MIN
+    z_max: 4.0               # metres; matches ddgng_realsense.py's Z_MAX
+    width: 640
+    height: 480
+    fps: 30
+    world_frame: "world"
+    camera_frame: "d405_depth_optical_frame"
+    environment_graph_topic: "/om6dof_topo_gng/environment_graph"
+    tf_timeout_sec: 0.1
+    node_marker_scale: 0.02
+    edge_marker_width: 0.004
+
+    # YOLOX (OpenCV DNN, ONNX Runtime is unavailable on this Jetson) -- same
+    # model and pre/post-processing as om6dof_perception/yolox_detector.py.
+    yolo_model_path: "~/.cache/om6dof_perception/yolox_s.onnx"
+    yolo_confidence: 0.35
+    yolo_nms_threshold: 0.5
+    yolo_period_sec: 0.5     # matches dd_gng_yolo.py's --yolo-period default
+    target_classes: ""       # comma-separated, e.g. "bottle,cup"; empty = every COCO class is a target
+    label_confidence: 0.35   # per-detection score floor before it can label any node
+    min_label_nodes: 3       # a box needs >=3 supporting nodes to label anything
+    labels_topic: "/om6dof_topo_gng/labels"

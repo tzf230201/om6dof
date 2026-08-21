@@ -40,7 +40,7 @@ DynamixelHardware::DynamixelHardware()
   logger_(rclcpp::get_logger("dynamixel_hardware_interface"))
 {
   dxl_status_ = DXL_OK;
-  dxl_torque_status_ = TORQUE_ENABLED;
+  dxl_torque_status_ = TORQUE_DISABLED;
   err_timeout_ms_ = 500;
   is_read_in_error_ = false;
   is_write_in_error_ = false;
@@ -138,6 +138,23 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
   RCLCPP_INFO(
     logger_, "Dynamixel communication fail-safe threshold: %d consecutive failures",
     consecutive_failure_shutdown_threshold_);
+
+  if (info_.hardware_parameters.find("auto_enable_torque_on_start") !=
+    info_.hardware_parameters.end())
+  {
+    auto_enable_torque_on_start_ =
+      info_.hardware_parameters.at("auto_enable_torque_on_start") == "true";
+  }
+  RCLCPP_INFO(
+    logger_, "Automatic torque enable on hardware start: %s",
+    auto_enable_torque_on_start_ ? "true" : "false");
+
+  if (info_.hardware_parameters.find("restrict_critical_write_service") !=
+    info_.hardware_parameters.end())
+  {
+    restrict_critical_write_service_ =
+      info_.hardware_parameters.at("restrict_critical_write_service") == "true";
+  }
 
   // Add new parameter for torque initialization
   bool disable_torque_at_init = false;
@@ -310,7 +327,7 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  if (num_of_transmissions_ != hdl_trans_commands_.size() &&
+  if (num_of_transmissions_ != hdl_trans_commands_.size() ||
     num_of_transmissions_ != hdl_trans_states_.size())
   {
     RCLCPP_ERROR_STREAM(
@@ -365,7 +382,7 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     hdl_joint_commands_.push_back(temp_cmd);
   }
 
-  if (num_of_joints_ != hdl_joint_commands_.size() &&
+  if (num_of_joints_ != hdl_joint_commands_.size() ||
     num_of_joints_ != hdl_joint_states_.size())
   {
     RCLCPP_ERROR_STREAM(
@@ -612,17 +629,38 @@ hardware_interface::CallbackReturn DynamixelHardware::start()
 
   CalcJointToTransmission();
 
-  dxl_comm_->WriteMultiDxlData();
+  if (dxl_comm_->WriteMultiDxlData() != DxlError::OK) {
+    RCLCPP_ERROR(logger_, "Failed to write initial Dynamixel command values");
+    return hardware_interface::CallbackReturn::ERROR;
+  }
 
-  if (torque_enabled_comm_id_id_.size() > 0) {
+  if (!auto_enable_torque_on_start_) {
+    dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+    dxl_torque_status_ = TORQUE_DISABLED;
+    RCLCPP_WARN(
+      logger_,
+      "Leaving Dynamixel torque disabled on start; explicitly arm only after the effort "
+      "controller is active and commanding zero current");
+  } else if (torque_enabled_comm_id_id_.size() > 0) {
     RCLCPP_INFO_STREAM(logger_, "Enabling torque for Dynamixels");
+    bool enabled = false;
     for (int i = 0; i < 10; i++) {
       if (dxl_comm_->DynamixelEnable(torque_enabled_comm_id_id_) == DxlError::OK) {
+        enabled = true;
         break;
       }
       RCLCPP_ERROR_STREAM(logger_, "Failed to enable torque for Dynamixels, retry...");
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+    if (!enabled) {
+      (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
+      dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+      dxl_torque_status_ = TORQUE_DISABLED;
+      RCLCPP_ERROR(logger_, "Failed to enable Dynamixel torque after 10 attempts");
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+    dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+    dxl_torque_status_ = TORQUE_ENABLED;
   }
 
   RCLCPP_INFO_STREAM(logger_, "Dynamixel Hardware Start!");
@@ -633,8 +671,14 @@ hardware_interface::CallbackReturn DynamixelHardware::start()
 hardware_interface::CallbackReturn DynamixelHardware::stop()
 {
   if (dxl_comm_) {
-    dxl_comm_->DynamixelDisable(dxl_comm_id_id_);
-    dxl_comm_->DynamixelDisable(virtual_dxl_comm_id_id_);
+    const DxlError physical_result = dxl_comm_->DynamixelDisable(dxl_comm_id_id_);
+    const DxlError virtual_result = dxl_comm_->DynamixelDisable(virtual_dxl_comm_id_id_);
+    dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+    dxl_torque_status_ = TORQUE_DISABLED;
+    if (physical_result != DxlError::OK || virtual_result != DxlError::OK) {
+      RCLCPP_ERROR_STREAM(logger_, "Failed to confirm torque disable while stopping hardware");
+      return hardware_interface::CallbackReturn::ERROR;
+    }
   } else {
     RCLCPP_ERROR_STREAM(logger_, "Dynamixel Hardware Stop Fail : dxl_comm_ is nullptr");
     return hardware_interface::CallbackReturn::ERROR;
@@ -655,7 +699,16 @@ hardware_interface::return_type DynamixelHardware::read(
     return hardware_interface::return_type::ERROR;
   } else if (dxl_status_ == DXL_OK || dxl_status_ == COMM_ERROR || dxl_status_ == HW_ERROR) {
     dxl_comm_err_ = CheckError(dxl_comm_->ReadMultiDxlData(period_ms));
-    if (dxl_comm_err_ != DxlError::OK && dxl_comm_err_ != DxlError::DXL_HARDWARE_ERROR) {
+    if (dxl_comm_err_ == DxlError::DXL_HARDWARE_ERROR) {
+      (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
+      dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+      dxl_torque_status_ = TORQUE_DISABLED;
+      fail_safe_triggered_ = true;
+      RCLCPP_FATAL(
+        logger_, "Dynamixel hardware fault detected; torque-disable requested and control stopped");
+      return hardware_interface::return_type::ERROR;
+    }
+    if (dxl_comm_err_ != DxlError::OK) {
       ++consecutive_read_failures_;
       if (!is_read_in_error_) {
         is_read_in_error_ = true;
@@ -700,6 +753,30 @@ hardware_interface::return_type DynamixelHardware::read(
 
   CalcTransmissionToJoint();
 
+  // Refresh the public torque status from the state values read this cycle.
+  for (const auto & transmission : hdl_trans_states_) {
+    const auto it = std::find(
+      transmission.interface_name_vec.begin(), transmission.interface_name_vec.end(),
+      "Torque Enable");
+    if (it == transmission.interface_name_vec.end()) {
+      continue;
+    }
+    const size_t index = std::distance(transmission.interface_name_vec.begin(), it);
+    const double value = *transmission.value_ptr_vec.at(index);
+    dxl_torque_state_[{transmission.comm_id, transmission.id}] =
+      std::isfinite(value) && value > 0.5;
+  }
+  if (dxl_torque_status_ != REQUESTED_TO_ENABLE &&
+    dxl_torque_status_ != REQUESTED_TO_DISABLE)
+  {
+    bool all_enabled = !torque_enabled_comm_id_id_.empty();
+    for (const auto & device : torque_enabled_comm_id_id_) {
+      const auto state = dxl_torque_state_.find(device);
+      all_enabled = all_enabled && state != dxl_torque_state_.end() && state->second;
+    }
+    dxl_torque_status_ = all_enabled ? TORQUE_ENABLED : TORQUE_DISABLED;
+  }
+
   for (auto sensor : hdl_gpio_sensor_states_) {
     ReadSensorData(sensor);
   }
@@ -729,15 +806,91 @@ hardware_interface::return_type DynamixelHardware::read(
 hardware_interface::return_type DynamixelHardware::write(
   [[maybe_unused]] const rclcpp::Time & time, const rclcpp::Duration & period)
 {
-  if (dxl_status_ == DXL_OK || dxl_status_ == HW_ERROR) {
-    dxl_comm_->WriteItemBuf();
+  const auto record_write_failure = [this, &period]() {
+    ++consecutive_write_failures_;
+    is_write_in_error_ = true;
+    write_error_duration_ = write_error_duration_ + period;
+    RCLCPP_ERROR_STREAM_THROTTLE(
+      logger_, clock_, 1000,
+      "Dynamixel write failed (consecutive attempts: " << consecutive_write_failures_ << "/" <<
+        consecutive_failure_shutdown_threshold_ << ")");
 
-    ChangeDxlTorqueState();
+    if (consecutive_write_failures_ >= consecutive_failure_shutdown_threshold_) {
+      if (!torque_enabled_comm_id_id_.empty()) {
+        (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
+      }
+      dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+      dxl_torque_status_ = TORQUE_DISABLED;
+      fail_safe_triggered_ = true;
+      RCLCPP_FATAL(
+        logger_,
+        "Dynamixel writes failed %d consecutive times; torque-disable requested and the "
+        "hardware loop is stopping",
+        consecutive_write_failures_);
+      return hardware_interface::return_type::ERROR;
+    }
+    return hardware_interface::return_type::OK;
+  };
+
+  if (dxl_status_ == HW_ERROR) {
+    (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
+    dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+    dxl_torque_status_ = TORQUE_DISABLED;
+    RCLCPP_FATAL(logger_, "Refusing to write current while Dynamixel hardware is faulted");
+    return hardware_interface::return_type::ERROR;
+  }
+
+  if (dxl_status_ == DXL_OK) {
+    // A disable request always wins and is executed before any other bus write.
+    if (dxl_torque_status_ == REQUESTED_TO_DISABLE &&
+      ChangeDxlTorqueState() != DxlError::OK)
+    {
+      return record_write_failure();
+    }
+
+    bool commands_are_finite = true;
+    bool effort_commands_are_zero = true;
+    for (const auto & joint : hdl_joint_commands_) {
+      for (size_t i = 0; i < joint.value_ptr_vec.size(); ++i) {
+        const double value = *joint.value_ptr_vec.at(i);
+        commands_are_finite = commands_are_finite && std::isfinite(value);
+        if (joint.interface_name_vec.at(i) == hardware_interface::HW_IF_EFFORT) {
+          effort_commands_are_zero = effort_commands_are_zero && std::abs(value) <= 1.0e-6;
+        }
+      }
+    }
+    if (!commands_are_finite) {
+      (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
+      dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+      dxl_torque_status_ = TORQUE_DISABLED;
+      RCLCPP_FATAL(logger_, "Non-finite joint command rejected; torque-disable requested");
+      return hardware_interface::return_type::ERROR;
+    }
+    if (dxl_torque_status_ == REQUESTED_TO_ENABLE && !effort_commands_are_zero) {
+      (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
+      dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+      dxl_torque_status_ = TORQUE_DISABLED;
+      RCLCPP_FATAL(
+        logger_, "Torque enable rejected because the effort/current command is not zero");
+      return hardware_interface::return_type::ERROR;
+    }
 
     CalcJointToTransmission();
 
-    dxl_comm_->WriteMultiDxlData();
+    const DxlError item_result = dxl_comm_->WriteItemBuf();
+    const DxlError command_result = dxl_comm_->WriteMultiDxlData();
+    if (item_result != DxlError::OK || command_result != DxlError::OK) {
+      // Never honor a pending enable after the zero-current write failed.
+      return record_write_failure();
+    }
 
+    if (dxl_torque_status_ == REQUESTED_TO_ENABLE &&
+      ChangeDxlTorqueState() != DxlError::OK)
+    {
+      return record_write_failure();
+    }
+
+    consecutive_write_failures_ = 0;
     is_write_in_error_ = false;
     write_error_duration_ = rclcpp::Duration(0, 0);
 
@@ -888,6 +1041,17 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
   uint8_t comm_id = (gpio.parameters.find("comm_id") != gpio.parameters.end()) ?
     static_cast<uint8_t>(stoi(gpio.parameters.at("comm_id"))) : id;
 
+  const auto operating_mode = gpio.parameters.find("Operating Mode");
+  if (operating_mode != gpio.parameters.end() && std::stoi(operating_mode->second) == 0) {
+    const auto zero_current = gpio.parameters.find("Goal Current");
+    if (zero_current == gpio.parameters.end() || std::stoi(zero_current->second) != 0) {
+      RCLCPP_ERROR_STREAM(
+        logger_, "Current Mode requires an explicit zero 'Goal Current' for Dynamixel ID " <<
+          std::to_string(id));
+      return false;
+    }
+  }
+
   auto unit_it = gpio.parameters.find("[unit info]");
   if (unit_it != gpio.parameters.end()) {
     std::string value = unit_it->second;
@@ -996,16 +1160,25 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
       continue;
     }
     if (param_name.find("Limit") != std::string::npos) {
+      const uint32_t requested_value = static_cast<uint32_t>(stoi(param.second));
+      uint32_t current_value = 0;
       RCLCPP_INFO_STREAM(
         logger_,
         "[InitItem][comm_id:" << std::to_string(comm_id) << "][ID:" << std::to_string(id) <<
           "] item_name: " << param_name.c_str() << "\tdata: " <<
           param.second);
-      if (dxl_comm_->WriteItem(
-          comm_id, id, param_name,
-          static_cast<uint32_t>(stoi(param.second))) != DxlError::OK)
+      if (dxl_comm_->ReadItem(comm_id, id, param_name, current_value) != DxlError::OK)
       {
         return false;
+      }
+      if (current_value != requested_value) {
+        if (dxl_comm_->WriteItem(comm_id, id, param_name, requested_value) != DxlError::OK) {
+          return false;
+        }
+      } else {
+        RCLCPP_DEBUG_STREAM(
+          logger_, "Skipping unchanged EEPROM limit '" << param_name << "' for ID " <<
+            std::to_string(id));
       }
     }
   }
@@ -1025,11 +1198,21 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
       "[InitItem][comm_id:" << std::to_string(comm_id) << "][ID:" << std::to_string(id) <<
         "] item_name: " << param_name.c_str() << "\tdata: " <<
         param.second);
-    if (dxl_comm_->WriteItem(
-        comm_id, id, param_name,
-        static_cast<uint32_t>(stoi(param.second))) != DxlError::OK)
+    const uint32_t requested_value = static_cast<uint32_t>(stoi(param.second));
+    if (dxl_comm_->WriteItem(comm_id, id, param_name, requested_value) != DxlError::OK)
     {
       return false;
+    }
+    if (param_name == "Goal Current") {
+      uint32_t verified_value = std::numeric_limits<uint32_t>::max();
+      if (dxl_comm_->ReadItem(comm_id, id, param_name, verified_value) != DxlError::OK ||
+        verified_value != requested_value)
+      {
+        RCLCPP_ERROR_STREAM(
+          logger_, "Failed to verify zero Goal Current for Dynamixel ID " <<
+            std::to_string(id));
+        return false;
+      }
     }
   }
   return true;
@@ -1500,31 +1683,35 @@ void DynamixelHardware::SyncJointCommandWithStates()
   }
 }
 
-void DynamixelHardware::ChangeDxlTorqueState()
+DxlError DynamixelHardware::ChangeDxlTorqueState()
 {
   if (torque_enabled_comm_id_id_.size() == 0) {
-    return;
+    return DxlError::OK;
   }
 
+  DxlError result = DxlError::OK;
   if (dxl_torque_status_ == REQUESTED_TO_ENABLE) {
     RCLCPP_WARN_STREAM(logger_, "Requested to enable torque, Enabling torque for all Dynamixels");
-    dxl_comm_->DynamixelEnable(torque_enabled_comm_id_id_);
-    SyncJointCommandWithStates();
+    result = dxl_comm_->DynamixelEnable(torque_enabled_comm_id_id_);
   } else if (dxl_torque_status_ == REQUESTED_TO_DISABLE) {
     RCLCPP_WARN_STREAM(logger_, "Requested to disable torque, Disabling torque for all Dynamixels");
-    dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
-    SyncJointCommandWithStates();
+    result = dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
+  }
+  if (result != DxlError::OK) {
+    return result;
   }
 
-  // Aggregate across all devices; if any OFF, report DISABLED
-  auto torque_state_map = dxl_comm_->GetDxlTorqueState();
-  for (const auto & single_torque_state : torque_state_map) {
-    if (single_torque_state.second == TORQUE_OFF) {
+  // Aggregate only the devices managed by this hardware profile.
+  dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+  for (const auto & device : torque_enabled_comm_id_id_) {
+    const auto state = dxl_torque_state_.find(device);
+    if (state == dxl_torque_state_.end() || state->second == TORQUE_OFF) {
       dxl_torque_status_ = TORQUE_DISABLED;
-      return;
+      return DxlError::OK;
     }
   }
   dxl_torque_status_ = TORQUE_ENABLED;
+  return DxlError::OK;
 }
 
 void DynamixelHardware::get_dxl_data_srv_callback(
@@ -1563,6 +1750,16 @@ void DynamixelHardware::set_dxl_data_srv_callback(
   const std::shared_ptr<dynamixel_interfaces::srv::SetDataToDxl::Request> request,
   std::shared_ptr<dynamixel_interfaces::srv::SetDataToDxl::Response> response)
 {
+  if (restrict_critical_write_service_ &&
+    (request->item_name == "Torque Enable" || request->item_name == "Operating Mode" ||
+    request->item_name == "Goal Current" || request->item_name == "Current Limit" ||
+    request->item_name == "Bus Watchdog"))
+  {
+    RCLCPP_ERROR_STREAM(
+      logger_, "Rejected critical item write through generic service: " << request->item_name);
+    response->result = false;
+    return;
+  }
   uint8_t dxl_id = static_cast<uint8_t>(request->id);
   uint32_t dxl_data = static_cast<uint32_t>(request->item_data);
   if (dxl_comm_->InsertWriteItemBuf(dxl_id, request->item_name, dxl_data) == DxlError::OK) {

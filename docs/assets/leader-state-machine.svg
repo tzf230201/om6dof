@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="620" viewBox="0 0 1400 620" role="img" aria-labelledby="title desc">
+  <title id="title">OM6DOF leader controller state machine</title>
+  <desc id="desc">The leader controller moves from disarmed to ramping, then to guiding when the deadman is active or holding when it is not. Releasing guide enters capturing before holding. Any invalid input or hard limit enters fault. The commissioned baseline has zero hold gains.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#071522"/><stop offset="1" stop-color="#163246"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity=".35"/></filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a7cce2"/></marker>
+    <style>
+      .h1{font:700 34px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#fff}.body{font:500 17px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#dceef8}.state{font:700 20px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#fff}.small{font:500 14px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#dceef8}.node{stroke:#83c5e8;stroke-width:2;filter:url(#shadow)}.line{stroke:#a7cce2;stroke-width:3;fill:none;marker-end:url(#arrow)}.dash{stroke:#ffbd59;stroke-width:3;fill:none;stroke-dasharray:8 7;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1400" height="620" fill="url(#bg)"/>
+  <text x="60" y="58" class="h1">OM6DOF leader control state machine</text>
+  <text x="60" y="89" class="body">Explicit arming, ramped gravity current, GUIDE heartbeat, and fail-safe zero-current exits.</text>
+
+  <rect class="node" x="64" y="226" width="190" height="100" rx="50" fill="#334b5d"/>
+  <text x="159" y="270" text-anchor="middle" class="state">DISARMED</text>
+  <text x="159" y="296" text-anchor="middle" class="small">current = 0</text>
+  <path class="line" d="M254 276 H337"/>
+  <text x="295" y="257" text-anchor="middle" class="small">ARM</text>
+
+  <rect class="node" x="340" y="226" width="190" height="100" rx="50" fill="#0e6f83"/>
+  <text x="435" y="270" text-anchor="middle" class="state">RAMPING</text>
+  <text x="435" y="296" text-anchor="middle" class="small">0 → gravity, 2.0 s</text>
+
+  <path class="line" d="M530 250 C595 190 655 190 720 250"/>
+  <text x="625" y="190" text-anchor="middle" class="small">GUIDE heartbeat active</text>
+  <rect class="node" x="722" y="131" width="210" height="100" rx="50" fill="#087d70"/>
+  <text x="827" y="175" text-anchor="middle" class="state">GUIDING</text>
+  <text x="827" y="201" text-anchor="middle" class="small">gravity + damping</text>
+
+  <path class="line" d="M932 181 C1013 181 1013 286 1090 286"/>
+  <text x="1010" y="163" text-anchor="middle" class="small">deadman timeout</text>
+  <rect class="node" x="1092" y="236" width="220" height="100" rx="50" fill="#b36a12"/>
+  <text x="1202" y="280" text-anchor="middle" class="state">CAPTURING</text>
+  <text x="1202" y="306" text-anchor="middle" class="small">capture pose, 0.40 s</text>
+
+  <path class="line" d="M1092 316 C1015 382 956 389 889 370"/>
+  <text x="1008" y="401" text-anchor="middle" class="small">capture complete</text>
+  <rect class="node" x="722" y="332" width="210" height="100" rx="50" fill="#514e82"/>
+  <text x="827" y="376" text-anchor="middle" class="state">HOLDING</text>
+  <text x="827" y="402" text-anchor="middle" class="small">gravity + impedance</text>
+
+  <path class="line" d="M530 302 C595 357 655 375 720 380"/>
+  <text x="618" y="357" text-anchor="middle" class="small">no GUIDE request</text>
+  <path class="line" d="M827 332 V235"/>
+  <text x="850" y="285" class="small">deadman active</text>
+
+  <rect class="node" x="492" y="493" width="250" height="92" rx="46" fill="#a42c36" stroke="#ff8c94"/>
+  <text x="617" y="533" text-anchor="middle" class="state">FAULT</text>
+  <text x="617" y="558" text-anchor="middle" class="small">latched · current = 0</text>
+  <path class="dash" d="M435 326 C435 430 500 455 557 491"/>
+  <path class="dash" d="M827 432 C800 483 754 514 744 521"/>
+  <path class="dash" d="M1202 336 C1113 482 871 533 744 538"/>
+  <text x="270" y="458" class="small">NaN · hard limit · update timeout · invalid state</text>
+
+  <rect x="58" y="118" width="353" height="65" rx="12" fill="#23394a" stroke="#638ca8"/>
+  <text x="78" y="145" class="body">Any state + DISARM / lost torque → DISARMED</text>
+  <text x="78" y="169" class="small">Commands are zeroed before leaving control.</text>
+
+  <rect x="972" y="443" width="355" height="112" rx="14" fill="#5d3a13" stroke="#ffbd59"/>
+  <text x="992" y="472" class="state">Commissioning status</text>
+  <text x="992" y="499" class="small">HOLD oscillated in the first impedance trial.</text>
+  <text x="992" y="523" class="small">Current baseline: K_hold = D_hold = 0.</text>
+  <text x="992" y="547" class="small">Therefore HOLD currently means gravity-only support.</text>
+</svg>

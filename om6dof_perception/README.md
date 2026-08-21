@@ -1,5 +1,10 @@
 # om6dof_perception
 
+> **Leader-profile note:** perception itself does not own U2D2, but any action
+> that invokes MoveIt/pickup requires the normal position-control profile. Do not
+> command pickup while the isolated Mode 0 leader stack is active. See the
+> [leader-arm gravity-compensation record](../docs/leader_arm_gravity_compensation.md).
+
 RealSense RGB-D perception for the OM6DOF arm. Local YOLOX-S detects a COCO
 target class, OpenCV CSRT tracks it between detections, and aligned depth
 produces its 3D position in `camera_color_optical_frame`. Ollama and a VLM are

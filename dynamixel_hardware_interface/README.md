@@ -4,6 +4,52 @@
 
 ROS 2 package providing a hardware interface for controlling [Dynamixel](https://www.dynamixel.com/) motors via the [ros2_control framework](https://github.com/ros-controls/ros2_control). This repository includes the **dynamixel_hardware_interface plugin** for seamless integration with ROS 2 control, along with the [dynamixel_interfaces](https://github.com/ROBOTIS-GIT/dynamixel_interfaces) package containing custom message definitions used by the interface
 
+## OM6DOF local safety patch
+
+This vendored package contains local changes used by the OM6DOF Mode 0 leader
+arm. It is not byte-identical to the upstream ROBOTIS package. The complete
+system context and commissioning evidence are documented in
+[`../docs/leader_arm_gravity_compensation.md`](../docs/leader_arm_gravity_compensation.md).
+
+The local patch adds or strengthens:
+
+- optional startup with automatic Torque Enable disabled;
+- validation that Current Mode has an explicit zero Goal Current;
+- checked initial/cyclic writes and write-failure handling;
+- finite command rejection and torque-off requests on critical failures;
+- read-before-write behavior for EEPROM limit values;
+- Goal Current readback and corrected torque-state reporting;
+- restriction of generic writes to safety-critical control-table items;
+- current-command zero checks before a torque-enable request;
+- command/state count validation on either-side mismatch;
+- replacement of leaked per-cycle raw buffers with managed storage.
+
+For the leader profile, hardware parameters must include at least:
+
+```xml
+<param name="disable_torque_at_init">true</param>
+<param name="auto_enable_torque_on_start">false</param>
+<param name="restrict_critical_write_service">true</param>
+```
+
+Operating Mode 0 also requires an explicit Goal Current of zero after the mode
+change and before Torque Enable. ROBOTIS documents that changing Operating Mode
+resets Goal Current to Current Limit, so relying on an uninitialized first
+control-loop write is unsafe.
+
+Important limitations remain:
+
+- A service response may confirm that a request was queued, not that every
+  servo register has changed. Verify `dxl_state` feedback.
+- The ROS interface name `effort` does not define physical units. In the
+  OM6DOF leader profile it carries mA; N·m-to-mA conversion occurs in the
+  controller.
+- Bus Watchdog protects against lost instruction traffic, not against a wrong
+  command that is still transmitted.
+- Managed buffers remove a leak but do not make every cyclic path hard-real-time.
+- These interlocks are not a certified safety function. Maintain mechanical
+  support and reachable power removal during commissioning.
+
 
 ## 2. **Prerequisites**
 

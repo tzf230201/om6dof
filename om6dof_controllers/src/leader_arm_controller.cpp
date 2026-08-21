@@ -109,9 +109,11 @@ controller_interface::CallbackReturn LeaderArmController::on_configure(
         name, get_node()->get_parameter(name).as_double_array(), n, fallback, out, error);
     };
 
+  std::vector<double> headroom;
+  std::vector<double> deadband;
   if (!read("gain", 1.0, gain_) || !read("effort_scale", 1.0, effort_scale_) ||
     !read("min_effort", 0.0, min_effort_) || !read("max_effort", 0.0, max_effort_) ||
-    !read("headroom", 0.0, headroom_) || !read("setpoint_deadband", 0.0, deadband_) ||
+    !read("headroom", 0.0, headroom) || !read("setpoint_deadband", 0.0, deadband) ||
     !read("friction.coulomb", 0.0, coulomb) ||
     !read("friction.viscous", 0.0, viscous))
   {
@@ -132,7 +134,7 @@ controller_interface::CallbackReturn LeaderArmController::on_configure(
       RCLCPP_ERROR(logger, "min_effort exceeds max_effort on joint '%s'", joint_names_[i].c_str());
       return controller_interface::CallbackReturn::ERROR;
     }
-    if (deadband_[i] <= 0.0) {
+    if (deadband[i] <= 0.0) {
       // A zero band pins the setpoint to the measurement, so the loop never
       // sees error, never generates holding current, and the arm sinks.
       RCLCPP_ERROR(
@@ -148,6 +150,12 @@ controller_interface::CallbackReturn LeaderArmController::on_configure(
   }
 
   ramp_seconds_ = std::max(get_node()->get_parameter("ramp_seconds").as_double(), 0.0);
+  deadband_.writeFromNonRT(deadband);
+  headroom_buffer_.writeFromNonRT(headroom);
+  parameter_callback_ = get_node()->add_on_set_parameters_callback(
+    [this](const std::vector<rclcpp::Parameter> & parameters) {
+      return onParameters(parameters);
+    });
 
   const auto gravity_parameter = get_node()->get_parameter("gravity").as_double_array();
   if (gravity_parameter.size() != 3) {
@@ -231,11 +239,43 @@ controller_interface::CallbackReturn LeaderArmController::on_activate(
     return controller_interface::CallbackReturn::ERROR;
   }
 
-  // Hold exactly where the arm stands, so taking over from arm_controller does
-  // not move it.
+  // The command-interface storage still contains values from the controller
+  // that owned it immediately before this lifecycle transition. Waiting for
+  // the first update() would allow one hardware write with that stale Goal
+  // Position and the servo's previous current limit. In mode 5 that is enough
+  // to make the arm snap towards the old trajectory target.
+  //
+  // Preload both halves of the leader command here, before activation returns:
+  // capture exactly where the arm stands and use the settled gravity-aware
+  // current limit rather than starting at max_effort.
   setpoints_ = positions_;
-  ramp_ = 0.0;
+  model_.compute(positions_, gravity_torque_);
+
+  const std::vector<double> * headroom = headroom_buffer_.readFromRT();
+  for (size_t i = 0; i < n; ++i) {
+    const double torque = gain_[i] * gravity_torque_[i] +
+      GravityModel::friction(velocities_[i], friction_[i]);
+    commanded_effort_[i] = currentLimitCommand(
+      torque, effort_scale_[i], (*headroom)[i], min_effort_[i], max_effort_[i], 1.0);
+
+    if (!std::isfinite(gravity_torque_[i]) || !std::isfinite(commanded_effort_[i])) {
+      RCLCPP_ERROR(
+        get_node()->get_logger(), "non-finite takeover command for joint '%s'",
+        joint_names_[i].c_str());
+      return controller_interface::CallbackReturn::ERROR;
+    }
+
+    command_interfaces_[i].set_value(setpoints_[i]);
+    command_interfaces_[n + i].set_value(commanded_effort_[i]);
+  }
+
+  // Starting at one keeps update() on the settled limit. The former
+  // max-to-target ramp made the arm maximally stiff during takeover.
+  ramp_ = 1.0;
   last_publish_time_ = get_node()->now();
+  RCLCPP_INFO(
+    get_node()->get_logger(),
+    "captured the live pose and preloaded settled current limits before takeover");
 
   return controller_interface::CallbackReturn::SUCCESS;
 }
@@ -287,12 +327,15 @@ controller_interface::return_type LeaderArmController::update(
 
   model_.compute(positions_, gravity_torque_);
 
+  const std::vector<double> * deadband = deadband_.readFromRT();
+  const std::vector<double> * headroom = headroom_buffer_.readFromRT();
+
   for (size_t i = 0; i < n; ++i) {
     const double torque = gain_[i] * gravity_torque_[i] +
       GravityModel::friction(velocities_[i], friction_[i]);
 
     commanded_effort_[i] = currentLimitCommand(
-      torque, effort_scale_[i], headroom_[i], min_effort_[i], max_effort_[i], ramp_);
+      torque, effort_scale_[i], (*headroom)[i], min_effort_[i], max_effort_[i], ramp_);
 
     const double needed = std::abs(torque) * effort_scale_[i];
     if (needed > max_effort_[i]) {
@@ -305,7 +348,7 @@ controller_interface::return_type LeaderArmController::update(
     // The band follows the arm, so the loop never sees more than a deadband of
     // error however far the arm travels, and there is nothing to spring back to
     // when the operator lets go.
-    setpoints_[i] = followSetpoint(setpoints_[i], positions_[i], deadband_[i]);
+    setpoints_[i] = followSetpoint(setpoints_[i], positions_[i], (*deadband)[i]);
 
     command_interfaces_[i].set_value(setpoints_[i]);
     command_interfaces_[n + i].set_value(commanded_effort_[i]);
@@ -331,6 +374,43 @@ controller_interface::return_type LeaderArmController::update(
   }
 
   return controller_interface::return_type::OK;
+}
+
+rcl_interfaces::msg::SetParametersResult LeaderArmController::onParameters(
+  const std::vector<rclcpp::Parameter> & parameters)
+{
+  rcl_interfaces::msg::SetParametersResult result;
+  result.successful = true;
+
+  const size_t n = joint_names_.size();
+  for (const auto & parameter : parameters) {
+    if (parameter.get_name() != "setpoint_deadband" && parameter.get_name() != "headroom") {
+      continue;
+    }
+    const auto values = parameter.as_double_array();
+    if (values.size() != n) {
+      result.successful = false;
+      result.reason = parameter.get_name() + " needs one value per joint";
+      return result;
+    }
+    const bool is_deadband = parameter.get_name() == "setpoint_deadband";
+    for (const double value : values) {
+      // A zero band pins the setpoint to the measurement, the loop never sees
+      // error, and the arm sinks. Refusing here is cheaper than discovering it
+      // with a hand on the arm.
+      if (!std::isfinite(value) || (is_deadband && value <= 0.0) || (!is_deadband && value < 0.0)) {
+        result.successful = false;
+        result.reason = parameter.get_name() + " must be finite and positive";
+        return result;
+      }
+    }
+    if (is_deadband) {
+      deadband_.writeFromNonRT(values);
+    } else {
+      headroom_buffer_.writeFromNonRT(values);
+    }
+  }
+  return result;
 }
 
 }  // namespace om6dof_controllers

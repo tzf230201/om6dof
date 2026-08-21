@@ -87,3 +87,67 @@ install(TARGETS DepthSensor_Buggy RUNTIME DESTINATION bin)
 endif()
 
 install(DIRECTORY systemd/ DESTINATION share/${PROJECT_NAME}/systemd)
+
+# ============================================================================
+# topo_gng_node: the ROS 2 (rclcpp) TopoVLA DD-GNG + robot-topology integration.
+# Everything above this point is the pre-existing plain-CMake sub-build
+# (legacy visualizer + realsense_ddgng's own build_om6dof); it is untouched.
+# This package was a plain CMake package (identified by colcon on
+# CMakeLists.txt alone, no package.xml); it now also carries a package.xml and
+# becomes ament_cmake so it can depend on rclcpp etc. colcon still builds both
+# halves of this one CMakeLists.txt in a single pass.
+# ============================================================================
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(OpenCV REQUIRED)
+# Provided by the ros-humble-librealsense2 apt package (sourcing
+# /opt/ros/humble/setup.bash puts its CMake config on CMAKE_PREFIX_PATH); this
+# is the same librealsense2.so the Python realsense_ddgng/ tools load via
+# pyrealsense2, so topo_gng_node and dd_gng_yolo.py contend for the same
+# camera handle exactly like any two processes opening the same device would.
+find_package(realsense2 REQUIRED)
+
+add_executable(topo_gng_node
+  src/topo_gng_node.cpp
+)
+target_include_directories(topo_gng_node PRIVATE
+  include
+)
+target_compile_features(topo_gng_node PRIVATE cxx_std_17)
+ament_target_dependencies(topo_gng_node
+  rclcpp
+  sensor_msgs
+  visualization_msgs
+  geometry_msgs
+  std_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+target_link_libraries(topo_gng_node
+  realsense2::realsense2
+  ${OpenCV_LIBS}
+)
+target_include_directories(topo_gng_node PRIVATE ${OpenCV_INCLUDE_DIRS})
+
+install(TARGETS topo_gng_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+install(DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+)
+install(DIRECTORY rviz/
+  DESTINATION share/${PROJECT_NAME}/rviz
+)
+
+ament_package()

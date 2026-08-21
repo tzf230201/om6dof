@@ -1,21 +1,29 @@
 # om6dof_controllers
 
-Three ros2_control controller plugins for the OM6DOF arm:
+Four ros2_control controller plugins for the OM6DOF arm:
 
 | Plugin | What it does | Command interface |
 |---|---|---|
 | `om6dof_controllers/TrajectoryController` | follows joint trajectories | `position` or `effort` |
-| `om6dof_controllers/LeaderArmController` | lead-by-hand leader arm | `position` + `effort` |
+| `om6dof_controllers/LeaderArmController` | legacy Mode 5 lead-by-hand experiment | `position` + `effort` |
 | `om6dof_controllers/GravityCompensationController` | caps the current from the weight model | `effort` |
 | `om6dof_controllers/SpringActuatorController` | virtual spring-damper to a rest pose | `effort` |
 
-These are controller_manager plugins, not nodes. `om6dof_bringup` stays the
-single owner of the hardware and of `ros2_control_node`; nothing here opens
-U2D2.
+These are controller_manager plugins, not nodes. In the normal/legacy profile,
+`om6dof_bringup` owns the hardware and `ros2_control_node`; nothing here opens
+U2D2 directly.
 
 This is a different package from `om6dof_controller` (singular), which is the
 Python jog-command converter that publishes to `forward_position_controller`.
 The two do not overlap and do not talk to each other.
+
+> **Leader-arm status:** `LeaderArmController` in this package is retained as a
+> historical Operating Mode 5 implementation. It is not the commissioned
+> leader path. Physical testing showed that its remaining position loop could
+> make the arm stiff and pull toward a setpoint. Use the separate
+> `om6dof_leader_controller` package for Mode 0 signed-current gravity support
+> and GUIDE. Do not run both U2D2 owners. See the
+> [complete research and commissioning record](../docs/leader_arm_gravity_compensation.md).
 
 ## Read this before energising anything on the real arm
 
@@ -47,9 +55,11 @@ a **torque** interface and have no `current_limit` equivalent, so they are not
 correct against mode 5. `TrajectoryController` in its default `position` mode is
 unaffected by any of this.
 
-`om6dof_gravity_comp`'s Python node reaches the same interface with its own
-arming interlock and ramp; it is the path that has the most hours on this arm.
-Never run it and this controller at the same time.
+The former `om6dof_gravity_comp` Python package reached the same interface with
+its own arming interlock and ramp. That package is currently removed from the
+working tree; its datasets and method are historical inputs, not an active
+runtime dependency. Never resurrect or run it alongside another effort/current
+controller without a fresh safety review.
 
 ## Which description you need
 
@@ -92,14 +102,11 @@ and everything that the description cannot know is a controller parameter:
 - `effort_scale` converts newton-metres into command-interface units,
 - `max_effort` bounds the result no matter what the model says.
 
-`om6dof_gravity_comp` is a separate effort that identifies these per-joint
-numbers from measured current. Nothing here reads its results automatically;
-they have been transcribed into this package's YAML by hand -- see below.
-
-It is also a **second, independent implementation of gravity compensation** on
-the same arm: its node publishes to `/forward_effort_controller/commands`, while
-this controller claims `jointN/effort` directly. Never run both at once. Check
-whether that node is alive before activating this controller.
+The former `om6dof_gravity_comp` package identified per-joint values from
+measured current. Nothing here read its output automatically; selected values
+were copied into this YAML by hand. The package is no longer present in the
+working tree, so treat its files and plots as historical research artifacts,
+not a runnable calibration dependency.
 
 ### The shipped numbers, and where they came from
 
@@ -116,8 +123,9 @@ into `effort_scale`.
 | joint3 | 384.7 | measured, r2 0.93 -- **stale, see below** |
 | joint1, 4, 5, 6 | 1.0, `gain: 0.0` | not compensated -- see below |
 
-The datasheet route would have given ~609 for a W350, more than double the
-measured 285. Guessing this was never acceptable.
+Do not compare these raw-tick coefficients directly with the new leader
+controller's provisional mA/N·m values. The interface units and controller
+semantics differ, and stall ratios are not a substitute for a measured fit.
 
 **These scales no longer match the model.** They were fitted against a `g(q)`
 that was missing 0.114 kg of off-chain mass and had placeholder centres of mass
@@ -125,9 +133,9 @@ on link3, link4 and link5. Both are fixed now, and the model's output moved a
 long way: at the ready pose joint3 went from -0.306 to -0.531 Nm and joint5 from
 -0.093 to -0.199 Nm. A fitted scale absorbs magnitude error, so the old numbers
 were partly compensating for the old model's absence of mass. Re-run the
-identification in `om6dof_gravity_comp` before trusting these on hardware, and
-watch whether `gravity_correlation` on joint2 improves on 0.87 -- that number is
-the test of whether the model's *shape* actually got better.
+identification through a new, versioned pipeline before trusting these on
+hardware, and watch whether `gravity_correlation` on joint2 improves on 0.87 --
+that number tests whether the model's *shape* actually got better.
 
 Joints 1, 4 and 6 are yaw/roll axes: their gravity torque comes out around
 1e-7 Nm at any pose, so there is nothing to compensate and the identification
@@ -164,22 +172,16 @@ afterwards.
 
 ### First run on real hardware
 
-The one thing that cannot be checked away from the arm is the **sign** of the
-model. This controller takes gravity as a vector in the base frame
-(`gravity: [0, 0, -9.80665]` about `base_link`); a sign that comes out inverted
-would make it push with gravity instead of against it. Before trusting it:
+The historical coefficients in this package predate gravity-model corrections
+and must not be treated as a current first-run recipe. The former comparison
+node has been removed from the working tree, and the Mode 5 leader behavior was
+superseded by the isolated Mode 0 package.
 
-1. Load it with `gain` all zeros. Output is then exactly zero -- the arm cannot
-   move -- but `~/gravity_torque` still publishes the raw model.
-2. Move the arm by hand to a few poses and compare that topic against the
-   Python `om6dof_gravity_comp` node, which is already known-good on this rig.
-   Signs and magnitudes should agree.
-3. Only then restore `gain` to `[0.0, 1.0, 1.0, 0.0, 0.0, 0.0]`, and bring it up
-   with the arm supported.
-
-`max_effort` is a real limit, not a formality. joint2 needs about 340 ticks at
-its worst pose, which is already roughly 85% of the W350 stall figure: held out
-horizontally, it will run hot.
+If this legacy controller is studied again, keep all gains at zero, support the
+arm, verify model sign independently, use conservative current limits, and
+collect new pose/current/temperature data. Do not copy the old 340-tick J2
+observation into the Mode 0 controller: the legacy package uses raw ticks and a
+current ceiling, whereas the commissioned leader interface uses signed mA.
 
 ## Getting the robot description
 
@@ -274,8 +276,18 @@ the servo's own loop already deals with gravity.
 
 ## LeaderArmController
 
-The one to use for a leader arm. Gravity compensation alone does not give you
-lead-by-hand on this rig, and it took a while to see why.
+### Legacy Mode 5 experiment — not the current leader implementation
+
+This section documents why the historical controller was built and how it
+worked. It must not be read as the recommended procedure for the physical
+leader arm. The commissioned path is the companion
+`om6dof_leader_controller`, which uses Operating Mode 0, explicit ARM and GUIDE
+deadman, signed current, saturation, slew limiting, and zero-before-enable
+interlocks.
+
+Gravity compensation alone did not give lead-by-hand behavior while a separate
+position controller retained a fixed setpoint, which motivated the combined
+legacy controller below.
 
 `arm_controller` holds one fixed position setpoint. It owns `jointN/position`,
 so it decides where the arm goes; a controller that only writes `jointN/effort`
@@ -301,9 +313,9 @@ ros2 launch om6dof_controllers om6dof_controllers.launch.py controllers:="om6dof
 ros2 control switch_controllers --deactivate arm_controller --activate om6dof_leader_arm_controller
 ```
 
-To hand the arm back to MoveIt, switch the other way. The controller writes the
-measured position and a full current ceiling on the way out, so whatever takes
-over gets the arm where it stands and able to hold it.
+To hand the legacy profile back to MoveIt, switch the other way. This operation
+does not convert a Mode 5 stack into the Mode 0 leader profile; changing
+Dynamixel operating mode requires a safe hardware restart with torque OFF.
 
 Each cycle it writes:
 

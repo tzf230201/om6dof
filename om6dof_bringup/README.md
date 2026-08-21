@@ -1,7 +1,9 @@
 # om6dof_bringup
 
-Canonical hardware and ros2_control bringup for OM6DOF. This package is the
-only component allowed to own U2D2 and the Dynamixel bus.
+Canonical hardware and ros2_control bringup for normal OM6DOF position control.
+It is the only U2D2 owner for the MoveIt/jog/teleop stack. The separate
+`om6dof_leader_controller` package is an alternative leader-only hardware owner;
+the two stacks must never run simultaneously.
 
 ```text
 MoveIt ------> arm_controller ---------------------------+
@@ -44,6 +46,21 @@ the two arm controllers atomically and is the sole publisher to
 `/forward_position_controller/commands`. Teleop and other command sources use
 `/om6dof/operation_mode` plus `/om6dof/control_cmd`; they never create another
 hardware interface.
+
+## Hardware profiles
+
+| Launch/profile | DXL mode | Semantics | Status |
+|---|---:|---|---|
+| `hardware.launch.py` | 3, Position Control | six arm position commands | normal MoveIt/jog/teleop path |
+| `hardware.launch.py current_control:=true` | 5, Current-based Position Control | position plus current ceiling | legacy research profile; not recommended for the commissioned leader arm |
+| `om6dof_leader_controller leader.launch.py` | 0, Current Control | signed current in mA | commissioned gravity/GUIDE research path |
+
+Mode 5 still contains an actuator position loop. On the physical OM6DOF it
+became stiff and moved toward a position when the legacy leader controller was
+activated. The new leader stack is intentionally separate, uses no arm Goal
+Position, starts with torque OFF, and converts KDL torque to signed current.
+
+See [the complete leader-arm gravity-compensation record](../docs/leader_arm_gravity_compensation.md).
 
 ## Real hardware
 
@@ -151,7 +168,10 @@ so systemd can restart the complete hardware owner instead of leaving only
 
 ## Ownership rule
 
-Never launch two copies of `hardware.launch.py` against the same U2D2. A second
-copy cannot share the serial port and must not be used as a controller-switch
-mechanism. Controller switching always occurs inside the one canonical
-`controller_manager`.
+Never launch two copies of `hardware.launch.py`, or one `hardware.launch.py`
+plus `om6dof_leader_controller/leader.launch.py`, against the same U2D2. A
+second process cannot share the serial port and must not be used as a
+controller-switch mechanism. Within the normal profile, controller switching
+occurs inside the one canonical `controller_manager`. Changing between the
+normal and leader profiles requires a supported arm, zero current, verified
+Torque Enable OFF, and a complete hardware-owner restart.

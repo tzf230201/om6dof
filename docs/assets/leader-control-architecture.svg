@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">OM6DOF control profiles and leader-arm architecture</title>
+  <desc id="desc">The normal position-control stack and isolated Mode 0 leader stack are mutually exclusive owners of the U2D2 bus. The leader stack uses a URDF and KDL gravity model, a real-time control law, torque-to-current conversion, ros2_control, a patched Dynamixel driver, and six Dynamixel motors.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#08131f"/>
+      <stop offset="1" stop-color="#10283c"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1677ff"/>
+      <stop offset="1" stop-color="#0e4ca4"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#13b8a6"/>
+      <stop offset="1" stop-color="#08776f"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffb02e"/>
+      <stop offset="1" stop-color="#cc6810"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#000" flood-opacity=".35"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8fb8d8"/>
+    </marker>
+    <style>
+      .h1{font:700 34px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#fff}
+      .h2{font:700 23px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#fff}
+      .body{font:500 17px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#e9f4fb}
+      .small{font:500 14px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#c8deec}
+      .tag{font:700 14px system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.7px;fill:#fff}
+      .box{stroke:#63a9d6;stroke-width:1.5;rx:14;filter:url(#shadow)}
+      .line{stroke:#8fb8d8;stroke-width:3;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+
+  <rect width="1400" height="820" fill="url(#bg)"/>
+  <text x="70" y="64" class="h1">OM6DOF: mutually exclusive control profiles</text>
+  <text x="70" y="94" class="body">Only one stack may own U2D2 at a time. The commissioned leader path is pure signed-current control.</text>
+
+  <rect x="55" y="132" width="400" height="560" rx="24" fill="#102f49" stroke="#3d7194" stroke-width="2"/>
+  <rect x="78" y="154" width="170" height="34" rx="17" fill="#2f6180"/>
+  <text x="163" y="177" text-anchor="middle" class="tag">NORMAL PROFILE</text>
+  <text x="78" y="224" class="h2">MoveIt / jog / teleop</text>
+  <text x="78" y="253" class="body">Operating Mode 3: Position Control</text>
+
+  <rect class="box" x="90" y="290" width="330" height="80" fill="url(#blue)"/>
+  <text x="255" y="321" text-anchor="middle" class="h2">Command source</text>
+  <text x="255" y="347" text-anchor="middle" class="small">MoveIt, trajectory, or streamed position</text>
+  <path class="line" d="M255 370 V406"/>
+  <rect class="box" x="90" y="407" width="330" height="82" fill="#194b73"/>
+  <text x="255" y="439" text-anchor="middle" class="h2">controller_manager</text>
+  <text x="255" y="465" text-anchor="middle" class="small">joint position command interfaces</text>
+  <path class="line" d="M255 489 V525"/>
+  <rect class="box" x="90" y="526" width="330" height="82" fill="#143b59"/>
+  <text x="255" y="558" text-anchor="middle" class="h2">Dynamixel driver</text>
+  <text x="255" y="584" text-anchor="middle" class="small">Goal Position → servo position loop</text>
+  <text x="78" y="654" class="small">Launch: om6dof_bringup hardware.launch.py</text>
+
+  <rect x="486" y="132" width="858" height="560" rx="24" fill="#0b3240" stroke="#28a99c" stroke-width="2"/>
+  <rect x="510" y="154" width="215" height="34" rx="17" fill="#0e8278"/>
+  <text x="617" y="177" text-anchor="middle" class="tag">LEADER PROFILE</text>
+  <text x="510" y="224" class="h2">Hand guiding / gravity compensation</text>
+  <text x="510" y="253" class="body">Operating Mode 0: Current Control · commissioned baseline 2026-08-21</text>
+
+  <rect class="box" x="515" y="290" width="220" height="92" fill="#125568"/>
+  <text x="625" y="322" text-anchor="middle" class="h2">URDF + KDL</text>
+  <text x="625" y="348" text-anchor="middle" class="small">mass, CoM, axes, limits</text>
+  <text x="625" y="368" text-anchor="middle" class="small">g(q) in N·m</text>
+
+  <rect class="box" x="795" y="290" width="250" height="92" fill="url(#teal)"/>
+  <text x="920" y="322" text-anchor="middle" class="h2">LeaderControlLaw</text>
+  <text x="920" y="348" text-anchor="middle" class="small">gravity + GUIDE damping</text>
+  <text x="920" y="368" text-anchor="middle" class="small">soft limits + state machine</text>
+  <path class="line" d="M735 336 H792"/>
+
+  <rect class="box" x="1105" y="290" width="205" height="92" fill="#0c6964"/>
+  <text x="1208" y="322" text-anchor="middle" class="h2">N·m → mA</text>
+  <text x="1208" y="348" text-anchor="middle" class="small">sign, clamp, slew</text>
+  <text x="1208" y="368" text-anchor="middle" class="small">provisional conversion</text>
+  <path class="line" d="M1045 336 H1102"/>
+
+  <rect class="box" x="515" y="446" width="220" height="92" fill="#125568"/>
+  <text x="625" y="478" text-anchor="middle" class="h2">Safety inputs</text>
+  <text x="625" y="504" text-anchor="middle" class="small">ARM · GUIDE deadman</text>
+  <text x="625" y="524" text-anchor="middle" class="small">limits · finite checks</text>
+  <path class="line" d="M735 492 H792"/>
+
+  <rect class="box" x="795" y="446" width="250" height="92" fill="#10505d"/>
+  <text x="920" y="478" text-anchor="middle" class="h2">ros2_control</text>
+  <text x="920" y="504" text-anchor="middle" class="small">effort interface carries mA</text>
+  <text x="920" y="524" text-anchor="middle" class="small">200 Hz read-update-write</text>
+  <path class="line" d="M920 382 V443"/>
+
+  <rect class="box" x="1105" y="446" width="205" height="92" fill="#10404c"/>
+  <text x="1208" y="478" text-anchor="middle" class="h2">Patched driver</text>
+  <text x="1208" y="504" text-anchor="middle" class="small">zero-before-enable</text>
+  <text x="1208" y="524" text-anchor="middle" class="small">write checks · watchdog</text>
+  <path class="line" d="M1045 492 H1102"/>
+
+  <rect class="box" x="795" y="590" width="515" height="67" fill="#123643"/>
+  <text x="1053" y="619" text-anchor="middle" class="h2">U2D2 → six XM430 actuators</text>
+  <text x="1053" y="643" text-anchor="middle" class="small">J1–J6 · signed Goal Current · Bus Watchdog ≈ 200 ms</text>
+  <path class="line" d="M1208 538 V587"/>
+
+  <rect x="395" y="720" width="610" height="62" rx="31" fill="url(#orange)" filter="url(#shadow)"/>
+  <text x="700" y="748" text-anchor="middle" class="h2">Mutual exclusion: never run both U2D2 owners</text>
+  <text x="700" y="771" text-anchor="middle" class="small">Stop and verify Torque OFF before changing profile.</text>
+</svg>

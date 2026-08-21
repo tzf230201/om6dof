@@ -11,8 +11,26 @@ ros2_control, MoveIt, RealSense perception, pick-and-place, and DD-GNG.
 | Jetson NX | Unitree Go2W services only |
 
 The AGX dashboard runs with `go2w_enabled:=false` and remains usable when the
-NX is disconnected. Only `om6dof_bringup` may open U2D2; never run two
-hardware owners.
+NX is disconnected. The normal `om6dof_bringup` stack and the isolated
+`om6dof_leader_controller` stack are the only intended U2D2 owners. They are
+mutually exclusive; never run two hardware owners.
+
+## Leader-arm research profile
+
+![OM6DOF control profiles](docs/assets/leader-control-architecture.svg)
+
+The commissioned leader-arm path uses six Dynamixel actuators in Operating
+Mode 0 (Current Control), a URDF/KDL gravity model, signed N·m-to-mA conversion,
+explicit arming, a GUIDE heartbeat, current clamps, and slew limits. Staged
+testing eliminated the activation snap and made the arm nearly balanced at
+`gravity_scale: 1.0` on the tested robot.
+
+This remains research commissioning: current conversion is provisional, no
+Coulomb/Stribeck friction model is active, and HOLD impedance is disabled after
+an oscillatory first trial. See the complete paper-oriented record:
+
+- [Leader-arm gravity compensation: architecture, equations, experiments, safety, and limitations](docs/leader_arm_gravity_compensation.md)
+- [Documentation and visual-asset index](docs/README.md)
 
 ## Packages
 
@@ -26,6 +44,7 @@ hardware owners.
 | `om6dof_perception` | RealSense RGB-D and YOLOX perception |
 | `om6dof_pick_and_place` | MoveIt and perception pickup |
 | `om6dof_dd_gng` | DD-GNG semantic camera stream |
+| `om6dof_leader_controller` (companion package beside this repo) | isolated Mode 0 gravity compensation and hand guiding |
 
 ## Install dependencies
 
@@ -75,6 +94,15 @@ colcon build --symlink-install --packages-up-to \
 source install/setup.bash
 ```
 
+Build the companion leader package separately when working on leader mode:
+
+```bash
+cd ~/ros2_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select om6dof_leader_controller
+source install/setup.bash
+```
+
 Build the DD-GNG native core:
 
 ```bash
@@ -99,6 +127,22 @@ ros2 launch om6dof_teleop full_stack.launch.py \
 The stack starts in `AUTONOMOUS`. `arm_controller` is used by MoveIt;
 `forward_position_controller` is used by streamed JOINT, CARTESIAN, and
 CYLINDRICAL commands. The two arm controllers are mutually exclusive.
+
+### Isolated leader-arm run
+
+Do not add the leader controller to a running normal stack. Support the arm,
+stop the normal U2D2 owner, then use the AGX desktop icon **OM6DOF Leader Arm**
+or run:
+
+```bash
+/home/kublab/.local/bin/om6dof_leader_launcher.sh
+```
+
+The launcher starts the `/leader` namespace with torque OFF, requires explicit
+ARM confirmation, verifies six torque states and gravity current, and requests
+disarm plus torque OFF on exit. Full manual terminal commands and the distinction
+between Mode 0 and the legacy Mode 5 profile are in the
+[leader-arm research document](docs/leader_arm_gravity_compensation.md).
 
 ## Install systemd services
 
@@ -252,6 +296,10 @@ unset CYCLONEDDS_URI
 
 - Keep the arm workspace clear before startup or restart.
 - Never run two U2D2 hardware owners.
+- Support the arm and verify six Torque Enable states OFF before changing
+  between normal and leader hardware profiles.
+- In the Mode 0 leader profile, ROS `effort` carries current in mA, not torque
+  in N·m. Never write raw KDL torque directly to that interface.
 - Never run perception and DD-GNG simultaneously.
 - Return to `AUTONOMOUS` before executing MoveIt trajectories.
 - Expose dashboard port 8080 only on a trusted LAN or behind a firewall/VPN.

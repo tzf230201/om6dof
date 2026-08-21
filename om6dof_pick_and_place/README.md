@@ -1,5 +1,11 @@
 # om6dof_pick_and_place
 
+> **Control-profile compatibility:** pick-and-place requires MoveIt and the
+> normal position-control hardware profile. It cannot share U2D2 or arm command
+> interfaces with the isolated Mode 0 leader stack. Return to normal mode using
+> the supported torque-OFF profile-change procedure first. See the
+> [leader-arm gravity-compensation record](../docs/leader_arm_gravity_compensation.md).
+
 Pick-and-place state machine for the 6-DOF OM6DOF. Sits on top
 of `om6dof_moveit_config` (MoveIt 2) and
 [`om6dof_bringup`](../om6dof_bringup/) (ros2_control + Dynamixels), and

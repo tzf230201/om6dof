@@ -2,12 +2,18 @@
 
 DD-GNG experiments and RealSense processing for the OM6DOF stack.
 
-The project now lives under `om6dof/om6dof_dd_gng`; it is a standalone CMake
-project rather than a ROS 2 package. It contains:
+The project lives under `om6dof/om6dof_dd_gng`. It is a proper ament_cmake
+ROS 2 package (`package.xml` + `find_package(ament_cmake ...)` +
+`ament_package()` in `CMakeLists.txt`) that also still carries its original
+plain-CMake sub-build for the pieces that predate that; both build in the
+same `colcon build` pass. It contains:
 
-- `DepthSensor_Buggy/`: the original ODE/OpenGL simulation.
+- `DepthSensor_Buggy/`: the original ODE/OpenGL simulation (plain CMake).
 - `realsense_ddgng/`: the RealSense input and OpenCV overlay using the shared
-  DD-GNG core.
+  DD-GNG core (plain CMake + a separate Python/systemd deployment -- see
+  below); still the thing the web monitor's "3D segmentation" button drives.
+- `src/topo_gng_node.cpp`, `include/om6dof_dd_gng/`: `topo_gng_node`, the
+  rclcpp TopoVLA DD-GNG + YOLO integration -- see "topo_gng_node" below.
 
 Build the RealSense core from a clean build directory:
 
@@ -64,6 +70,51 @@ The labels topic is JSON containing each matched node's index, YOLO class and
 confidence, camera-frame XYZ coordinate, and projected UV pixel. Use
 `--classes bottle,cup` to restrict labelling or `--hide-node-labels` to retain
 semantic colours without drawing text beside every matched node.
+
+## topo_gng_node
+
+The ROS 2 node for the TopoVLA <-> om6dof_dd_gng integration: two graphs
+published as `visualization_msgs/MarkerArray` for RViz, meant as the
+perception front-end for a later robot-topology-vs-environment-topology
+avoidance scheme (not implemented yet -- this node is perception and
+visualization only).
+
+- `~/environment_graph` (`world` frame, grey/coloured spheres+lines): a
+  Dynamic Growing Neural Gas graph (`include/om6dof_dd_gng/ddgng.hpp`,
+  vendored unmodified from `TopoVLA @ 0da5050,
+  native_depth_yolo/src/ddgng.hpp`) learned from D405 depth, deprojected with
+  the camera's own live intrinsics and transformed into `world` via tf2 at
+  each frame's own timestamp -- so the graph stays put in the world as the
+  wrist (and camera with it) moves, rather than following the camera.
+  YOLOX (OpenCV DNN; ONNX Runtime, what TopoVLA's own code uses, is not
+  available on this Jetson) runs asynchronously against the aligned colour
+  frame and labels nodes whose depth, image position, and re-projected
+  visibility agree with a detection box strongly enough (see
+  `labelGraph()`/`enrichDepth()` in `src/topo_gng_node.cpp` for the exact
+  scoring, ported from TopoVLA's `main.cpp`); labelled nodes get a
+  colour-per-class instead of grey, and also go out as JSON on `~/labels`
+  (index, stable `node_id`, class, confidence, world XYZ).
+- `~/robot_graph` (`world` frame, blue): a constant-topology graph (fixed
+  nodes/edges, not GNG) at link1..link7, end_effector_link, both gripper
+  fingers, and d405_payload_link, read from tf2 every frame -- so gripper
+  opening/closing and arm motion move it automatically. The same segment
+  geometry (with a per-link radius, `body_radius.*` parameters, and a
+  `body_mask_margin` on top) is used as a self-body mask: depth points that
+  land inside the robot's own capsule graph are dropped before they can seed
+  a GNG node, which is what stops the wrist camera's view of its own gripper
+  fingers from becoming phantom obstacle nodes.
+
+```bash
+systemctl --user stop om6dof-dd-gng.service om6dof-perception.service
+ros2 launch om6dof_dd_gng topo_gng_node.launch.py
+```
+
+Needs `robot_state_publisher` (and therefore joint states) already running
+for the `world -> d405_depth_optical_frame` TF chain to resolve; see
+`om6dof_description/urdf/om6dof.urdf.xacro` for how that frame's pose was
+derived from the D405 datasheet and the wrist-camera mesh. All parameters
+(pixel step, node/update caps, YOLO model/thresholds, `target_classes`,
+per-link capsule radii, etc.) are in `config/topo_gng.yaml`.
 
 ## Low-light RealSense depth
 

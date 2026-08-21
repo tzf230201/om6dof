@@ -21,6 +21,8 @@
 
 #include "controller_interface/controller_interface.hpp"
 #include "rclcpp_lifecycle/state.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
+#include "realtime_tools/realtime_buffer.hpp"
 #include "realtime_tools/realtime_publisher.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/float64_multi_array.hpp"
@@ -91,11 +93,20 @@ protected:
   std::vector<double> effort_scale_;
   std::vector<double> min_effort_;
   std::vector<double> max_effort_;
-  std::vector<double> headroom_;
   std::vector<FrictionParameters> friction_;
 
-  std::vector<double> deadband_;
   double ramp_seconds_{1.0};
+
+  /// Live-tunable, because the only way to know what the arm should feel like
+  /// is to hold it while changing them. Written from the parameter callback,
+  /// read in update(), so they go through a realtime buffer rather than being
+  /// edited under the control loop's feet.
+  realtime_tools::RealtimeBuffer<std::vector<double>> deadband_;
+  realtime_tools::RealtimeBuffer<std::vector<double>> headroom_buffer_;
+
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_;
+  rcl_interfaces::msg::SetParametersResult onParameters(
+    const std::vector<rclcpp::Parameter> & parameters);
 
   GravityModel model_;
 

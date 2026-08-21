@@ -188,7 +188,10 @@ private:
   double err_timeout_ms_;
   int consecutive_failure_shutdown_threshold_{10};
   int consecutive_read_failures_{0};
+  int consecutive_write_failures_{0};
   bool fail_safe_triggered_{false};
+  bool auto_enable_torque_on_start_{true};
+  bool restrict_critical_write_service_{false};
   rclcpp::Duration read_error_duration_{0, 0};
   rclcpp::Duration write_error_duration_{0, 0};
   bool is_read_in_error_{false};
@@ -312,7 +315,7 @@ private:
   /**
    * @brief Changes the torque state of the Dynamixel.
    */
-  void ChangeDxlTorqueState();
+  DxlError ChangeDxlTorqueState();
 
   using DynamixelStateMsg = dynamixel_interfaces::msg::DynamixelState;
   using StatePublisher = realtime_tools::RealtimePublisher<DynamixelStateMsg>;

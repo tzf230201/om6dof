@@ -1,5 +1,11 @@
 # om6dof_controller
 
+> **Control-profile compatibility:** this package is the normal position-command
+> path for MoveIt/jog/teleop and is not used by the isolated Mode 0 leader arm.
+> Do not start it as a second U2D2 owner or send position commands while the
+> leader stack is active. See the
+> [leader-arm gravity-compensation record](../docs/leader_arm_gravity_compensation.md).
+
 High-level command converter between generic OM6DOF jog commands and the
 existing ros2_control `forward_position_controller`. This package does not
 open U2D2 and is not a ros2_control plugin; `om6dof_bringup` remains the single

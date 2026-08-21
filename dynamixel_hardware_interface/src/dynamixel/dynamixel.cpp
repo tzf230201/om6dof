@@ -2071,7 +2071,7 @@ DxlError Dynamixel::SetDxlValueToSyncWrite()
 {
   for (auto it_write_data : write_data_list_) {
     uint8_t comm_id = it_write_data.comm_id;
-    uint8_t * param_write_value = new uint8_t[indirect_info_write_[comm_id].size];
+    std::vector<uint8_t> param_write_value(indirect_info_write_[comm_id].size, 0);
     uint8_t added_byte = 0;
 
     for (uint16_t item_index = 0; item_index < indirect_info_write_[comm_id].cnt; item_index++) {
@@ -2090,22 +2090,23 @@ DxlError Dynamixel::SetDxlValueToSyncWrite()
         uint32_t raw_value = ConvertUnitValueToRawValue(
           comm_id, ID, item_name, data, size,
           is_signed);
-        WriteValueToBuffer(param_write_value, added_byte, raw_value, size);
+        WriteValueToBuffer(param_write_value.data(), added_byte, raw_value, size);
       } else {
         // Fallback to existing logic for compatibility
         if (item_name == "Goal Position") {
           int32_t goal_position = dxl_info_.ConvertRadianToValue(comm_id, ID, data);
           WriteValueToBuffer(
-            param_write_value, added_byte, static_cast<uint32_t>(goal_position),
+            param_write_value.data(), added_byte, static_cast<uint32_t>(goal_position),
             4);
         } else {
-          WriteValueToBuffer(param_write_value, added_byte, static_cast<uint32_t>(data), size);
+          WriteValueToBuffer(
+            param_write_value.data(), added_byte, static_cast<uint32_t>(data), size);
         }
       }
       added_byte += size;
     }
 
-    if (group_sync_write_->addParam(comm_id, param_write_value) != true) {
+    if (group_sync_write_->addParam(comm_id, param_write_value.data()) != true) {
       fprintf(stderr, "[ID:%03d] groupSyncWrite addparam failed\n", comm_id);
       return DxlError::SYNC_WRITE_FAIL;
     }
@@ -2272,12 +2273,12 @@ DxlError Dynamixel::SetDxlValueToBulkWrite()
 {
   for (auto it_write_data : write_data_list_) {
     uint8_t comm_id = it_write_data.comm_id;
-    uint8_t * param_write_value;
+    std::vector<uint8_t> param_write_value;
     uint8_t added_byte = 0;
 
     // Check if this is a direct write
     if (direct_info_write_.find(comm_id) != direct_info_write_.end()) {
-      param_write_value = new uint8_t[direct_info_write_[comm_id].size];
+      param_write_value.assign(direct_info_write_[comm_id].size, 0);
 
       for (uint16_t item_index = 0; item_index < direct_info_write_[comm_id].cnt; item_index++) {
         double data = *it_write_data.item_data_ptr_vec.at(item_index);
@@ -2295,16 +2296,17 @@ DxlError Dynamixel::SetDxlValueToBulkWrite()
           uint32_t raw_value = ConvertUnitValueToRawValue(
             comm_id, ID, item_name, data, size,
             is_signed);
-          WriteValueToBuffer(param_write_value, added_byte, raw_value, size);
+          WriteValueToBuffer(param_write_value.data(), added_byte, raw_value, size);
         } else {
           // Fallback to existing logic for compatibility
           if (item_name == "Goal Position") {
             int32_t goal_position = dxl_info_.ConvertRadianToValue(comm_id, ID, data);
             WriteValueToBuffer(
-              param_write_value, added_byte, static_cast<uint32_t>(goal_position),
+              param_write_value.data(), added_byte, static_cast<uint32_t>(goal_position),
               4);
           } else {
-            WriteValueToBuffer(param_write_value, added_byte, static_cast<uint32_t>(data), size);
+            WriteValueToBuffer(
+              param_write_value.data(), added_byte, static_cast<uint32_t>(data), size);
           }
         }
         added_byte += size;
@@ -2314,14 +2316,14 @@ DxlError Dynamixel::SetDxlValueToBulkWrite()
           comm_id,
           direct_info_write_[comm_id].indirect_data_addr,
           direct_info_write_[comm_id].size,
-          param_write_value) != true)
+          param_write_value.data()) != true)
       {
         fprintf(stderr, "[ID:%03d] groupBulkWrite addparam failed\n", comm_id);
         return DxlError::BULK_WRITE_FAIL;
       }
     } else {
       // Handle indirect write
-      param_write_value = new uint8_t[indirect_info_write_[comm_id].size];
+      param_write_value.assign(indirect_info_write_[comm_id].size, 0);
 
       for (uint16_t item_index = 0; item_index < indirect_info_write_[comm_id].cnt; item_index++) {
         double data = *it_write_data.item_data_ptr_vec.at(item_index);
@@ -2339,16 +2341,17 @@ DxlError Dynamixel::SetDxlValueToBulkWrite()
           uint32_t raw_value = ConvertUnitValueToRawValue(
             comm_id, ID, item_name, data, size,
             is_signed);
-          WriteValueToBuffer(param_write_value, added_byte, raw_value, size);
+          WriteValueToBuffer(param_write_value.data(), added_byte, raw_value, size);
         } else {
           // Fallback to existing logic for compatibility
           if (item_name == "Goal Position") {
             int32_t goal_position = dxl_info_.ConvertRadianToValue(comm_id, ID, data);
             WriteValueToBuffer(
-              param_write_value, added_byte, static_cast<uint32_t>(goal_position),
+              param_write_value.data(), added_byte, static_cast<uint32_t>(goal_position),
               4);
           } else {
-            WriteValueToBuffer(param_write_value, added_byte, static_cast<uint32_t>(data), size);
+            WriteValueToBuffer(
+              param_write_value.data(), added_byte, static_cast<uint32_t>(data), size);
           }
         }
         added_byte += size;
@@ -2358,7 +2361,7 @@ DxlError Dynamixel::SetDxlValueToBulkWrite()
           comm_id,
           indirect_info_write_[comm_id].indirect_data_addr,
           indirect_info_write_[comm_id].size,
-          param_write_value) != true)
+          param_write_value.data()) != true)
       {
         fprintf(stderr, "[ID:%03d] groupBulkWrite addparam failed\n", comm_id);
         return DxlError::BULK_WRITE_FAIL;
