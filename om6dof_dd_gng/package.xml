@@ -4,30 +4,46 @@
   <name>om6dof_dd_gng</name>
   <version>0.1.0</version>
   <description>
-    DD-GNG topology for OM6DOF: an environment graph (Dynamic Growing Neural
-    Gas over RealSense D405 depth, learned in the world frame) and a constant
-    robot-body graph read from TF, published as RViz MarkerArrays. Also still
-    ships the legacy realsense_ddgng/ Python + shared-library tooling and the
-    optional DepthSensor_Buggy visualizer as a plain CMake sub-build; see
-    README.md.
+    DD-GNG topology for OM6DOF: a typed world-frame environment graph, the
+    live robot-body graph used for camera self-masking, and a deterministic
+    MoveIt-based end-effector reachability roadmap with target intersection
+    and preview-only shortest-path output.
   </description>
   <maintainer email="biancanobelia@gmail.com">unitree</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
 
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>nav_msgs</depend>
+  <depend>trajectory_msgs</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
+  <depend>moveit_core</depend>
+  <depend>moveit_ros_planning</depend>
+  <depend>moveit_msgs</depend>
+  <depend>shape_msgs</depend>
+
+  <exec_depend>rosidl_default_runtime</exec_depend>
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>rviz2</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>om6dof_description</exec_depend>
+  <exec_depend>om6dof_moveit_config</exec_depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
 
   <export>
     <build_type>ament_cmake</build_type>

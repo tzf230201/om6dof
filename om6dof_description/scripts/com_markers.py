@@ -120,6 +120,10 @@ class ComLabels(Node):
 
             marker = Marker()
             marker.header.frame_id = link.name
+            # The markers are published once, but their link frames move as the
+            # joints move.  Ask RViz to resolve the frame on every render frame
+            # instead of transforming this pose only when the message arrives.
+            marker.frame_locked = True
             marker.ns = 'label'
             marker.id = index
             marker.type = Marker.TEXT_VIEW_FACING

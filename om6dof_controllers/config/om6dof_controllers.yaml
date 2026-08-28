@@ -27,6 +27,9 @@
       om6dof_leader_arm_controller:
         type: om6dof_controllers/LeaderArmController
 
+      om6dof_torque_teaching_controller:
+        type: om6dof_controllers/GravityCompensationController
+
   # ----- trajectory following -----
   # Position mode works against the standard description. Effort mode needs
   # om6dof.ros2_control.current.xacro, and needs `gains.p`/`gains.d` and
@@ -158,6 +161,42 @@
       ramp_seconds: 2.0
       publish_rate: 20.0
 
+  # ----- pure-current teaching -----
+  # This is the direct-teaching controller.  It is valid only when arm joints
+  # are in Dynamixel Operating Mode 0: Goal Current is then signed current,
+  # not the ceiling used by mode 5.  No position command is claimed.
+  om6dof_torque_teaching_controller:
+    ros__parameters:
+      joints: [joint1, joint2, joint3, joint4, joint5, joint6]
+      command_semantics: torque
+      base_link: link1
+      tip_link: end_effector_link
+      gravity: [0.0, 0.0, -9.80665]
+
+      # Only these axes passed the gravity fit on the 2026-08-28 multisine
+      # dataset.  Yaw/roll axes receive zero current because gravity does not
+      # load them appreciably; do not invent compensation for noisy fits.
+      gain: [0.0, 1.0, 1.0, 0.0, 1.0, 0.0]
+      effort_scale: [1.0, 174.841, 159.582, 1.0, 142.124, 1.0]
+
+      # Start without the uncertain friction and bias estimates.  This gives
+      # a clean Tg-only trial; friction can be added after checking that every
+      # axis is gravity-neutral by hand.
+      friction:
+        coulomb: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        viscous: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        deadzone: 0.02
+      bias: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+      # Absolute Goal Current limits (raw Dynamixel ticks, 2.69 mA each).
+      # These are conservative caps, not holding targets.  A cap that binds
+      # means the affected joint will sag; support it and increase only after
+      # inspecting ~/commanded_effort.
+      max_effort: [30.0, 360.0, 260.0, 30.0, 220.0, 30.0]
+      deactivate_effort: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      ramp_seconds: 0.5
+      publish_rate: 50.0
+
   # ----- leader arm -----
   # Replaces arm_controller while active: it claims position AND effort, so it
   # cannot run beside a JointTrajectoryController. Switch, do not stack.
@@ -175,32 +214,23 @@
       tip_link: end_effector_link
       gravity: [0.0, 0.0, -9.80665]
 
-      gain: [0.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+      # Identified from multisine_teaching_all.csv on 2026-08-28 with the
+      # current URDF, including gripper/D405 branch mass.  joint2, joint3 and
+      # joint5 have gravity-fit R² of 0.881, 0.951 and 0.958 respectively.
+      # joint1 has no identifiable gravity, while joint4/6 have weak fits; they
+      # remain gravity-disabled rather than applying noisy parameters.
+      gain: [0.0, 1.0, 1.0, 0.0, 1.0, 0.0]
 
-      # PROVISIONAL, and the reason matters.
-      #
-      # The identification of 2026-08-20 measured 285.4 and 384.7 ticks per Nm,
-      # but against a gravity model that has since changed: off-chain mass folded
-      # in, placeholder centres of mass replaced, link6 and link7 corrected. The
-      # measured currents are still true, so the scale can in principle be
-      # carried across by the ratio of old model to new.
-      #
-      # It cannot be carried cleanly. Over 4000 random poses that ratio is not
-      # constant -- joint2 spreads 0.43 to 0.90, joint3 0.25 to 1.04 -- which
-      # means the model's SHAPE changed, not just its size, and no single factor
-      # fixes that. These are the least-squares best single scales (x0.653 and
-      # x0.608): closer than the stale numbers, still wrong pose by pose.
-      #
-      # Re-run the identification in om6dof_gravity_comp. Until then the arm is
-      # usable but not calibrated.
-      effort_scale: [1.0, 186.4, 233.9, 1.0, 1.0, 1.0]
+      # Raw Present Current per Nm, fitted against the same KDL gravity model
+      # this controller evaluates.  Do not replace these with motor datasheet
+      # constants: they are effective joint-side scales including gearing.
+      effort_scale: [1.0, 174.841, 159.582, 1.0, 142.124, 1.0]
 
-      # Coulomb in Nm, from the fitted ticks divided by the scale above:
-      # joint2 27.396/186.4, joint3 47.279/233.9. Carries the same caveat.
-      # `viscous` came out negative in that fit, which would mean friction adding
-      # energy, so it stays at zero.
+      # Coulomb friction in Nm: raw fitted Coulomb divided by effort_scale.
+      # Viscous fits were negative, so retaining them would add energy.  Keep
+      # them disabled until a dedicated dynamics validation says otherwise.
       friction:
-        coulomb: [0.0, 0.147, 0.202, 0.0, 0.0, 0.0]
+        coulomb: [0.0, 0.1417, 0.3944, 0.0, 0.2653, 0.0]
         viscous: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         deadzone: 0.02
 

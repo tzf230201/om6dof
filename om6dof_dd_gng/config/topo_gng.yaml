@@ -13,6 +13,7 @@ topo_gng_node:
     world_frame: "world"
     camera_frame: "d405_depth_optical_frame"
     environment_graph_topic: "/om6dof_topo_gng/environment_graph"
+    environment_graph_data_topic: "/om6dof_topo_gng/environment_graph_data"
     tf_timeout_sec: 0.1
     node_marker_scale: 0.02
     edge_marker_width: 0.004
@@ -27,3 +28,106 @@ topo_gng_node:
     label_confidence: 0.35   # per-detection score floor before it can label any node
     min_label_nodes: 3       # a box needs >=3 supporting nodes to label anything
     labels_topic: "/om6dof_topo_gng/labels"
+
+    # Current-body graph used only for the camera self-mask. This is distinct
+    # from reachability_graph_node's end-effector action roadmap below.
+    robot_graph_topic: "/om6dof_topo_gng/robot_graph"
+    body_segment_spacing: 0.05
+    body_mask_margin: 0.01
+    body_radius.link1: 0.020
+    body_radius.link2: 0.021
+    body_radius.link3: 0.022
+    body_radius.link4: 0.023
+    body_radius.link5: 0.021
+    body_radius.link6: 0.016
+    body_radius.link7: 0.040
+    body_radius.end_effector_link: 0.015
+    body_radius.gripper_left_link: 0.029
+    body_radius.gripper_right_link: 0.029
+    body_radius.d405_payload_link: 0.024
+
+reachability_graph_node:
+  ros__parameters:
+    group_name: "arm"
+    end_effector_link: "end_effector_link"
+    world_frame: "world"
+
+    # Research switch: halton_prm is the controlled baseline, gng is pure
+    # adaptive quantization, and guarded_gng reserves part of the same node
+    # budget for evenly spaced raw samples to retain rare IK branches.
+    # All backends share the same validated k-NN roadmap connection stage.
+    graph_method: "gng"       # "gng", "guarded_gng", or "halton_prm"
+    sample_count: 800
+    max_sampling_attempts: 20000
+    halton_start_index: 17
+    sample_stream_seed: 0       # 0=legacy; >0=digit-permuted Halton stream
+    gng_training_samples: 4000
+    gng_max_epochs: 4
+    gng_insert_interval: 20
+    gng_max_edge_age: 50
+    gng_winner_learning_rate: 0.05
+    gng_neighbor_learning_rate: 0.0006
+    gng_error_reduction: 0.5
+    gng_error_decay: 0.995
+    gng_guard_fraction: 0.25   # used only by guarded_gng; ablate before fixing
+    neighbors: 10
+    max_normalized_joint_distance: 0.75
+    max_cartesian_edge_length: 0.14
+    edge_validation_step: 0.15
+
+    # Ignores the SRDF's broad "Never" collision exemptions and permits only
+    # directly adjacent link pairs. Disable only for diagnosis if the robot's
+    # collision meshes are found to overlap incorrectly.
+    strict_self_collision: true
+
+    # Environment nodes/edges are tested against cached capsules for link2
+    # through link7, the end effector, both fingers, and the D405 payload at
+    # every interpolated edge state. Edge 0 (fixed-base link1-link2) is omitted
+    # so the known support surface does not invalidate the complete roadmap.
+    target_intersection_radius: 0.05
+    obstacle_clearance: 0.035
+    target_exclusion_radius: 0.055
+    body_collision_step: 0.08
+    body_collision_first_edge: 1
+    body_radius.link1: 0.020
+    body_radius.link2: 0.021
+    body_radius.link3: 0.022
+    body_radius.link4: 0.023
+    body_radius.link5: 0.021
+    body_radius.link6: 0.016
+    body_radius.link7: 0.040
+    body_radius.end_effector_link: 0.015
+    body_radius.gripper_left_link: 0.029
+    body_radius.gripper_right_link: 0.029
+    body_radius.d405_payload_link: 0.024
+
+    # Stage 2: only the shortlisted capsule-safe route is checked against
+    # exact robot collision meshes in a MoveIt/FCL PlanningScene. DD-GNG
+    # nodes become spheres and DD-GNG edges become cylinders. A failed graph
+    # edge is disabled and Dijkstra is repeated up to exact_max_replans.
+    exact_collision_enabled: true
+    exact_collision_step: 0.05
+    exact_environment_point_radius: 0.012
+    exact_environment_edge_radius: 0.006
+    exact_max_replans: 20
+    exact_environment_ignored_links: ["link1"]
+    start_connect_candidates: 20
+    start_max_normalized_joint_distance: 0.85
+    preview_joint_velocity: 0.35
+    planning_period_sec: 0.5
+
+    node_marker_scale: 0.012
+    edge_marker_width: 0.002
+    path_marker_width: 0.008
+
+    query_mode: false           # true only in isolated, preview-only benchmarks
+    environment_graph_topic: "/om6dof_topo_gng/environment_graph_data"
+    query_topic: "/om6dof_topo_gng/reachability_query"
+    joint_state_topic: "/joint_states"
+    graph_data_topic: "/om6dof_topo_gng/reachability_graph_data"
+    marker_topic: "/om6dof_topo_gng/reachability_graph"
+    plan_topic: "/om6dof_topo_gng/reachability_plan"
+    path_topic: "/om6dof_topo_gng/reachability_path"
+    rebuild_service: "/om6dof_topo_gng/rebuild_reachability"
+    plan_service: "/om6dof_topo_gng/plan_reachability"
+    scene_validation_service: "/om6dof_topo_gng/validate_reachability_scene"

@@ -8,6 +8,9 @@
        which is what gravity compensation needs to reach a motor. The arm
        becomes softer the moment it is loaded, so switch it deliberately. -->
   <xacro:arg name="current_control" default="false"/>
+  <!-- Passed through only when current_control is true.  5 retains the
+       Dynamixel position loop; 0 makes Goal Current a signed torque command. -->
+  <xacro:arg name="arm_operating_mode" default="5"/>
 
   <!-- Runtime communication fail-safe settings are kept in one editable file. -->
   <xacro:property name="hardware_safety"
@@ -28,5 +31,6 @@
     port_name="$(arg port_name)"
     baudrate="$(arg baud_rate)"
     consecutive_failure_shutdown_threshold="${hardware_safety['consecutive_failure_shutdown_threshold']}"
-    use_fake_hardware="$(arg use_fake_hardware)"/>
+    use_fake_hardware="$(arg use_fake_hardware)"
+    arm_operating_mode="$(arg arm_operating_mode)"/>
 </robot>

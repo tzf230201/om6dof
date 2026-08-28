@@ -103,16 +103,38 @@ find_package(sensor_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(moveit_core REQUIRED)
+find_package(moveit_ros_planning REQUIRED)
+find_package(moveit_msgs REQUIRED)
+find_package(shape_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 # Provided by the ros-humble-librealsense2 apt package (sourcing
 # /opt/ros/humble/setup.bash puts its CMake config on CMAKE_PREFIX_PATH); this
 # is the same librealsense2.so the Python realsense_ddgng/ tools load via
 # pyrealsense2, so topo_gng_node and dd_gng_yolo.py contend for the same
 # camera handle exactly like any two processes opening the same device would.
 find_package(realsense2 REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/TopologyEdge.msg"
+  "msg/EnvironmentNode.msg"
+  "msg/EnvironmentGraph.msg"
+  "msg/ReachabilityNode.msg"
+  "msg/ReachabilityGraph.msg"
+  "msg/ReachabilityPlan.msg"
+  "msg/ReachabilityQuery.msg"
+  "srv/ValidateReachabilityScene.srv"
+  DEPENDENCIES std_msgs geometry_msgs sensor_msgs trajectory_msgs nav_msgs
+)
+rosidl_get_typesupport_target(cpp_typesupport_target
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 add_executable(topo_gng_node
   src/topo_gng_node.cpp
@@ -134,11 +156,36 @@ ament_target_dependencies(topo_gng_node
 target_link_libraries(topo_gng_node
   realsense2::realsense2
   ${OpenCV_LIBS}
+  ${cpp_typesupport_target}
 )
 target_include_directories(topo_gng_node PRIVATE ${OpenCV_INCLUDE_DIRS})
 
-install(TARGETS topo_gng_node
+add_executable(reachability_graph_node
+  src/reachability_graph_node.cpp
+)
+target_include_directories(reachability_graph_node PRIVATE include)
+target_compile_features(reachability_graph_node PRIVATE cxx_std_17)
+ament_target_dependencies(reachability_graph_node
+  rclcpp
+  sensor_msgs
+  visualization_msgs
+  geometry_msgs
+  std_msgs
+  std_srvs
+  nav_msgs
+  trajectory_msgs
+  moveit_core
+  moveit_ros_planning
+  moveit_msgs
+  shape_msgs
+)
+target_link_libraries(reachability_graph_node ${cpp_typesupport_target})
+
+install(TARGETS topo_gng_node reachability_graph_node
   DESTINATION lib/${PROJECT_NAME}
+)
+install(DIRECTORY include/
+  DESTINATION include
 )
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
@@ -149,5 +196,39 @@ install(DIRECTORY config/
 install(DIRECTORY rviz/
   DESTINATION share/${PROJECT_NAME}/rviz
 )
+install(PROGRAMS
+  scripts/reachability_benchmark.py
+  scripts/reachability_multiscene_benchmark.py
+  scripts/generate_reachability_scene_catalog.py
+  scripts/analyze_reachability_multiscene.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_gtest(test_reachability_graph
+    test/test_reachability_graph.cpp
+  )
+  target_include_directories(test_reachability_graph PRIVATE include)
+  target_compile_features(test_reachability_graph PRIVATE cxx_std_17)
+  ament_add_pytest_test(test_reachability_benchmark
+    test/test_reachability_benchmark.py
+    TIMEOUT 30
+  )
+  ament_add_pytest_test(test_reachability_multiscene_benchmark
+    test/test_reachability_multiscene_benchmark.py
+    TIMEOUT 30
+  )
+  ament_add_pytest_test(test_generate_reachability_scene_catalog
+    test/test_generate_reachability_scene_catalog.py
+    TIMEOUT 30
+  )
+  ament_add_pytest_test(test_analyze_reachability_multiscene
+    test/test_analyze_reachability_multiscene.py
+    TIMEOUT 60
+  )
+endif()
+
+ament_export_dependencies(rosidl_default_runtime)
 ament_package()

@@ -90,6 +90,13 @@ typedef enum DxlTorqueStatus
   REQUESTED_TO_DISABLE = 3,  /**< Torque disable is requested. */
 } DxlTorqueStatus;
 
+struct BusWatchdogConfig
+{
+  uint8_t comm_id;
+  uint8_t id;
+  uint8_t timeout;
+};
+
 /**
  * @class DynamixelHardware
  * @brief Class for interfacing with Dynamixel hardware using the ROS2 hardware interface.
@@ -192,6 +199,7 @@ private:
   bool fail_safe_triggered_{false};
   bool auto_enable_torque_on_start_{true};
   bool restrict_critical_write_service_{false};
+  std::vector<BusWatchdogConfig> bus_watchdog_configs_;
   rclcpp::Duration read_error_duration_{0, 0};
   rclcpp::Duration write_error_duration_{0, 0};
   bool is_read_in_error_{false};
@@ -271,6 +279,12 @@ private:
    * @return True if initialization was successful, false otherwise.
    */
   bool InitItem(const hardware_interface::ComponentInfo & gpio);
+
+  /**
+   * @brief Enables configured actuator watchdogs, or clears them during shutdown/recovery.
+   * @return True when every configured watchdog write succeeds.
+   */
+  bool SetConfiguredBusWatchdogs(bool enabled);
 
   /**
    * @brief Initializes the read items for Dynamixel.

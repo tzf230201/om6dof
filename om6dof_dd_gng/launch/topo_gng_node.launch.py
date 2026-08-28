@@ -14,8 +14,10 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+from launch_ros.substitutions import FindPackageShare
 import os
 
 
@@ -26,6 +28,20 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file')
     rviz_config = LaunchConfiguration('rviz_config')
     launch_rviz = LaunchConfiguration('launch_rviz')
+    launch_reachability = LaunchConfiguration('launch_reachability')
+
+    moveit_share = get_package_share_directory('om6dof_moveit_config')
+    xacro_file = PathJoinSubstitution([
+        FindPackageShare('om6dof_description'), 'urdf', 'om6dof.urdf.xacro'
+    ])
+    robot_description = {
+        'robot_description': ParameterValue(
+            Command([FindExecutable(name='xacro'), ' ', xacro_file]),
+            value_type=str,
+        )
+    }
+    with open(os.path.join(moveit_share, 'config', 'om6dof.srdf'), encoding='utf-8') as stream:
+        robot_description_semantic = {'robot_description_semantic': stream.read()}
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -39,6 +55,11 @@ def generate_launch_description():
             description='Also start RViz2 pre-configured for environment_graph/robot_graph',
         ),
         DeclareLaunchArgument(
+            'launch_reachability',
+            default_value='true',
+            description='Start the preview-only end-effector reachability graph node',
+        ),
+        DeclareLaunchArgument(
             'rviz_config',
             default_value=default_rviz,
             description='RViz config used when launch_rviz:=true',
@@ -49,6 +70,14 @@ def generate_launch_description():
             name='topo_gng_node',
             output='screen',
             parameters=[params_file],
+        ),
+        Node(
+            package='om6dof_dd_gng',
+            executable='reachability_graph_node',
+            name='reachability_graph_node',
+            output='screen',
+            parameters=[params_file, robot_description, robot_description_semantic],
+            condition=IfCondition(launch_reachability),
         ),
         Node(
             package='rviz2',

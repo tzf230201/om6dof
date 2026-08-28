@@ -1,23 +1,17 @@
 <?xml version="1.0"?>
 <!--
-  Current-limited variant of om6dof.ros2_control.xacro, for leading the arm
-  by hand.
+  Effort-command variant of om6dof.ros2_control.xacro.
 
   WHAT DIFFERS FROM THE STANDARD FILE
     each arm joint gains an "effort" command interface
     each servo gains a "Goal Current" command interface
-    Operating Mode goes from 3 (position) to 5 (current-based position)
+    Operating mode for arm joints is selected by arm_operating_mode:
+    5 = current-based position; 0 = signed, pure current control.
 
-  WHY MODE 5 AND NOT MODE 0
-    Mode 0 is pure current control. The servo stops holding position at all,
-    so if the compensation model is wrong, or the node stops, the arm falls
-    under its own weight. Mode 5 keeps the position loop and caps how hard it
-    may pull: command a small Goal Current and the arm becomes backdrivable,
-    light enough to lead by hand, while still holding its pose when let go.
-    The gripper on this arm already runs in mode 5.
-
-    Mode 0 is the endpoint once the model is trusted at every pose, including
-    standing still. That is not yet true, so it is not this file.
+  MODE 0 WARNING
+    In pure current control the position loop is absent. It is suitable only
+    with a live, signed gravity-compensation controller and a supported arm.
+    The gripper always remains in mode 5.
 
   NOT LOADED BY DEFAULT
     The standard bringup keeps using om6dof.ros2_control.xacro. Loading this
@@ -47,7 +41,8 @@
       port_name:=/dev/ttyUSB0
       baudrate:=1000000
       consecutive_failure_shutdown_threshold:=10
-      use_fake_hardware:=false">
+      use_fake_hardware:=false
+      arm_operating_mode:=5">
 
     <ros2_control name="${name}" type="system">
 
@@ -184,6 +179,7 @@
       <gpio name="dxl1">
         <param name="type">dxl</param>
         <param name="ID">31</param>
+        <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
@@ -191,7 +187,12 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
-        <param name="Operating Mode">5</param>
+        <param name="Operating Mode">${arm_operating_mode}</param>
+        <!-- Mode 0 is accepted by the hardware driver only after an explicit
+             zero-current packet, preventing torque enable with a stale value. -->
+        <xacro:if value="${int(arm_operating_mode) == 0}">
+          <param name="Goal Current">0</param>
+        </xacro:if>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
         <param name="Position D Gain">100</param>
@@ -203,6 +204,7 @@
       <gpio name="dxl2">
         <param name="type">dxl</param>
         <param name="ID">32</param>
+        <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
@@ -210,7 +212,10 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
-        <param name="Operating Mode">5</param>
+        <param name="Operating Mode">${arm_operating_mode}</param>
+        <xacro:if value="${int(arm_operating_mode) == 0}">
+          <param name="Goal Current">0</param>
+        </xacro:if>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
         <param name="Position D Gain">100</param>
@@ -222,6 +227,7 @@
       <gpio name="dxl3">
         <param name="type">dxl</param>
         <param name="ID">33</param>
+        <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
@@ -229,7 +235,10 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
-        <param name="Operating Mode">5</param>
+        <param name="Operating Mode">${arm_operating_mode}</param>
+        <xacro:if value="${int(arm_operating_mode) == 0}">
+          <param name="Goal Current">0</param>
+        </xacro:if>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
         <param name="Position D Gain">100</param>
@@ -241,6 +250,7 @@
       <gpio name="dxl4">
         <param name="type">dxl</param>
         <param name="ID">24</param>
+        <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
@@ -248,7 +258,10 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
-        <param name="Operating Mode">5</param>
+        <param name="Operating Mode">${arm_operating_mode}</param>
+        <xacro:if value="${int(arm_operating_mode) == 0}">
+          <param name="Goal Current">0</param>
+        </xacro:if>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
         <param name="Position D Gain">100</param>
@@ -260,6 +273,7 @@
       <gpio name="dxl5">
         <param name="type">dxl</param>
         <param name="ID">35</param>
+        <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
@@ -267,7 +281,10 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
-        <param name="Operating Mode">5</param>
+        <param name="Operating Mode">${arm_operating_mode}</param>
+        <xacro:if value="${int(arm_operating_mode) == 0}">
+          <param name="Goal Current">0</param>
+        </xacro:if>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
         <param name="Position D Gain">100</param>
@@ -279,6 +296,7 @@
       <gpio name="dxl6">
         <param name="type">dxl</param>
         <param name="ID">26</param>
+        <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
         <command_interface name="Goal Current"/>
         <state_interface name="Present Position"/>
@@ -286,7 +304,10 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
-        <param name="Operating Mode">5</param>
+        <param name="Operating Mode">${arm_operating_mode}</param>
+        <xacro:if value="${int(arm_operating_mode) == 0}">
+          <param name="Goal Current">0</param>
+        </xacro:if>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
         <param name="Position D Gain">100</param>

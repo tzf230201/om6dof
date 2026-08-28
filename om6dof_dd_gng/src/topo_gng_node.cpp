@@ -1,14 +1,12 @@
 // topo_gng_node: environment topology for the TopoVLA <-> om6dof_dd_gng
-// integration (M2 + M3 of the integration task -- see the task notes for the
-// full milestone list; M4's robot-body graph and self-body mask are not in
-// this file yet).
+// integration: world-fixed environment DD-GNG, YOLO semantic labels, typed
+// environment graph output, and the current-body capsule graph/self-mask.
 //
 // Pipeline, once per captured depth frame:
 //   RealSense D405 depth + color, aligned to the depth stream
 //     -> pixel_step-strided grid, rs2_deproject_pixel_to_point (camera-frame
 //        metres, using the device's own live intrinsics, never hardcoded)
-//     -> self-body mask (placeholder here; M4 fills this in with the robot's
-//        capsule graph)
+//     -> self-body mask from the robot's live TF capsule graph
 //     -> tf2 lookup(world_frame, camera_frame, frame timestamp), applied to
 //        every surviving point, so the graph is learned in the WORLD frame
 //        and stays put as the wrist (and camera with it) moves
@@ -74,6 +72,7 @@
 #include "om6dof_dd_gng/ddgng.hpp"
 #include "om6dof_dd_gng/yolox_detector.hpp"
 #include "om6dof_dd_gng/async_yolo.hpp"
+#include "om6dof_dd_gng/msg/environment_graph.hpp"
 
 using namespace std::chrono_literals;
 using om6dof_dd_gng::AsyncYolo;
@@ -236,6 +235,8 @@ public:
 
     env_graph_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
       environment_graph_topic_, rclcpp::QoS(2));
+    env_graph_data_pub_ = create_publisher<om6dof_dd_gng::msg::EnvironmentGraph>(
+      environment_graph_data_topic_, rclcpp::QoS(2).reliable());
     labels_pub_ = create_publisher<std_msgs::msg::String>(labels_topic_, rclcpp::QoS(2));
     robot_graph_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
       robot_graph_topic_, rclcpp::QoS(2));
@@ -290,6 +291,8 @@ private:
     declare_parameter<std::string>("world_frame", "world");
     declare_parameter<std::string>("camera_frame", "d405_depth_optical_frame");
     declare_parameter<std::string>("environment_graph_topic", "/om6dof_topo_gng/environment_graph");
+    declare_parameter<std::string>(
+      "environment_graph_data_topic", "/om6dof_topo_gng/environment_graph_data");
     declare_parameter<double>("tf_timeout_sec", 0.1);
     declare_parameter<double>("node_marker_scale", 0.02);
     declare_parameter<double>("edge_marker_width", 0.004);
@@ -345,6 +348,7 @@ private:
     world_frame_ = get_parameter("world_frame").as_string();
     camera_frame_ = get_parameter("camera_frame").as_string();
     environment_graph_topic_ = get_parameter("environment_graph_topic").as_string();
+    environment_graph_data_topic_ = get_parameter("environment_graph_data_topic").as_string();
     tf_timeout_sec_ = get_parameter("tf_timeout_sec").as_double();
     node_marker_scale_ = get_parameter("node_marker_scale").as_double();
     edge_marker_width_ = get_parameter("edge_marker_width").as_double();
@@ -504,6 +508,8 @@ private:
     labelGraph(depth, detections, world_to_camera, nodes, node_ids, node_class_id, node_confidence);
 
     publishEnvironmentGraph(nodes, edges, node_class_id);
+    publishEnvironmentGraphData(
+      nodes, node_ids, edges, node_class_id, node_confidence);
     publishLabels(nodes, node_ids, node_class_id, node_confidence);
   }
 
@@ -1083,6 +1089,47 @@ private:
     labels_pub_->publish(msg);
   }
 
+  // Typed planning interface. MarkerArray remains the RViz representation,
+  // while this message preserves stable DD-GNG node IDs, semantic state and
+  // edge identity for the independent reachability planner.
+  void publishEnvironmentGraphData(
+    const std::vector<GngPoint3f> & nodes,
+    const std::vector<uint32_t> & node_ids,
+    const std::vector<std::pair<uint16_t, uint16_t>> & edges,
+    const std::vector<int16_t> & node_class_id,
+    const std::vector<float> & node_confidence)
+  {
+    om6dof_dd_gng::msg::EnvironmentGraph message;
+    message.header.frame_id = world_frame_;
+    message.header.stamp = now();
+    message.nodes.reserve(nodes.size());
+    for (size_t index = 0; index < nodes.size(); ++index) {
+      om6dof_dd_gng::msg::EnvironmentNode output;
+      output.id = node_ids[index];
+      output.position.x = nodes[index].x;
+      output.position.y = nodes[index].y;
+      output.position.z = nodes[index].z;
+      output.class_id = node_class_id[index];
+      output.confidence = node_confidence[index];
+      message.nodes.push_back(output);
+    }
+    message.edges.reserve(edges.size());
+    for (const auto & [source_index, target_index] : edges) {
+      if (source_index >= nodes.size() || target_index >= nodes.size()) {
+        continue;
+      }
+      om6dof_dd_gng::msg::TopologyEdge output;
+      output.source_id = node_ids[source_index];
+      output.target_id = node_ids[target_index];
+      const double dx = static_cast<double>(nodes[source_index].x - nodes[target_index].x);
+      const double dy = static_cast<double>(nodes[source_index].y - nodes[target_index].y);
+      const double dz = static_cast<double>(nodes[source_index].z - nodes[target_index].z);
+      output.cost = std::sqrt(dx * dx + dy * dy + dz * dz);
+      message.edges.push_back(output);
+    }
+    env_graph_data_pub_->publish(message);
+  }
+
   // Parameters
   int pixel_step_ = 6;
   int max_nodes_ = 500;
@@ -1095,6 +1142,7 @@ private:
   std::string world_frame_;
   std::string camera_frame_;
   std::string environment_graph_topic_;
+  std::string environment_graph_data_topic_;
   double tf_timeout_sec_ = 0.1;
   double node_marker_scale_ = 0.02;
   double edge_marker_width_ = 0.004;
@@ -1132,6 +1180,7 @@ private:
 
   // ROS I/O
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr env_graph_pub_;
+  rclcpp::Publisher<om6dof_dd_gng::msg::EnvironmentGraph>::SharedPtr env_graph_data_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr labels_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr robot_graph_pub_;
 

@@ -42,7 +42,7 @@
     </inertial>-->
 
      <inertial>
-      <origin xyz="3.0876154e-04 0.0000000e+00 -1.2176461e-04" />
+      <origin xyz="3.0876154e-04 0.00 0.018" />
       <mass value="7.9119962e-02" />
       <inertia ixx="1.2505234e-05" ixy="0.0" ixz="-1.7855208e-07"
                iyy="2.1898364e-05" iyz="0.0"
@@ -555,6 +555,15 @@
       </geometry>
       <material name="white"/>
     </visual>
+    <!-- Exact final-path validation uses the same fused bracket+D405 mesh.
+         The fast online reachability filter still uses conservative capsules,
+         so this triangle mesh is evaluated only for shortlisted paths. -->
+    <collision>
+      <origin xyz="0.0191 -0.0272 -0.0755" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://om6dof_description/meshes/d405_wrist_cam.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
     <xacro:if value="${payload_mass > 0.0}">
       <!-- Solid sphere: valid for any mass, and gravity reads none of it. -->
       <xacro:property name="payload_i"
@@ -620,17 +629,17 @@
        side is "left" is not recoverable from this mesh (both end faces are bilaterally
        symmetric in it; unlike the bracket rotation there is no photo of the assembled camera
        to check against). That 9 mm is left off (optical frame kept on the centerline) rather
-       than guessing its sign: it only shifts the drawn TF pose in RViz, never the
-       reconstructed point cloud, because the perception node deprojects with librealsense's
-       own live intrinsics (fx, fy, ppx, ppy read from the camera at runtime), not this static
-       offset.
+       than guessing its sign. This leaves an unknown rigid translation of up to 9 mm in the
+       reconstructed world-frame cloud: live intrinsics determine the deprojected ray, but do
+       not replace the housing-to-imager extrinsic translation.
 
-       d405_depth_optical_frame's rotation relative to d405_link is left as identity: baseline
-       (d405.stl local X) lands within 0.012 deg of link7's own +Y axis, and forward (local Z)
-       within 25 deg of link7's +Z, exactly what X-right/Y-down/Z-forward should look like if
-       d405.stl's mesh axes were already authored in that convention, which is plausible for a
-       mesh sourced for URDF/ROS use. Like the 9 mm above, this is not verified against the
-       real hardware's markings.
+       d405.stl local +Z is camera-forward, but its local +X and +Y are image-left and image-up.
+       This was cross-checked against google-deepmind/mujoco_menagerie's ALOHA model, which
+       places the D405 mesh and wrist camera in the same parent frame, and against the local
+       mesh geometry (the local file is a decimated copy with the same axes). ROS optical is
+       X-right/Y-down/Z-forward, so d405_depth_optical_frame needs a pi roll about local +Z:
+       diag(-1,-1,+1). This preserves the verified forward direction (25 deg from link7 +Z)
+       while correcting both image-plane axis signs.
   -->
   <joint name="d405_link_joint" type="fixed">
     <origin xyz="0.010093 0.047231 0.000046" rpy="-1.134465 1.570590 -1.570798"/>
@@ -642,7 +651,7 @@
   <joint name="d405_depth_optical_joint" type="fixed">
     <!-- -0.0037 m: Table 4-16 "Depth Start Point" for D405, 3.7 mm behind the front cover
          glass (local -Z, back toward the sensor); see the derivation above. -->
-    <origin xyz="0 0 -0.0037" rpy="0 0 0"/>
+    <origin xyz="0 0 -0.0037" rpy="0 0 ${pi}"/>
     <parent link="d405_link"/>
     <child link="d405_depth_optical_frame"/>
   </joint>

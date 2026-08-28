@@ -64,6 +64,12 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 install(
+  PROGRAMS
+    scripts/fit_gravity_friction.py
+    scripts/multisine_identification.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(
   FILES README.md
   DESTINATION share/${PROJECT_NAME}
 )

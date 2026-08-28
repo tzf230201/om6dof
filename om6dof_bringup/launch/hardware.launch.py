@@ -42,6 +42,8 @@ def generate_launch_description():
     baud_rate = LaunchConfiguration("baud_rate")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
     current_control = LaunchConfiguration("current_control")
+    arm_operating_mode = LaunchConfiguration("arm_operating_mode")
+    start_arm_controller = LaunchConfiguration("start_arm_controller")
     package_share = FindPackageShare("om6dof_bringup")
 
     robot_description = ParameterValue(
@@ -52,6 +54,7 @@ def generate_launch_description():
             " baud_rate:=", baud_rate,
             " use_fake_hardware:=", use_fake_hardware,
             " current_control:=", current_control,
+            " arm_operating_mode:=", arm_operating_mode,
         ]),
         value_type=str,
     )
@@ -77,6 +80,7 @@ def generate_launch_description():
     arm_spawner = Node(
         package="controller_manager", executable="spawner",
         arguments=["arm_controller", "--controller-manager", "/controller_manager"],
+        condition=IfCondition(start_arm_controller),
     )
     gripper_spawner = Node(
         package="controller_manager", executable="spawner",
@@ -131,6 +135,11 @@ def generate_launch_description():
         # as soon as it comes up, so it is opt-in.
         DeclareLaunchArgument("current_control",
                               default_value=current_control_default()),
+        DeclareLaunchArgument("arm_operating_mode", default_value="5"),
+        # A teaching/leader session supplies its own controller, which claims
+        # the same arm command interfaces as arm_controller.  Keep the
+        # conventional controller enabled for every normal hardware launch.
+        DeclareLaunchArgument("start_arm_controller", default_value="true"),
         state_publisher,
         control_node,
         joint_state_spawner,

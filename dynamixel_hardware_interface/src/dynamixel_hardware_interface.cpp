@@ -271,6 +271,7 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
   }
 
   torque_enabled_comm_id_id_.clear();
+  bus_watchdog_configs_.clear();
   for (const hardware_interface::ComponentInfo & gpio : info_.gpios) {
     uint8_t id = static_cast<uint8_t>(stoi(gpio.parameters.at("ID")));
     uint8_t comm_id = (gpio.parameters.find("comm_id") != gpio.parameters.end()) ?
@@ -634,6 +635,14 @@ hardware_interface::CallbackReturn DynamixelHardware::start()
     return hardware_interface::CallbackReturn::ERROR;
   }
 
+  // Arm the actuator watchdog only after read/write handlers and the initial
+  // command packet are valid. Enabling it during on_init can expire while the
+  // remaining servos are still being configured.
+  if (!SetConfiguredBusWatchdogs(true)) {
+    RCLCPP_ERROR(logger_, "Failed to enable configured Dynamixel Bus Watchdogs");
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+
   if (!auto_enable_torque_on_start_) {
     dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
     dxl_torque_status_ = TORQUE_DISABLED;
@@ -673,10 +682,12 @@ hardware_interface::CallbackReturn DynamixelHardware::stop()
   if (dxl_comm_) {
     const DxlError physical_result = dxl_comm_->DynamixelDisable(dxl_comm_id_id_);
     const DxlError virtual_result = dxl_comm_->DynamixelDisable(virtual_dxl_comm_id_id_);
+    const bool watchdog_result = SetConfiguredBusWatchdogs(false);
     dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
     dxl_torque_status_ = TORQUE_DISABLED;
-    if (physical_result != DxlError::OK || virtual_result != DxlError::OK) {
-      RCLCPP_ERROR_STREAM(logger_, "Failed to confirm torque disable while stopping hardware");
+    if (physical_result != DxlError::OK || virtual_result != DxlError::OK || !watchdog_result) {
+      RCLCPP_ERROR_STREAM(
+        logger_, "Failed to confirm torque disable/watchdog clear while stopping hardware");
       return hardware_interface::CallbackReturn::ERROR;
     }
   } else {
@@ -1134,6 +1145,38 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
     torque_enabled_comm_id_id_.emplace_back(comm_id, id);
   }
 
+  // A timed-out Dynamixel Bus Watchdog reports 0xFF (-1) and makes the
+  // profile/goal registers read-only. Clear it before every other init item,
+  // but remember the configured nonzero timeout so start() can re-enable the
+  // fail-safe only after cyclic command traffic is ready.
+  for (const auto & param : gpio.parameters) {
+    const std::string & param_name = param.first;
+    if (param_name == "Bus Watchdog") {
+      const int requested_timeout = stoi(param.second);
+      if (requested_timeout <= 0 || requested_timeout > 127) {
+        RCLCPP_ERROR_STREAM(
+          logger_, "Bus Watchdog for Dynamixel ID " << std::to_string(id) <<
+            " must be in [1, 127] (20 ms units), got " << requested_timeout);
+        return false;
+      }
+      RCLCPP_INFO_STREAM(
+        logger_,
+        "[InitItem][comm_id:" << std::to_string(comm_id) << "][ID:" << std::to_string(id) <<
+          "] clearing stale Bus Watchdog before register initialization; configured timeout: " <<
+          requested_timeout << " x 20 ms");
+      const DxlError result = dxl_comm_->WriteItem(
+        comm_id, id, param_name, 0U);
+      if (result != DxlError::OK) {
+        RCLCPP_ERROR_STREAM(
+          logger_, "Failed to clear Bus Watchdog for Dynamixel ID " <<
+            std::to_string(id) << ": " << Dynamixel::DxlErrorToString(result));
+        return false;
+      }
+      bus_watchdog_configs_.push_back(
+        {comm_id, id, static_cast<uint8_t>(requested_timeout)});
+    }
+  }
+
   for (const auto & param : gpio.parameters) {
     const std::string & param_name = param.first;
     if (param_name == "Operating Mode") {
@@ -1188,7 +1231,7 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
     if (param_name == "ID" || param_name == "type" ||
       param_name == "Torque Enable" || param_name == "Operating Mode" ||
       param_name == "model_num" || param_name == "comm_id" || param_name == "Reboot" ||
-      param_name == "[unit info]" ||
+      param_name == "[unit info]" || param_name == "Bus Watchdog" ||
       param_name.find("Limit") != std::string::npos)
     {
       continue;
@@ -1214,6 +1257,39 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
         return false;
       }
     }
+  }
+  return true;
+}
+
+bool DynamixelHardware::SetConfiguredBusWatchdogs(bool enabled)
+{
+  std::size_t configured = 0;
+  for (const BusWatchdogConfig & watchdog : bus_watchdog_configs_) {
+    const uint32_t value = enabled ? static_cast<uint32_t>(watchdog.timeout) : 0U;
+    const DxlError result = dxl_comm_->WriteItem(
+      watchdog.comm_id, watchdog.id, "Bus Watchdog", value);
+    if (result != DxlError::OK) {
+      RCLCPP_ERROR_STREAM(
+        logger_, "Failed to " << (enabled ? "enable" : "clear") <<
+          " Bus Watchdog for Dynamixel ID " << std::to_string(watchdog.id) <<
+          ": " << Dynamixel::DxlErrorToString(result));
+      if (enabled) {
+        // Do not leave a partially armed set when no reliable cyclic loop is
+        // available. Torque is still disabled at this point in start().
+        for (std::size_t index = 0; index < configured; ++index) {
+          const BusWatchdogConfig & rollback = bus_watchdog_configs_[index];
+          (void)dxl_comm_->WriteItem(
+            rollback.comm_id, rollback.id, "Bus Watchdog", 0U);
+        }
+      }
+      return false;
+    }
+    ++configured;
+  }
+  if (!bus_watchdog_configs_.empty()) {
+    RCLCPP_INFO(
+      logger_, "%s Bus Watchdog on %zu Dynamixels",
+      enabled ? "Enabled" : "Cleared", bus_watchdog_configs_.size());
   }
   return true;
 }
