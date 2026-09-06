@@ -1,0 +1,69 @@
+{
+  "schema": "om6dof-confirmatory-freeze-candidate-v1",
+  "created_jst": "2026-08-24",
+  "status": "local_candidate_complete_remote_build_and_catalog_pending",
+  "protocol_id": "icra_confirmatory_v1",
+  "design": {
+    "methods": ["gng", "guarded_gng", "halton_prm"],
+    "node_budget": 800,
+    "roadmap_stream_labels": "100..159",
+    "roadmap_stream_count": 60,
+    "base_trajectory_count": 30,
+    "scene_count": 60,
+    "graph_builds": 180,
+    "queries": 21600,
+    "bootstrap_repetitions": 50000,
+    "permutation_repetitions": 100000
+  },
+  "frozen_local_artifacts": {
+    "SOURCE_MANIFEST.json": {
+      "sha256": "24b645cad37ef9ded7487fa66cbaffbc699bf226c0eef90f1580744812a10b7a"
+    },
+    "source_snapshot.tar.gz": {
+      "sha256": "629d41b12c4357d587e9c632add5b3e68d25e1ff532529e948886039f91a4400",
+      "bytes": 97317,
+      "unwanted_cache_entries": 0
+    },
+    "CONFIRMATORY_PROTOCOL_V1.md": {
+      "sha256": "e5f1d18439847fd3518571b77a1573df78fba3f112245c4652a817706d0f387d",
+      "bytes": 7108
+    },
+    "AGX_EXECUTION_CHECKLIST.md": {
+      "sha256": "9f0b1360dcbb4d5b97cce0882b4a4e79ae04bc33b5586730ab2d706dbfadf575",
+      "bytes": 7525
+    },
+    "package_snapshot/om6dof_dd_gng/scripts/analyze_reachability_multiscene.py": {
+      "sha256": "8b88092f41ec8962e4ffc26e27d99058ea5969ad1db38aef91f331382bb1ee2f"
+    },
+    "package_snapshot/om6dof_dd_gng/scripts/reachability_multiscene_benchmark.py": {
+      "sha256": "c534a79f7f55074108c534be14a2b80b4415c63e7e1db8ce7d580f01ed8c4a13"
+    },
+    "package_snapshot/om6dof_dd_gng/scripts/generate_reachability_scene_catalog.py": {
+      "sha256": "d04f6cf4d22ef14e85909fecef441e0a5fd181612ac053df7f852e3a938e35d5"
+    }
+  },
+  "local_verification": {
+    "python_tests": 43,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0,
+    "analyzer_smoke_audit": "PASS",
+    "smoke_is_confirmatory": false
+  },
+  "pending_before_confirmatory_execution": [
+    "Deploy this exact package snapshot to AGX without touching ROS domain 0 hardware processes.",
+    "Build om6dof_dd_gng and run the complete C++ and Python package tests on AGX.",
+    "Verify installed expanded URDF, SRDF, parameter, node-binary, and source-manifest hashes.",
+    "Generate and audit the exact 60-scene catalog and freeze its SHA-256 plus generation log.",
+    "Copy the AGX-built source snapshot/protocol/analyzer into the benchmark frozen-input bundle.",
+    "Run functional confirmatory queries in isolated ROS domains 20..99.",
+    "Run timing only under separately documented controlled load and thermal conditions."
+  ],
+  "not_yet_frozen": {
+    "catalog_sha256": null,
+    "catalog_generation_log_sha256": null,
+    "agx_reachability_node_binary_sha256": null,
+    "agx_build_log_sha256": null,
+    "agx_test_results_sha256": null
+  }
+}

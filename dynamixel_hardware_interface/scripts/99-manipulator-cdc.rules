@@ -1,1 +1,6 @@
+# Reduce FTDI buffering for Dynamixel traffic.
 KERNEL=="ttyUSB*", DRIVERS=="ftdi_sio", MODE="0666", ATTR{device/latency_timer}="1"
+
+# This OM6DOF's U2D2 is not a modem. Match its exact USB identity so unrelated
+# FTDI adapters retain the host's normal ModemManager policy.
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", ATTRS{serial}=="FT5NUUIQ", ENV{ID_MM_DEVICE_IGNORE}="1"

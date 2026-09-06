@@ -1,0 +1,13 @@
+[INFO] [launch]: All log files can be found below /home/kublab/.ros/log/2026-08-24-07-44-31-820090-agx-95632
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [reachability_graph_node-1]: process started with pid [95658]
+[reachability_graph_node-1] [INFO] [1787525072.232210752] [reachability_graph_node]: Reachability node started in preview-only mode; it has no controller publisher or action client.
+[reachability_graph_node-1] [INFO] [1787525072.735902176] [moveit_robot_model.robot_model]: Loading robot model 'om6dof'...
+[reachability_graph_node-1] [INFO] [1787525072.735947712] [moveit_robot_model.robot_model]: No root/virtual joint specified in SRDF. Assuming fixed joint
+[reachability_graph_node-1] [INFO] [1787525073.524037248] [reachability_graph_node]: GNG sampling retained 199 prototypes and 599/599 deterministic guard samples
+[reachability_graph_node-1] [INFO] [1787525074.911531840] [reachability_graph_node]: Built method=guarded_gng with 800/800 nodes (2 anchors, 199 prototypes, 599/599 guards, 0 fill samples) after 4142 candidate attempts; retained 3540 validated edges in 9 components and cached 3540 full-body edge sweeps
+[reachability_graph_node-1] [INFO] [1787525074.912773216] [reachability_graph_node]: Reachability graph ready: method=guarded_gng, 800 nodes, 3540 edges, group=arm, tip=end_effector_link, strict_collision=true, exact_collision=true
+[WARNING] [launch]: user interrupted with ctrl-c (SIGINT)
+[INFO] [reachability_graph_node-1]: sending signal 'SIGINT' to process[reachability_graph_node-1]
+[reachability_graph_node-1] [INFO] [1787525075.377106880] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[ERROR] [reachability_graph_node-1]: process has died [pid 95658, exit code -2, cmd '/home/kublab/ros2_ws/install/om6dof_dd_gng/lib/om6dof_dd_gng/reachability_graph_node --ros-args -r __node:=reachability_graph_node --params-file /home/kublab/ros2_ws/install/om6dof_dd_gng/share/om6dof_dd_gng/config/topo_gng.yaml --params-file /tmp/launch_params_na8rxegy --params-file /tmp/launch_params_vt_eeffp --params-file /tmp/launch_params_5vy9xli8'].

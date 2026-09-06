@@ -1,0 +1,4 @@
+method_a,method_b,n_pairs,a_successes,b_successes,both_success,a_only_success,b_only_success,both_fail,paired_risk_difference_pp_a_minus_b,risk_difference_ci_low_pp,risk_difference_ci_high_pp,mcnemar_exact_p_raw,confirmatory_primary,mcnemar_p_holm_primary
+guarded_gng,gng,50,49,46,45,4,1,0,6.0,-2.0,14.0,0.375,True,0.75
+guarded_gng,halton_prm,50,49,49,48,1,1,0,0.0,-6.0,6.0,1.0,True,1.0
+gng,halton_prm,50,46,49,45,1,4,0,-6.0,-16.0,2.0,0.375,False,

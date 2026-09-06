@@ -1,0 +1,127 @@
+# OM6DOF Reachability Benchmark — Confirmatory Protocol v1
+
+Status: **frozen before confirmatory outcomes (2026-08-24 JST)**. The earlier single-target 50-offset benchmark and
+the 6-scene smoke runs are development evidence only. They must not be pooled with
+the confirmatory results. Freeze the source, catalog, binary, this protocol, and the
+analysis script by SHA-256 before starting the confirmatory run.
+
+## Research question and methods
+
+The benchmark compares three 800-node, preview-only reachability roadmaps:
+
+1. `gng`: GNG-quantized PRM with two fixed anchors and 798 retained prototypes.
+2. `guarded_gng`: two anchors, 199 retained GNG prototypes, and 599 deterministic
+   guard samples (`gng_guard_fraction=0.75`).
+3. `halton_prm`: two anchors and 798 digit-permuted Halton samples.
+
+All methods use the same validated k-nearest-neighbor connection rule, collision
+model, target-intersection radius, joint limits, and exact MoveIt/FCL validation.
+The comparison is node-budget matched, not candidate-information-budget matched:
+GNG-based methods train from 4,000 valid candidates, whereas Halton fills its node
+budget directly. Claims must describe GNG as a quantizer/sampler, not as preserving
+the learned GNG edge topology.
+
+## Fixed catalog and roadmap streams
+
+- Catalog ID: `om6dof_icra_scene_catalog_v1`.
+- 60 scenes = 30 deterministic base start-target trajectories crossed with two
+  obstacle kinds (`point`, `segment`).
+- Each base trajectory must have exactly one point and one segment variant, with
+  identical start joints, target source joints, and target position.
+- Difficulty is a deterministic tertile of normalized joint distance, yielding
+  10 base trajectories per `low`, `medium`, and `high` stratum.
+- Every scene must pass the independent oracle contract: clear direct interpolation
+  valid under conservative capsules and exact MoveIt/FCL; the dynamic obstacle
+  blocks that interpolation under both checks; start, target, and detour states stay
+  valid; and a two-leg detour remains valid under both checks.
+- Scene generation uses the fixed SHA-256 counter-stream key recorded in the catalog.
+- Roadmap stream labels are fixed to the 60 labels `100..159`. They produce
+  deterministic digit-permuted Halton streams and are not ordinary RNG seeds.
+- Scene and stream sets are fixed experimental conditions. The primary interval is
+  conditional on this catalog; no unrestricted scene-population claim is permitted.
+
+## Execution design
+
+- Exactly 180 graph builds: 60 streams × 3 methods.
+- Exactly 21,600 atomic queries: 60 streams × 3 methods × 60 scenes × 2 phases.
+- The six possible method orders occur 10 times each.
+- Scene order is rotated identically across methods for each stream; across 60
+  streams every scene occupies every order position once.
+- Clear/dynamic order is counterbalanced by
+  `clear_position=(stream_ordinal+catalog_index) mod 2`, identically across methods.
+- Every query carries one atomic query ID, scene ID, start state, target, and complete
+  environment. Only a response echoing the same IDs and graph revision is accepted.
+- The run is preview-only on isolated ROS domains with `ROS_LOCALHOST_ONLY=1` and
+  `rmw_fastrtps_cpp`. It must create no controller publisher or action client.
+
+## Primary endpoint and hypotheses
+
+Primary endpoint: dynamic-scene exact-valid success (`ReachabilityPlan.exact_valid`).
+
+For method pair `a,b`, define the per-stream risk difference
+
+`d_s = mean over 30 bases × 2 obstacle kinds of (Y_a - Y_b)`,
+
+and the reported effect `Delta = mean over the 60 streams of d_s`.
+
+Only these two contrasts are confirmatory:
+
+1. `guarded_gng - gng`.
+2. `guarded_gng - halton_prm`.
+
+Report risk differences in percentage points. Correct the two primary p-values with
+Holm's procedure over exactly this two-hypothesis family. The GNG-Halton comparison
+and all other endpoints are exploratory.
+
+## Primary uncertainty and test
+
+- 95% paired stream-cluster percentile interval with at least 50,000 deterministic
+  bootstrap repetitions. Each resampled stream carries all 60 scenes and all three
+  methods. The same resampled stream indices are used for both primary contrasts.
+- Paired stream-level sign-flip permutation test aligned to the mean risk difference.
+  Flip the entire 60-scene difference vector per stream; use the studentized statistic
+  `mean(d_s)/(sd(d_s)/sqrt(60))`, 100,000 deterministic Monte Carlo permutations,
+  and two-sided `p=(1+number(|T*|>=|Tobs|))/(B+1)`.
+- An exact sign test on the direction of the 60 stream summaries may be reported only
+  as a robustness analysis. Its effect is `sign_dominance`, not rank-biserial.
+
+## Secondary and exploratory endpoints
+
+- Clear exact-valid success and dynamic success by obstacle kind and difficulty.
+- Dynamic retention conditional on each method's own clear successes: descriptive
+  only, because eligibility differs by method.
+- Roadmap build time: paired over all 60 streams.
+- Query latency including failures: paired over every common query cell and clearly
+  labeled as time-to-outcome.
+- Success-conditional latency and path cost: pairwise comparisons only on cells where
+  both compared methods succeeded in that phase.
+- Path-change comparisons: only on four-way common support where clear and dynamic
+  plans are valid for both compared methods.
+- Components, validated edges, exact checks, replans, blocked nodes/edges, and failure
+  reasons are descriptive diagnostics.
+- Optional scene-generalization sensitivity: independently resample roadmap streams
+  and base-trajectory IDs, keep point/segment variants together, and resample bases
+  within difficulty strata. This two-way analysis must be labeled a sensitivity and
+  must not replace the fixed-catalog primary analysis.
+
+## Data integrity, failures, and timing
+
+- `valid` must equal `exact_valid` for every response.
+- Start, target, method, stream seed, graph revision, node composition, path length,
+  costs, and sentinel semantics must satisfy the runtime contracts.
+- Timeouts and infrastructure errors are never converted to algorithmic failures.
+  Any partial/corrupt run invalidates that output directory; rerun using a fresh
+  directory. Resume may skip only complete, provenance-matching runs.
+- Do not delete difficult streams/scenes or tune parameters after inspecting
+  confirmatory outcomes. Any later modification creates a new protocol version.
+- Functional success can be measured under ordinary integration load, but paper
+  timing requires a separately documented controlled run: fixed power/performance
+  mode, stable clocks, warm-up, recorded temperature/load, and no unrelated high-CPU
+  perception process. Otherwise timings are labeled loaded-system integration latency.
+
+## Required frozen provenance
+
+Before execution, record SHA-256 for the catalog, expanded URDF, SRDF, reachability
+parameters, curated source tree, runner, analyzer, generator, node binary, tests, and
+this protocol. Record Git HEAD/dirty state, exact command, ROS/MoveIt/FCL/RMW/compiler
+versions, hardware model, power mode, clocks, temperatures, and every raw CSV/log hash.

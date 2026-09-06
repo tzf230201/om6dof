@@ -1,0 +1,36 @@
+{
+  "catalog_id": "om6dof_scene_catalog_smoke_v1_20260824",
+  "catalog_sha256": "4a180640428d0a8197538f4136aa3e379587061482bcd956daf354c7348ed6a1",
+  "controller_topics_published": [],
+  "domain_range": [
+    20,
+    37
+  ],
+  "finished_utc": "2026-08-23T22:44:48.302474+00:00",
+  "graph_builds": 18,
+  "graph_timeout_sec": 60.0,
+  "guarded_fraction": 0.75,
+  "halton_start_index": 17,
+  "methods": [
+    "gng",
+    "guarded_gng",
+    "halton_prm"
+  ],
+  "phase_timeout_sec": 5.0,
+  "preview_only": true,
+  "query_rows": 216,
+  "rmw_implementation": "rmw_fastrtps_cpp",
+  "ros_localhost_only": true,
+  "sample_count": 800,
+  "scene_count": 6,
+  "schema": "om6dof-reachability-multiscene-run-v1",
+  "started_utc": "2026-08-23T22:43:29.528452+00:00",
+  "streams": [
+    9000,
+    9001,
+    9002,
+    9003,
+    9004,
+    9005
+  ]
+}

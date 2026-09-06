@@ -1,0 +1,7 @@
+# Conservative tool-space limits for straight grasp/place segments.
+# These are additionally scaled by the request's vel_scale/acc_scale.
+cartesian_limits:
+  max_trans_vel: 0.10
+  max_trans_acc: 0.25
+  max_trans_dec: -0.25
+  max_rot_vel: 0.50

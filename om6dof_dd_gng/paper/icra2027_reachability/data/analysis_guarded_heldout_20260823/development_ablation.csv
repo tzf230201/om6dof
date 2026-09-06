@@ -1,0 +1,6 @@
+guard_fraction,method,n_development_failure_seeds,dynamic_successes,dynamic_success_rate,role
+0.0,gng,8,0,0.0,development-only hyperparameter selection; not confirmatory
+0.1,guarded_gng,8,1,0.125,development-only hyperparameter selection; not confirmatory
+0.25,guarded_gng,8,4,0.5,development-only hyperparameter selection; not confirmatory
+0.5,guarded_gng,8,7,0.875,development-only hyperparameter selection; not confirmatory
+0.75,guarded_gng,8,8,1.0,development-only hyperparameter selection; not confirmatory

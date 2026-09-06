@@ -17,18 +17,19 @@
 #ifndef DYNAMIXEL_HARDWARE_INTERFACE__DYNAMIXEL__DYNAMIXEL_HPP_
 #define DYNAMIXEL_HARDWARE_INTERFACE__DYNAMIXEL__DYNAMIXEL_HPP_
 
-#include "dynamixel_hardware_interface/dynamixel/dynamixel_info.hpp"
-#include "dynamixel_sdk/dynamixel_sdk.h"
-
+#include <cstdarg>
+#include <functional>
+#include <iostream>
 #include <map>
+#include <memory>
 #include <queue>
 #include <string>
-#include <vector>
-#include <iostream>
-#include <cstdarg>
-#include <memory>
-#include <functional>
 #include <utility>
+#include <vector>
+
+#include "dynamixel_hardware_interface/dynamixel/dynamixel_info.hpp"
+#include "dynamixel_hardware_interface/read_transport_mode.hpp"
+#include "dynamixel_sdk/dynamixel_sdk.h"
 
 namespace dynamixel_hardware_interface
 {
@@ -204,9 +205,15 @@ private:
   // read item (sync or bulk) variable
   bool read_type_;
   std::vector<RWItemList> read_data_list_;
+  ReadTransportMode read_transport_mode_{ReadTransportMode::MULTI_SYNC};
 
   // sync read
   dynamixel::GroupSyncRead * group_sync_read_ = nullptr;
+  // One persistent, single-responder SyncRead handler per communication ID.
+  // Payloads stay in these handlers until every response in the cycle has
+  // succeeded, allowing an atomic commit to the exported state pointers.
+  std::map<uint8_t, std::unique_ptr<dynamixel::GroupSyncRead>>
+  sequential_single_sync_read_handlers_;
   // bulk read
   dynamixel::GroupBulkRead * group_bulk_read_ = nullptr;
   // fast sync read
@@ -243,6 +250,7 @@ public:
   // Disable the FastSyncRead/FastBulkRead protocol and use plain
   // Sync/Bulk Read from the start (more tolerant of bus timing jitter).
   void SetUseFastReadProtocol(bool enable) {use_fast_read_protocol_ = enable;}
+  void SetReadTransportMode(ReadTransportMode mode) {read_transport_mode_ = mode;}
 
   // DXL Communication Setting
   DxlError SetupPort(const std::string & port_name, const std::string & baudrate);
@@ -263,7 +271,7 @@ public:
   DxlError SetMultiDxlWrite();
 
   // Read Item (sync or bulk)
-  DxlError ReadMultiDxlData(double period_ms);
+  DxlError ReadMultiDxlData(double packet_timeout_ms);
   // Write Item (sync or bulk)
   DxlError WriteMultiDxlData();
 
@@ -315,13 +323,19 @@ private:
   // SyncRead
   DxlError SetSyncReadItemAndHandler();
   DxlError SetSyncReadHandler(std::vector<uint8_t> id_arr);
-  DxlError GetDxlValueFromSyncRead(double period_ms);
+  DxlError GetDxlValueFromSyncRead(double packet_timeout_ms);
   DxlError SetFastSyncReadHandler(std::vector<uint8_t> id_arr);
+  DxlError SetSequentialSingleSyncReadHandlers(const std::vector<uint8_t> & id_arr);
+  DxlError GetDxlValueFromSequentialSingleSyncRead(double packet_timeout_ms);
+  DxlError ProcessSequentialSingleSyncReadCommunication(
+    const RWItemList & item,
+    dynamixel::GroupSyncRead * handler,
+    double packet_timeout_ms);
 
   // BulkRead
   DxlError SetBulkReadItemAndHandler();
   DxlError SetBulkReadHandler(std::vector<uint8_t> id_arr);
-  DxlError GetDxlValueFromBulkRead(double period_ms);
+  DxlError GetDxlValueFromBulkRead(double packet_timeout_ms);
   DxlError SetFastBulkReadHandler(std::vector<uint8_t> id_arr);
 
   // DirectRead for BulkRead
@@ -359,7 +373,7 @@ private:
   // Read - Communication
   DxlError ProcessReadCommunication(
     dynamixel::PortHandler * port_handler,
-    double period_ms,
+    double packet_timeout_ms,
     bool is_sync,
     bool is_fast);
 

@@ -1,0 +1,78 @@
+source_csv: /home/kublab/ros2_ws/src/om6dof/om6dof_controllers/papers/experiments/multisine_identification/data/multisine_teaching_all.csv
+source_samples: 18156
+fit_samples_after_stride: 1816
+stride: 10
+units:
+  gravity_scale_raw_per_nm: raw Present Current per Nm
+  coulomb_raw: raw Present Current
+  viscous_raw_per_rad_s: raw Present Current per rad/s
+  bias_raw: raw Present Current
+deadzone_rad_s: 0.02
+velocity_min_rad_s: 0.005
+joints:
+  joint1:
+    gravity_identifiable: false
+    gravity_scale_raw_per_nm: 0.0
+    coulomb_raw: 2.3511579004370664
+    viscous_raw_per_rad_s: 3.4555915146082357
+    bias_raw: 0.23583926698143345
+    rmse_raw: 2.9745166573490316
+    r_squared: 0.37143051031711494
+    samples: 1182
+    rank: 3
+    condition_number: 61.97158830613938
+  joint2:
+    gravity_identifiable: true
+    gravity_scale_raw_per_nm: 174.840988306258
+    coulomb_raw: 24.774658625390117
+    viscous_raw_per_rad_s: -108.92261846480628
+    bias_raw: -13.155264476614757
+    rmse_raw: 10.670461722116544
+    r_squared: 0.8807471801177159
+    samples: 1260
+    rank: 4
+    condition_number: 41.88638227911145
+  joint3:
+    gravity_identifiable: true
+    gravity_scale_raw_per_nm: 159.58184866633107
+    coulomb_raw: 62.94286303201943
+    viscous_raw_per_rad_s: -231.21093320612977
+    bias_raw: -17.78858995117409
+    rmse_raw: 10.003203998406603
+    r_squared: 0.9513484753650546
+    samples: 802
+    rank: 4
+    condition_number: 49.601109102850224
+  joint4:
+    gravity_identifiable: true
+    gravity_scale_raw_per_nm: 503.4282750469057
+    coulomb_raw: 3.2868465698688856
+    viscous_raw_per_rad_s: -9.513282701784762
+    bias_raw: 1.8649699865847027
+    rmse_raw: 3.1370007657403636
+    r_squared: 0.5166340208408404
+    samples: 1007
+    rank: 4
+    condition_number: 301.9684879390545
+  joint5:
+    gravity_identifiable: true
+    gravity_scale_raw_per_nm: 142.12395541461885
+    coulomb_raw: 37.70606790354514
+    viscous_raw_per_rad_s: -158.99448797266442
+    bias_raw: -13.361255027944413
+    rmse_raw: 5.756904262740284
+    r_squared: 0.9584568494338953
+    samples: 1170
+    rank: 4
+    condition_number: 59.05062839556638
+  joint6:
+    gravity_identifiable: true
+    gravity_scale_raw_per_nm: 145.0958588349936
+    coulomb_raw: 2.349257539850651
+    viscous_raw_per_rad_s: -10.541644089719162
+    bias_raw: 1.6674131482828067
+    rmse_raw: 2.879684126949368
+    r_squared: 0.3077331625795502
+    samples: 763
+    rank: 4
+    condition_number: 158.1208169676025

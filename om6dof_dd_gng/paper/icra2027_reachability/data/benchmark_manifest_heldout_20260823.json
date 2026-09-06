@@ -1,0 +1,45 @@
+{
+  "benchmark_id": "reachability-heldout-50-three-methods-20260823",
+  "completed_at_agx": "2026-08-24T05:59:30+09:00",
+  "agx_workspace": "/home/kublab/ros2_ws",
+  "repository_parent_commit": "6dbd71a29228098d88ffba02837b28b753123895",
+  "repository_state": "dirty; reachability files were untracked relative to the parent commit and are identified by SHA-256 below",
+  "platform": {
+    "kernel": "Linux 5.15.185-tegra aarch64",
+    "cpu": "12 x ARM Cortex-A78AE",
+    "ros_distribution": "ROS 2 Humble"
+  },
+  "protocol": {
+    "methods": ["gng", "guarded_gng", "halton_prm"],
+    "heldout_sample_stream_offsets": [50, 99],
+    "offset_count_per_method": 50,
+    "sample_count": 800,
+    "gng_guard_fraction": 0.75,
+    "halton_offset_formula": "17 + 7919 * seed",
+    "ros_domain_range": [20, 169],
+    "method_order": "all six permutations cycled by held-out offset index; 50 blocks leave a small position imbalance",
+    "execution_mode": "preview-only; no controller publisher/action client",
+    "clear_and_obstacle_queries": true,
+    "exact_collision_validation": true
+  },
+  "matched_query": {
+    "start_joints": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "target_joints": [0.0, -0.6806, 1.3613, 0.0, 0.8901, 0.0],
+    "target_xyz_m": [0.1622375619994582, 0.0, 0.2540819536713998],
+    "obstacle_xyz_m": [0.08711878099972911, 0.0, 0.3607909768356999]
+  },
+  "source_sha256": {
+    "include/om6dof_dd_gng/reachability_graph.hpp": "4c38eac6a5fb7255e1c4ae852b5f736d81a504530ed4294c4355b4eb91e17d29",
+    "src/reachability_graph_node.cpp": "883efaae45b3085b45a4bab98448bff36d1b9f36bf15305a280ceef411b731aa",
+    "launch/reachability_graph.launch.py": "fc892b5677bdfe9a3269901d9785502c77d60246093da5b0215cf74f9b3cd8f2",
+    "config/topo_gng.yaml": "c5857a16ef6262f085f51e72dea70b1e2f274b35d991097013e821579fe1a3cd",
+    "scripts/reachability_benchmark.py": "ee6bce0fa0e7a261a826f41e965d36caab3a4a6981e3f15b088a2aea79e6692b",
+    "test/test_reachability_graph.cpp": "85b6693026f3576a283a675342683f1338adedcde6c2dda138d348ace3364c15"
+  },
+  "artifact_sha256": {
+    "reachability_benchmark_heldout_50_three_methods_20260823.csv": "6ac3fbc8ad42f4363a3c70f375cafcfa16b5f94e1fbe188686366dac2e42043c",
+    "reachability_benchmark_50_matched_20260823.csv": "6ff48d32e1b999b1ece1017f54356c24fa1e7939168a72e5cbad941b11053ed7",
+    "analyze_guarded_gng_heldout.py": "e1846b8c09c80a8accac678a05646b1380df148a5ab381a559a2d4ad8a65ad51"
+  },
+  "safety_note": "Hardware and perception processes remained active in ROS domain 0; benchmark traffic used isolated domains and never published to arm_controller. No hardware process was restarted."
+}

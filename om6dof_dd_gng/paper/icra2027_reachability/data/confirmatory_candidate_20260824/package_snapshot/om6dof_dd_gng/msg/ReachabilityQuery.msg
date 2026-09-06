@@ -1,0 +1,7 @@
+std_msgs/Header header
+uint64 query_id
+string scene_id
+sensor_msgs/JointState start_state
+uint32 target_environment_node_id
+geometry_msgs/Point target_position
+om6dof_dd_gng/EnvironmentGraph environment

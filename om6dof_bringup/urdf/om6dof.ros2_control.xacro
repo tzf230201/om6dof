@@ -22,8 +22,11 @@
       port_name:=/dev/ttyUSB0
       baudrate:=1000000
       consecutive_failure_shutdown_threshold:=10
+      read_packet_timeout_ms:=30.0
+      read_transport_mode:=multi_sync
       use_fake_hardware:=false
-      arm_operating_mode:=5">
+      arm_operating_mode:=5
+      torque_off_diagnostic_mode:=false">
 
     <ros2_control name="${name}" type="system">
 
@@ -41,6 +44,9 @@
           <param name="baud_rate">${baudrate}</param>
           <param name="error_timeout_ms">500</param>
           <param name="consecutive_failure_shutdown_threshold">${consecutive_failure_shutdown_threshold}</param>
+          <param name="read_packet_timeout_ms">${read_packet_timeout_ms}</param>
+          <param name="read_transport_mode">${read_transport_mode}</param>
+          <param name="torque_off_diagnostic_mode">${torque_off_diagnostic_mode}</param>
           <!-- Plain SyncRead from the start. FastSyncRead is tighter on bus
                timing and throws -3001 SYNC_READ_FAIL on the first cycle after
                activation + sporadically under CPU load. -->
@@ -161,6 +167,7 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
+        <state_interface name="Hardware Error Status"/>
         <param name="Operating Mode">3</param>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
@@ -180,6 +187,7 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
+        <state_interface name="Hardware Error Status"/>
         <param name="Operating Mode">3</param>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
@@ -199,6 +207,7 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
+        <state_interface name="Hardware Error Status"/>
         <param name="Operating Mode">3</param>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
@@ -218,6 +227,7 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
+        <state_interface name="Hardware Error Status"/>
         <param name="Operating Mode">3</param>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
@@ -237,6 +247,7 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
+        <state_interface name="Hardware Error Status"/>
         <param name="Operating Mode">3</param>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
@@ -256,6 +267,7 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
+        <state_interface name="Hardware Error Status"/>
         <param name="Operating Mode">3</param>
         <param name="Position P Gain">800</param>
         <param name="Position I Gain">100</param>
@@ -275,6 +287,7 @@
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
+        <state_interface name="Hardware Error Status"/>
         <param name="Operating Mode">5</param>
         <param name="Profile Velocity">20</param>
         <param name="Profile Acceleration">10</param>

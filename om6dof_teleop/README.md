@@ -238,6 +238,71 @@ the unit from the package share directory and enable it in the normal way. Do
 not restart it while the physical arm is in an unsafe pose: startup can claim
 the position interfaces and move to READY according to the launch setting.
 
+The unit grants a real-time priority limit of 60 and unlimited memory locking.
+This lets `controller_manager` promote only its update-loop thread to FIFO 50;
+the launch process and its other children remain under the normal scheduler.
+Do not add `CPUSchedulingPolicy=fifo` to the service because that would make
+the entire launch tree real-time and could starve normal system work.
+
+Build, install, reload, and restart the hardware service with:
+
+```bash
+cd ~/ros2_ws
+colcon build --packages-select om6dof_teleop --symlink-install
+source install/setup.bash
+sudo install -o root -g root -m 0644 \
+  ~/ros2_ws/install/om6dof_teleop/share/om6dof_teleop/systemd/om6dof-hardware.service \
+  /etc/systemd/system/om6dof-hardware.service
+sudo systemctl daemon-reload
+sudo systemctl restart om6dof-hardware.service
+```
+
+Restarting can initialize and move the physical arm. Clear its workspace and
+be ready to stop it before running the final command. Verify the installed
+limits, the controller thread, and the absence of the former permission error:
+
+```bash
+systemctl show om6dof-hardware.service \
+  --property=LimitRTPRIO --property=LimitMEMLOCK
+control_pid="$(pgrep -o -f '/controller_manager/ros2_control_node')"
+ps -L -p "$control_pid" -o pid,tid,cls,rtprio,pri,psr,comm
+journalctl -u om6dof-hardware.service -b --no-pager | \
+  grep -E 'scheduler priority|FIFO RT|Operation not permitted'
+```
+
+The limits should be `LimitRTPRIO=60` and `LimitMEMLOCK=infinity`, and one
+controller thread should show scheduling class `FF` with `RTPRIO` 50. The
+journal may report the requested scheduler priority, but must not report
+`Could not enable FIFO RT scheduling policy` or `Operation not permitted` for
+that request.
+
+CPU affinity is deliberately not fixed in the packaged unit because CPU and
+IRQ topology is host-specific. On an AGX where the USB controller's hard IRQ
+is confined to CPU 0, an optional local drop-in can keep the hardware stack on
+CPUs 8-11:
+
+```bash
+sudo systemctl edit om6dof-hardware.service
+```
+
+Enter the following, then run `sudo systemctl daemon-reload` and restart only
+after making the arm safe:
+
+```ini
+[Service]
+CPUAffinity=8-11
+```
+
+Confirm the actual IRQ and CPU topology first; do not copy this affinity to a
+different machine blindly. Check the effective process affinity afterward
+with:
+
+```bash
+service_pid="$(systemctl show --property=MainPID --value \
+  om6dof-hardware.service)"
+taskset -pc "$service_pid"
+```
+
 The separate `om6dof-web-monitor.service` from the
 `application_web_monitor` package stays alive while the arm stack is restarted.
 Its dashboard at `http://<go2w-ip>:8080` provides **Restart OM6DOF stack**. The

@@ -1,0 +1,191 @@
+{
+  "source_csv": "/home/kublab/ros2_ws/src/om6dof/om6dof_controllers/papers/experiments/multisine_identification/data/multisine_teaching_all.csv",
+  "raw_samples": 18156,
+  "analysis_stride": 10,
+  "effective_sample_rate_hz": 10.014887524726175,
+  "chronological_train_interval_s": [
+    2.0,
+    120.0
+  ],
+  "chronological_test_interval_s": [
+    122.0,
+    179.33004444796825
+  ],
+  "velocity_min_rad_s": 0.005,
+  "friction_deadzone_rad_s": 0.02,
+  "gravity_support_joints": [
+    "joint2",
+    "joint3",
+    "joint5"
+  ],
+  "ranges": {
+    "joint1": {
+      "position_min_rad": -0.13652429012202916,
+      "position_max_rad": 0.13499030933372946,
+      "velocity_min_rad_s": -0.0958764908,
+      "velocity_max_rad_s": 0.0958764908,
+      "gravity_min_nm": 0.0,
+      "gravity_max_nm": 0.0,
+      "current_min_raw": -14.0,
+      "current_max_raw": 14.0
+    },
+    "joint2": {
+      "position_min_rad": -0.8513593372767376,
+      "position_max_rad": -0.5276893910328675,
+      "velocity_min_rad_s": -0.1677838589,
+      "velocity_max_rad_s": 0.14381473620000002,
+      "gravity_min_nm": -0.28156960047986956,
+      "gravity_max_nm": 0.21942105870031978,
+      "current_min_raw": -105.0,
+      "current_max_raw": 47.0
+    },
+    "joint3": {
+      "position_min_rad": 1.247126380550819,
+      "position_max_rad": 1.463417671642695,
+      "velocity_min_rad_s": -0.21572210430000002,
+      "velocity_max_rad_s": 0.0958764908,
+      "gravity_min_nm": -0.6990286401276079,
+      "gravity_max_nm": -0.40417196970343733,
+      "current_min_raw": -241.0,
+      "current_max_raw": -38.0
+    },
+    "joint4": {
+      "position_min_rad": -0.10737865515220202,
+      "position_max_rad": 0.10737865515178813,
+      "velocity_min_rad_s": -0.1198456135,
+      "velocity_max_rad_s": 0.07190736810000001,
+      "gravity_min_nm": -0.002507340857160756,
+      "gravity_max_nm": 0.010823252050151664,
+      "current_min_raw": -9.0,
+      "current_max_raw": 19.0
+    },
+    "joint5": {
+      "position_min_rad": 0.7547185476395284,
+      "position_max_rad": 1.0231651855195159,
+      "velocity_min_rad_s": -0.1198456135,
+      "velocity_max_rad_s": 0.0958764908,
+      "gravity_min_nm": -0.28274868471012127,
+      "gravity_max_nm": -0.21089993120781966,
+      "current_min_raw": -102.0,
+      "current_max_raw": -8.0
+    },
+    "joint6": {
+      "position_min_rad": -0.0843689433339172,
+      "position_max_rad": 0.07976700096984635,
+      "velocity_min_rad_s": -0.0958764908,
+      "velocity_max_rad_s": 0.07190736810000001,
+      "gravity_min_nm": -0.014057186215055138,
+      "gravity_max_nm": 0.009792464017444047,
+      "current_min_raw": -8.0,
+      "current_max_raw": 17.0
+    }
+  },
+  "fits": {
+    "joint1": {
+      "joint": "joint1",
+      "gravity_identifiable": false,
+      "gravity_scale_raw_per_nm": null,
+      "coulomb_raw": 2.291123297638253,
+      "viscous_raw_per_rad_s": 1.7169104336878063,
+      "bias_raw": 0.2868462190448302,
+      "train_samples": 782,
+      "test_samples": 375,
+      "rank": 3,
+      "condition_number": 61.917943005141026,
+      "test": {
+        "rmse_raw": 3.2090147732204155,
+        "mae_raw": 2.437542385400289,
+        "r_squared": 0.38329226960890084
+      }
+    },
+    "joint2": {
+      "joint": "joint2",
+      "gravity_identifiable": true,
+      "gravity_scale_raw_per_nm": 176.3923830170388,
+      "coulomb_raw": 25.051259965594504,
+      "viscous_raw_per_rad_s": -111.80980098862213,
+      "bias_raw": -13.13837996397428,
+      "train_samples": 836,
+      "test_samples": 396,
+      "rank": 4,
+      "condition_number": 41.18137479772669,
+      "test": {
+        "rmse_raw": 10.629508473385911,
+        "mae_raw": 8.945870372908983,
+        "r_squared": 0.8691348427221951
+      }
+    },
+    "joint3": {
+      "joint": "joint3",
+      "gravity_identifiable": true,
+      "gravity_scale_raw_per_nm": 165.54305124826425,
+      "coulomb_raw": 62.36995087442818,
+      "viscous_raw_per_rad_s": -220.73893120213089,
+      "bias_raw": -14.362208369445034,
+      "train_samples": 529,
+      "test_samples": 262,
+      "rank": 4,
+      "condition_number": 47.833933333273116,
+      "test": {
+        "rmse_raw": 9.674160487052326,
+        "mae_raw": 7.610148519155223,
+        "r_squared": 0.9517633031642433
+      }
+    },
+    "joint4": {
+      "joint": "joint4",
+      "gravity_identifiable": true,
+      "gravity_scale_raw_per_nm": 456.9966372510785,
+      "coulomb_raw": 3.5607772821502848,
+      "viscous_raw_per_rad_s": -13.223322362859069,
+      "bias_raw": 2.014392993252326,
+      "train_samples": 676,
+      "test_samples": 308,
+      "rank": 4,
+      "condition_number": 308.94367363015454,
+      "test": {
+        "rmse_raw": 3.223789728662177,
+        "mae_raw": 2.6185113441031596,
+        "r_squared": 0.5262650468228829
+      }
+    },
+    "joint5": {
+      "joint": "joint5",
+      "gravity_identifiable": true,
+      "gravity_scale_raw_per_nm": 139.3410417669212,
+      "coulomb_raw": 37.99526563132029,
+      "viscous_raw_per_rad_s": -162.8698786003898,
+      "bias_raw": -13.875238576682964,
+      "train_samples": 786,
+      "test_samples": 363,
+      "rank": 4,
+      "condition_number": 58.781034030120026,
+      "test": {
+        "rmse_raw": 5.8891801596159725,
+        "mae_raw": 4.675669023267409,
+        "r_squared": 0.9557190231132585
+      }
+    },
+    "joint6": {
+      "joint": "joint6",
+      "gravity_identifiable": true,
+      "gravity_scale_raw_per_nm": 162.37038695341357,
+      "coulomb_raw": 2.8436822358538425,
+      "viscous_raw_per_rad_s": -21.19519413367607,
+      "bias_raw": 1.7572740726155782,
+      "train_samples": 527,
+      "test_samples": 223,
+      "rank": 4,
+      "condition_number": 159.42388417406224,
+      "test": {
+        "rmse_raw": 2.7360791310334904,
+        "mae_raw": 2.167424715974056,
+        "r_squared": 0.2629594462821212
+      }
+    }
+  },
+  "guard_interval_s": [
+    120.0,
+    122.0
+  ]
+}

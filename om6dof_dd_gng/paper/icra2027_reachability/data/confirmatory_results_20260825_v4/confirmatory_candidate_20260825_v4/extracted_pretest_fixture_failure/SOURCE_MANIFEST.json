@@ -1,0 +1,50 @@
+{
+  "schema": "om6dof-confirmatory-source-manifest-v4",
+  "created_jst": "2026-08-25",
+  "status": "runner_analyzer_contract_sync_frozen_before_v4_outcomes",
+  "base_repository": {
+    "path_on_agx": "/home/kublab/ros2_ws/src/om6dof",
+    "git_head": "6dbd71a29228098d88ffba02837b28b753123895",
+    "dirty_state_at_prior_audit": true
+  },
+  "digest_definition": "The source_tree_sha256 supplied to the benchmark is SHA-256 of the exact bytes of this SOURCE_MANIFEST.json file. Each listed digest is SHA-256 of the exact package-snapshot file bytes.",
+  "package_snapshot_root": "package_snapshot/om6dof_dd_gng",
+  "verification": {
+    "python_tests": 45,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0,
+    "suites": {
+      "test_analyze_reachability_multiscene.py": 19,
+      "test_reachability_multiscene_benchmark.py": 15,
+      "test_generate_reachability_scene_catalog.py": 6,
+      "test_reachability_benchmark.py": 5
+    },
+    "cpp_build_and_tests": "pending_on_agx_after_deployment"
+  },
+  "files": [
+    {"path": "CMakeLists.txt", "sha256": "ca03ea4d8581e1f15a0ac1e036c7281d7896f85651a60b8f3683455d467787f5", "bytes": 7765},
+    {"path": "config/topo_gng.yaml", "sha256": "abf60d6f21bbb0e9b77558316dfb746dacf3af37814a349c60308f7dcfd22175", "bytes": 5837},
+    {"path": "include/om6dof_dd_gng/reachability_graph.hpp", "sha256": "d3bdc9fab36695217dcd4dde7fa2b67b181c180f3346eab5d0c159b3d4bcbce8", "bytes": 23126},
+    {"path": "launch/reachability_graph.launch.py", "sha256": "ea2babcc39c546aa2bab82bb0d699a20ec961492841c0b5152c865f8d26e20b4", "bytes": 6171},
+    {"path": "msg/EnvironmentGraph.msg", "sha256": "0df981dc6811d206c706f01614c383a7a81ee7bc4bcdbc3a4e5a6ebfce576679", "bytes": 96},
+    {"path": "msg/EnvironmentNode.msg", "sha256": "0cd9922c5a01d62836cd6ba9fbd4c351b860d614af014461f0555d8ed6fae99a", "bytes": 73},
+    {"path": "msg/ReachabilityGraph.msg", "sha256": "e4e571cb337a54d4b6b3dbcad3977aab6e4e1b5a39065d801df5dabde6bfc7f0", "bytes": 759},
+    {"path": "msg/ReachabilityNode.msg", "sha256": "8719225a27b55b60a93c5c7f779480b20e56181b35d22b5a63f4d02203a158c5", "bytes": 60},
+    {"path": "msg/ReachabilityPlan.msg", "sha256": "ac29bc8fb3780025c7042f02a195de7bb397f0d86a96a2c7b57f42842d1a56d0", "bytes": 688},
+    {"path": "msg/ReachabilityQuery.msg", "sha256": "49517bb8191f88f3de02a0ec3e4f73ab5d31b7e28ab305c8801dab0f8b4d8ec6", "bytes": 203},
+    {"path": "msg/TopologyEdge.msg", "sha256": "c22805dd3aa467606a4f01a019d8cbab645faa6fa7d8ae7e75a780dcea00ca8c", "bytes": 47},
+    {"path": "package.xml", "sha256": "8b8c03419b06f67d410b4980591f9f7450847a3d3410865b2a50a601d21a3ed3", "bytes": 1738},
+    {"path": "scripts/analyze_reachability_multiscene.py", "sha256": "0bd80d28a45eaea3727287989e862c56d271c34038065a1db5a89c14490c68d9", "bytes": 114960},
+    {"path": "scripts/generate_reachability_scene_catalog.py", "sha256": "1f0c8de8086f2cccdca4dbcbb5b6bead996f8c18c78be090136f5bcf83e0e765", "bytes": 34017},
+    {"path": "scripts/reachability_benchmark.py", "sha256": "0320bc390e247213023f690ee84ef450e163b92176fddae6779f9cdcb51a8fe6", "bytes": 20151},
+    {"path": "scripts/reachability_multiscene_benchmark.py", "sha256": "0c6556971efb63378cd96ec62c069f8cd14a9134a3623fe3af1bac0b7775ee13", "bytes": 70883},
+    {"path": "src/reachability_graph_node.cpp", "sha256": "4ee29149506162302fa168abf86a3bfd1f9aeedcc697443106619ff8b6bdba33", "bytes": 83922},
+    {"path": "srv/ValidateReachabilityScene.srv", "sha256": "8f0773b907fe0dfc076916b0f4b20e26abcd2b76af9ebc5fbdf04eb96df64a42", "bytes": 650},
+    {"path": "test/test_analyze_reachability_multiscene.py", "sha256": "97b1aab5f0e90bd8702fd31a1aea28fed7850537fd95899a87d55688dc8ac775", "bytes": 32403},
+    {"path": "test/test_generate_reachability_scene_catalog.py", "sha256": "eecdbf87edd7f08e7d43151f48cec797c146940da4c5c7dfe1162013e1c1e143", "bytes": 5854},
+    {"path": "test/test_reachability_benchmark.py", "sha256": "cac146eaff2c7875435e75c0422cd04877a8d7c1fb24577ec1b0249cc4d8a286", "bytes": 2468},
+    {"path": "test/test_reachability_graph.cpp", "sha256": "9ac6490e4b5eb52f0911f6b008a381db5edc799d624b227205376754742d8a71", "bytes": 8307},
+    {"path": "test/test_reachability_multiscene_benchmark.py", "sha256": "2a880c09c4d50b84c6ef9452054a3df3e3e9218a6e897943947531cadd8e41c7", "bytes": 20062}
+  ]
+}

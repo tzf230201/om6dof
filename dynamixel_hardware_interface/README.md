@@ -113,6 +113,103 @@ These parameters define how the interface communicates with the Dynamixel motors
 
 - **`error_timeout_ms`**: Timeout for communication errors (in milliseconds).
 
+- **`read_packet_timeout_ms`**: Receive deadline for one complete
+  read response, in milliseconds. It is independent of the
+  `ros2_control` update period and stays bounded even after a scheduler stall.
+  Values must be finite and between `5` and `100` ms; invalid configuration
+  stops initialization. The default is `30` ms. This is distinct from
+  `error_timeout_ms`: it changes how long one packet read may wait, while the
+  existing consecutive-failure and elapsed-error fail-safes remain unchanged.
+
+- **`read_transport_mode`**: Selects `multi_sync` (the backward-compatible
+  library default) or `sequential_single_sync`. The sequential mode creates
+  one persistent, one-ID `GroupSyncRead` handler per communication ID. It
+  acquires every response before updating any exported state pointer, so a
+  failure cannot expose a mixed old/new joint snapshot. Invalid values and
+  layouts that cannot use the common indirect SyncRead block abort hardware
+  initialization; the driver never silently falls back to multi-ID traffic.
+
+#### Read-only OM6DOF bus isolation
+
+`dxl_read_diagnostic` compares four read paths without changing any Dynamixel
+register:
+
+1. Individual reads of Present Position (`132`, 4 bytes).
+2. Individual reads of the driver's indirect block (`634`, 14 bytes).
+3. Plain GroupSyncRead of Present Position (`132`, 4 bytes).
+4. Plain GroupSyncRead of the driver's exact indirect block (`634`, 14 bytes).
+
+Immediately before and after those trials, it also records a read-only health
+snapshot for every safety ID: Hardware Error Status (`70`, 1 byte), Present
+Input Voltage (`144`, 2 bytes, decoded at `0.1 V` per unit), and Present
+Temperature (`146`, 1 byte, decoded in degrees Celsius). JSON output retains
+both the raw register value and its decoded form per ID. Any communication or
+status-packet error, or any nonzero Hardware Error Status, makes the overall
+result non-pass; voltage and temperature are reported without imposing a
+model-specific threshold.
+
+It is deliberately fail-closed. The tool requires
+`om6dof-hardware.service` to be conclusively `inactive`, rejects a visibly
+owned port, obtains `flock` and `TIOCEXCL`, and repeats the ownership check
+after locking and after the trials. Before any diagnostic phase, it reads
+Torque Enable (`64`, 1 byte) from the immutable complete rig roster, IDs
+`31,32,33,24,35,26,37`. Any missing/error response or any value other than zero
+aborts the run. This full gate remains in force when `--ids` selects a test
+subset for bisection. The tool does **not** disable torque itself and contains
+no register-write API.
+
+Support the arm mechanically before making the hardware owner inactive:
+with torque already off, gravity can move the arm. After building and sourcing
+the workspace, run:
+
+```bash
+ros2 run dynamixel_hardware_interface dxl_read_diagnostic \
+  --trials 500 \
+  > /tmp/om6dof_dxl_read_diagnostic.json
+```
+
+For a statistically useful comparison with the production 14-byte SyncRead,
+skip the three unrelated phases and preserve the requested ID order:
+
+```bash
+ros2 run dynamixel_hardware_interface dxl_read_diagnostic \
+  --phase driver-group-only \
+  --ids 31,32,33,24,35,26,37 \
+  --trials 10000 \
+  > /tmp/om6dof_dxl_group_only.json
+```
+
+Each failed group transaction reports `expected_id`, `expected_index`, RX
+elapsed time, and bytes still queued after failure. `expected_id` means the
+response the SDK was waiting for; it is not automatically proof that this
+motor transmitted the corrupt bytes. Repeat with reversed order and selected
+subsets: a failure that follows the same ID points toward that actuator or its
+cable path, while one that follows the same list index points toward response
+ordering or aggregate timing. The immutable seven-ID torque gate is still
+checked even when the test uses a subset.
+
+The fixed defaults are Protocol 2.0, 1 Mbps, the rig's stable FTDI by-id path,
+test IDs `31,32,33,24,35,26,37`, and a 30 ms receive deadline. `--port`, `--ids`,
+`--phase`, `--trials`, `--timeout-ms`, and `--interval-ms` are configurable.
+The guarded service name is intentionally not configurable. Any state other
+than exactly `inactive`, including `unknown`, is rejected.
+
+Output is one JSON document. Exit `0` means every read succeeded; `2` means a
+service/ownership/configuration guard refused access; `3` means torque-off
+could not be conclusively established; and `4` means the guarded trials ran
+but recorded read or health errors. Group-only failures implicate aggregate
+packet timing/USB scheduling or multi-response bus behavior; failures isolated
+to one ID also direct inspection toward that servo and its upstream cable
+segment.
+
+The commissioned OM6DOF profile uses `sequential_single_sync`. Guarded testing
+on 2026-09-04 recorded intermittent failures for multi-ID GroupSyncRead in
+natural, reverse, and sorted orders, while seven separate one-ID GroupSyncRead
+runs completed 70,000/70,000 transactions without a read error. The mode is a
+software mitigation for that rig, not proof that the underlying electrical or
+multi-responder timing fault has been repaired. Generic users retain
+`multi_sync` unless they opt in explicitly.
+
 #### **2. Hardware Configuration**
 
 These parameters define the hardware setup:
@@ -236,6 +333,8 @@ Ensure the parameters are configured correctly in your `ros2_control` YAML file 
   ```xml
   <ros2_control>
       <param name="dynamixel_state_pub_msg_name">dynamixel_hardware_interface/dxl_state</param>
+      <param name="dynamixel_health_topic">dynamixel_hardware_interface/health</param>
+      <param name="dynamixel_health_status_name">dynamixel_hardware_interface/BusHealth</param>
       <param name="get_dynamixel_data_srv_name">dynamixel_hardware_interface/get_dxl_data</param>
       <param name="set_dynamixel_data_srv_name">dynamixel_hardware_interface/set_dxl_data</param>
       <param name="reboot_dxl_srv_name">dynamixel_hardware_interface/reboot_dxl</param>
@@ -251,26 +350,57 @@ Ensure the parameters are configured correctly in your `ros2_control` YAML file 
 
 - **Default Value**: `dynamixel_hardware_interface/dxl_state`
 
+##### 2. **dynamixel_health_topic / dynamixel_health_status_name**
 
-##### 2. **get_dynamixel_data_srv_name**
+- **Description**: Publishes a reliable, transient-local
+  `diagnostic_msgs/DiagnosticArray` at up to 20 Hz. The named status contains
+  persistent `read_failure_count` and `write_failure_count` counters, current
+  and last communication errors, consecutive failure counts, a driver-instance
+  ID, fail-safe state, aggregate hardware-error mask, all-actuator torque
+  state, and input-voltage feedback.
+
+- **Default Values**: `dynamixel_hardware_interface/health` and
+  `dynamixel_hardware_interface/BusHealth`
+
+The counters never clear after communication recovers (until the driver
+process restarts), so safety consumers can require an unchanged clean window
+without depending on delivery of one short-lived error frame. A new
+`driver_instance_id` tells consumers to discard the old clean window.
+
+`hardware_error_expected_count`, `hardware_error_monitored_count`, and
+`hardware_error_monitoring_complete` distinguish a real all-zero set of
+Hardware Error Status registers from a missing state-interface configuration.
+Incomplete coverage forces the diagnostic level to `ERROR`; it can never be
+reported as a healthy zero mask. Likewise, the input-voltage fields report
+expected/monitored counts, a completeness flag, and the minimum voltage in
+volts together with its Dynamixel ID. Voltage is already part of the cyclic
+read, so these fields add no serial transaction. They expose the minimum for a
+supervisory threshold without imposing one model-independent limit in this
+driver.
+
+For OM6DOF, all seven physical GPIO entries must declare both
+`Present Input Voltage` and `Hardware Error Status`. With the other standard
+state items this is a 14-byte indirect SyncRead block per actuator.
+
+##### 3. **get_dynamixel_data_srv_name**
 
 - **Description**: Specifies the service name for retrieving Dynamixel data.
 
 - **Default Value**: `dynamixel_hardware_interface/get_dxl_data`
 
-##### 3. **set_dynamixel_data_srv_name**
+##### 4. **set_dynamixel_data_srv_name**
 
 - **Description**: Specifies the service name for setting Dynamixel data.
 
 - **Default Value**: `dynamixel_hardware_interface/set_dxl_data`
 
-##### 4. **reboot_dxl_srv_name**
+##### 5. **reboot_dxl_srv_name**
 
 - **Description**: Specifies the service name for rebooting Dynamixel motors.
 
 - **Default Value**: `dynamixel_hardware_interface/reboot_dxl`
 
-##### 5. **set_dxl_torque_srv_name**
+##### 6. **set_dxl_torque_srv_name**
 
 - **Description**: Specifies the service name for enabling or disabling torque on Dynamixel motors.
 

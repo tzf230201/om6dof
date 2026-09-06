@@ -17,6 +17,8 @@
 #ifndef DYNAMIXEL_HARDWARE_INTERFACE__DYNAMIXEL_HARDWARE_INTERFACE_HPP_
 #define DYNAMIXEL_HARDWARE_INTERFACE__DYNAMIXEL_HARDWARE_INTERFACE_HPP_
 
+#include <chrono>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -35,8 +37,11 @@
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 
 #include "dynamixel_hardware_interface/visibility_control.h"
+#include "dynamixel_hardware_interface/bus_health.hpp"
 #include "dynamixel_hardware_interface/dynamixel/dynamixel.hpp"
+#include "dynamixel_hardware_interface/read_packet_timeout.hpp"
 
+#include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "dynamixel_interfaces/msg/dynamixel_state.hpp"
 #include "dynamixel_interfaces/srv/get_data_from_dxl.hpp"
 #include "dynamixel_interfaces/srv/set_data_to_dxl.hpp"
@@ -193,12 +198,16 @@ private:
   std::map<std::pair<uint8_t /*comm_id*/, uint8_t /*id*/>, bool /*enable*/> dxl_torque_state_;
   std::vector<std::pair<uint8_t, uint8_t>> torque_enabled_comm_id_id_;
   double err_timeout_ms_;
+  double read_packet_timeout_ms_{kDefaultReadPacketTimeoutMs};
   int consecutive_failure_shutdown_threshold_{10};
   int consecutive_read_failures_{0};
   int consecutive_write_failures_{0};
   bool fail_safe_triggered_{false};
+  BusHealthState bus_health_;
   bool auto_enable_torque_on_start_{true};
   bool restrict_critical_write_service_{false};
+  bool torque_off_diagnostic_mode_{false};
+  bool torque_state_feedback_valid_{false};
   std::vector<BusWatchdogConfig> bus_watchdog_configs_;
   rclcpp::Duration read_error_duration_{0, 0};
   rclcpp::Duration write_error_duration_{0, 0};
@@ -233,6 +242,41 @@ private:
    * @return The resulting error status.
    */
   DxlError CheckError(DxlError dxl_comm_err);
+
+  /**
+   * @brief Publish persistent communication counters for motion interlocks.
+   * @param force Ignore the normal healthy-message rate limit.
+   * @param event Human-readable context for this sample.
+   */
+  void PublishBusHealth(bool force, const std::string & event);
+
+  /**
+   * @brief True only when every physical actuator currently reports torque on.
+   */
+  bool AllActuatorTorqueEnabled() const;
+
+  /**
+   * @brief True only when fresh feedback reports every physical actuator torque off.
+   */
+  bool AllActuatorTorqueDisabled() const;
+
+  /**
+   * @brief Refresh cached torque state from the most recent multi-servo read.
+   * @return True when every expected actuator supplied finite Torque Enable feedback.
+   */
+  bool RefreshTorqueStateFromFeedback();
+
+  /**
+   * @brief Fail closed if torque is on or unknown in torque-off diagnostic mode.
+   * @param context Human-readable location for the diagnostic message.
+   * @return True unless the diagnostic torque invariant was violated.
+   */
+  bool EnforceTorqueOffDiagnosticMode(const char * context);
+
+  /**
+   * @brief Bitwise OR of the most recently read Dynamixel hardware errors.
+   */
+  std::uint32_t AggregateHardwareError() const;
 
   /**
    * @brief Resets communication with the hardware.
@@ -335,6 +379,14 @@ private:
   using StatePublisher = realtime_tools::RealtimePublisher<DynamixelStateMsg>;
   rclcpp::Publisher<DynamixelStateMsg>::SharedPtr dxl_state_pub_;
   std::unique_ptr<StatePublisher> dxl_state_pub_uni_ptr_;
+
+  using BusHealthMsg = diagnostic_msgs::msg::DiagnosticArray;
+  using BusHealthPublisher = realtime_tools::RealtimePublisher<BusHealthMsg>;
+  rclcpp::Publisher<BusHealthMsg>::SharedPtr bus_health_pub_;
+  std::unique_ptr<BusHealthPublisher> bus_health_pub_uni_ptr_;
+  std::string bus_health_status_name_{"dynamixel_hardware_interface/BusHealth"};
+  std::string bus_health_instance_id_;
+  std::chrono::steady_clock::time_point last_bus_health_publish_{};
 
   rclcpp::Service<dynamixel_interfaces::srv::GetDataFromDxl>::SharedPtr get_dxl_data_srv_;
   void get_dxl_data_srv_callback(

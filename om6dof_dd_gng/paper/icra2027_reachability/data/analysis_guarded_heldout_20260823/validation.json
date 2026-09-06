@@ -1,0 +1,59 @@
+{
+  "row_count": 150,
+  "method_counts": {
+    "gng": 50,
+    "guarded_gng": 50,
+    "halton_prm": 50
+  },
+  "seed_count": 50,
+  "seed_range": [
+    50,
+    99
+  ],
+  "all_expected_seeds_present": true,
+  "each_seed_has_all_methods": true,
+  "run_indices_complete": true,
+  "method_position_counts": {
+    "gng": [
+      18,
+      16,
+      16
+    ],
+    "guarded_gng": [
+      16,
+      17,
+      17
+    ],
+    "halton_prm": [
+      16,
+      17,
+      17
+    ]
+  },
+  "errors": 0,
+  "nodes_all_800": true,
+  "matched_target_xyz": true,
+  "matched_target_joints": true,
+  "matched_obstacle_xyz": true,
+  "clear_valid_matches_exact": true,
+  "dynamic_valid_matches_exact": true,
+  "target_xyz": [
+    0.1622375619994582,
+    0.0,
+    0.2540819536713998
+  ],
+  "target_joints": [
+    0.0,
+    -0.6806,
+    1.3613,
+    0.0,
+    0.8901,
+    0.0
+  ],
+  "obstacle_xyz": [
+    0.08711878099972911,
+    0.0,
+    0.3607909768356999
+  ],
+  "valid": true
+}

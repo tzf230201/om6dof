@@ -1,0 +1,3 @@
+scenario,n_pairs,gng_successes,halton_successes,gng_success_rate,halton_success_rate,both_success,gng_only_success,halton_only_success,both_fail,paired_risk_difference_pp,risk_difference_ci_low_pp,risk_difference_ci_high_pp,matched_odds_ratio_haldane,mcnemar_exact_p_raw,primary,p_holm_primary_family
+clear,50,50,50,1.0,1.0,50,0,0,0,0.0,0.0,0.0,1.0,1.0,False,
+dynamic,50,42,50,0.84,1.0,42,0,8,0,-16.0,-26.0,-6.0,0.058823529411764705,0.0078125,True,0.0234375

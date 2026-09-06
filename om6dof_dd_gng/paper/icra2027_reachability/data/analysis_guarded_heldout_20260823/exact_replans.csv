@@ -1,0 +1,13 @@
+seed,method,clear_exact_replans,dynamic_exact_replans,clear_valid,dynamic_valid,dynamic_reason
+98,gng,0,2,True,True,path_ready_exact_validated_preview_only
+50,guarded_gng,0,3,True,True,path_ready_exact_validated_preview_only
+58,guarded_gng,0,3,True,True,path_ready_exact_validated_preview_only
+85,guarded_gng,0,1,True,True,path_ready_exact_validated_preview_only
+89,guarded_gng,0,1,True,True,path_ready_exact_validated_preview_only
+60,halton_prm,0,1,True,True,path_ready_exact_validated_preview_only
+64,halton_prm,0,1,True,True,path_ready_exact_validated_preview_only
+67,halton_prm,0,1,True,True,path_ready_exact_validated_preview_only
+75,halton_prm,0,2,True,True,path_ready_exact_validated_preview_only
+77,halton_prm,0,1,True,True,path_ready_exact_validated_preview_only
+81,halton_prm,0,1,True,True,path_ready_exact_validated_preview_only
+99,halton_prm,0,5,True,True,path_ready_exact_validated_preview_only

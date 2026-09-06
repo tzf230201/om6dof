@@ -1,0 +1,931 @@
+#!/usr/bin/env python3
+#
+# Copyright 2026 KUBOTA Lab
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Fail-closed, read-only Dynamixel bus diagnostic for the OM6DOF rig."""
+
+import argparse
+from collections import Counter
+from datetime import datetime, timezone
+import fcntl
+import json
+import os
+from pathlib import Path
+import stat
+import subprocess
+import sys
+import termios
+import time
+
+from dynamixel_sdk import COMM_NOT_AVAILABLE
+from dynamixel_sdk import COMM_RX_FAIL
+from dynamixel_sdk import COMM_SUCCESS
+from dynamixel_sdk import GroupSyncRead
+from dynamixel_sdk import PacketHandler
+from dynamixel_sdk import PortHandler
+
+
+DEFAULT_PORT = (
+    "/dev/serial/by-id/"
+    "usb-FTDI_USB__-__Serial_Converter_FT5NUUIQ-if00-port0"
+)
+SAFETY_IDS = (31, 32, 33, 24, 35, 26, 37)
+DEFAULT_IDS = SAFETY_IDS
+DEFAULT_SERVICE = "om6dof-hardware.service"
+PROTOCOL_VERSION = 2.0
+BAUD_RATE = 1_000_000
+TORQUE_ENABLE_ADDRESS = 64
+HARDWARE_ERROR_STATUS_ADDRESS = 70
+PRESENT_POSITION_ADDRESS = 132
+PRESENT_POSITION_LENGTH = 4
+PRESENT_INPUT_VOLTAGE_ADDRESS = 144
+PRESENT_TEMPERATURE_ADDRESS = 146
+DRIVER_INDIRECT_ADDRESS = 634
+DRIVER_INDIRECT_LENGTH = 14
+MIN_TIMEOUT_MS = 5.0
+MAX_TIMEOUT_MS = 100.0
+LOCAL_INCOMPLETE_DATA = -9001
+PHASE_ALL = "all"
+PHASE_DRIVER_GROUP_ONLY = "driver-group-only"
+PHASE_DRIVER_INDIVIDUAL_ONLY = "driver-individual-only"
+MAX_RECORDED_FAILURE_EVENTS = 100
+
+EXIT_OK = 0
+EXIT_REFUSED = 2
+EXIT_TORQUE_UNSAFE = 3
+EXIT_READ_ERRORS = 4
+EXIT_INTERRUPTED = 130
+
+HARDWARE_ERROR_FLAGS = (
+    (0x01, "input_voltage"),
+    (0x04, "overheating"),
+    (0x08, "motor_encoder"),
+    (0x10, "electrical_shock"),
+    (0x20, "overload"),
+)
+
+
+def utc_now():
+    """Return an ISO-8601 UTC timestamp."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def parse_ids(value):
+    """Parse a comma-separated list of unique unicast Dynamixel IDs."""
+    try:
+        ids = [int(item.strip()) for item in value.split(",")]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("IDs must be comma-separated integers") from exc
+    if not ids or any(dxl_id < 0 or dxl_id > 252 for dxl_id in ids):
+        raise argparse.ArgumentTypeError("each Dynamixel ID must be in [0, 252]")
+    if len(set(ids)) != len(ids):
+        raise argparse.ArgumentTypeError("Dynamixel IDs must be unique")
+    return tuple(ids)
+
+
+def bounded_int(minimum, maximum):
+    """Create an argparse converter for a bounded integer."""
+    def convert(value):
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError("expected an integer") from exc
+        if parsed < minimum or parsed > maximum:
+            raise argparse.ArgumentTypeError(
+                f"value must be in [{minimum}, {maximum}]"
+            )
+        return parsed
+    return convert
+
+
+def bounded_float(minimum, maximum):
+    """Create an argparse converter for a finite bounded float."""
+    def convert(value):
+        try:
+            parsed = float(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError("expected a number") from exc
+        if not minimum <= parsed <= maximum:
+            raise argparse.ArgumentTypeError(
+                f"value must be finite and in [{minimum}, {maximum}]"
+            )
+        return parsed
+    return convert
+
+
+def build_parser():
+    """Build the command-line parser."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Read-only Protocol 2.0/1 Mbps comparison of individual reads "
+            "and GroupSyncRead. It refuses to run unless all seven immutable "
+            "OM6DOF safety IDs report Torque Enable=0."
+        )
+    )
+    parser.add_argument("--port", default=DEFAULT_PORT)
+    parser.add_argument(
+        "--ids", type=parse_ids, default=DEFAULT_IDS,
+        help="comma-separated IDs (default: 31,32,33,24,35,26,37)",
+    )
+    parser.add_argument(
+        "--trials", type=bounded_int(1, 100000), default=100,
+        help="trial count for each enabled diagnostic phase (default: 100)",
+    )
+    parser.add_argument(
+        "--phase", choices=(
+            PHASE_ALL,
+            PHASE_DRIVER_GROUP_ONLY,
+            PHASE_DRIVER_INDIVIDUAL_ONLY,
+        ),
+        default=PHASE_ALL,
+        help=(
+            "all runs the original four read phases; driver-group-only runs "
+            "only the production-shaped GroupSyncRead at address 634, length "
+            "14; driver-individual-only uses a direct Protocol 2 Read for "
+            "the same block"
+        ),
+    )
+    parser.add_argument(
+        "--timeout-ms", type=bounded_float(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS),
+        default=30.0, help="receive deadline in milliseconds (default: 30)",
+    )
+    parser.add_argument(
+        "--interval-ms", type=bounded_float(0.0, 1000.0), default=0.0,
+        help="pause between diagnostic transactions (default: 0)",
+    )
+    parser.add_argument(
+        "--interval-wait", choices=("sleep", "busy"), default="sleep",
+        help=(
+            "implement --interval-ms with normal sleep or a diagnostic "
+            "busy-wait (default: sleep)"
+        ),
+    )
+    parser.add_argument(
+        "--retries", type=bounded_int(0, 3), default=0,
+        help=(
+            "immediate retries after a failed GroupSyncRead transaction "
+            "(default: 0; read-only)"
+        ),
+    )
+    parser.add_argument(
+        "--drain-after-tx", action="store_true",
+        help=(
+            "wait for the Linux tty transmit queue to drain before starting "
+            "the receive deadline (read-only transport probe)"
+        ),
+    )
+    return parser
+
+
+def _bytes_available(port_handler):
+    """Return queued kernel bytes without allowing telemetry to abort a read."""
+    try:
+        return int(port_handler.getBytesAvailable())
+    except (AttributeError, OSError, TypeError, ValueError):
+        return -1
+
+
+class DiagnosticGroupSyncRead(GroupSyncRead):
+    """GroupSyncRead that exposes which expected response failed.
+
+    The expected ID is not necessarily the device that emitted bad bytes. The
+    SDK may discard an unexpected complete response while waiting for that ID,
+    and it does not expose the received packet ID on CRC/framing failure.
+    """
+
+    def __init__(self, port, packet_handler, start_address, data_length):
+        super().__init__(port, packet_handler, start_address, data_length)
+        self.last_rx_failure = None
+
+    def rxPacket(self):
+        """Receive in request order and retain context for a failed response."""
+        self.last_result = False
+        self.last_rx_failure = None
+
+        if self.ph.getProtocolVersion() == 1.0 or not self.data_dict:
+            return COMM_NOT_AVAILABLE
+
+        result = COMM_RX_FAIL
+        rx_started = time.monotonic()
+        for index, dxl_id in enumerate(self.data_dict):
+            data, result, device_error = self.ph.readRx(
+                self.port, dxl_id, self.data_length
+            )
+            self.data_dict[dxl_id] = data
+            if result != COMM_SUCCESS:
+                self.last_rx_failure = {
+                    "expected_id": dxl_id,
+                    "expected_index": index,
+                    "responses_completed": index,
+                    "communication_code": result,
+                    "device_error": device_error,
+                    "rx_elapsed_ms": round(
+                        (time.monotonic() - rx_started) * 1000.0, 3
+                    ),
+                    "queued_bytes_after_failure": _bytes_available(self.port),
+                }
+                return result
+
+        self.last_result = result == COMM_SUCCESS
+        return result
+
+
+def service_state(service_name):
+    """Return inactive only for a loaded, conclusively inactive systemd unit."""
+    try:
+        result = subprocess.run(
+            [
+                "systemctl", "show", service_name,
+                "--property=LoadState", "--property=ActiveState", "--no-pager",
+            ],
+            check=False, capture_output=True, text=True, timeout=2.0,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError) as exc:
+        return "unavailable", str(exc)
+    properties = {}
+    for line in result.stdout.splitlines():
+        key, separator, value = line.partition("=")
+        if separator:
+            properties[key] = value
+    load_state = properties.get("LoadState", "unknown")
+    active_state = properties.get("ActiveState", "unknown")
+    if result.returncode == 0 and load_state == "loaded":
+        return active_state, result.stderr.strip()
+    detail = result.stderr.strip() or f"LoadState={load_state}"
+    return f"unavailable:{active_state}", detail
+
+
+def _process_label(pid, proc_root):
+    """Read a short process label for an owner report."""
+    try:
+        command = (proc_root / str(pid) / "cmdline").read_bytes()
+        label = command.replace(b"\0", b" ").decode(errors="replace").strip()
+        if label:
+            return label
+    except (OSError, PermissionError):
+        pass
+    try:
+        return (proc_root / str(pid) / "comm").read_text().strip()
+    except (OSError, PermissionError):
+        return "unknown"
+
+
+def find_port_owners(port, excluded_pids=(), proc_root=Path("/proc")):
+    """Find visible processes with the same character device open."""
+    target = os.stat(port)
+    if not stat.S_ISCHR(target.st_mode):
+        raise ValueError(f"resolved port is not a character device: {port}")
+
+    owners = []
+    unreadable_processes = 0
+    excluded = set(excluded_pids)
+    try:
+        processes = list(proc_root.iterdir())
+    except OSError as exc:
+        raise RuntimeError(f"cannot inspect {proc_root}: {exc}") from exc
+
+    for process in processes:
+        if not process.name.isdigit():
+            continue
+        pid = int(process.name)
+        if pid in excluded:
+            continue
+        fd_dir = process / "fd"
+        try:
+            descriptors = list(fd_dir.iterdir())
+        except PermissionError:
+            unreadable_processes += 1
+            continue
+        except FileNotFoundError:
+            continue
+        for descriptor in descriptors:
+            try:
+                opened = os.stat(descriptor)
+            except (FileNotFoundError, PermissionError, OSError):
+                continue
+            if stat.S_ISCHR(opened.st_mode) and opened.st_rdev == target.st_rdev:
+                owners.append({
+                    "pid": pid,
+                    "command": _process_label(pid, proc_root),
+                    "fd": descriptor.name,
+                })
+                break
+    return owners, unreadable_processes
+
+
+def _unsafe_service_state(state):
+    """Fail closed unless systemd conclusively reports the unit inactive."""
+    return state != "inactive"
+
+
+def check_external_ownership(port, service_name, excluded_pids=()):
+    """Perform non-mutating service and open-file ownership checks."""
+    state, service_detail = service_state(service_name)
+    owners, unreadable = find_port_owners(port, excluded_pids)
+    return {
+        "service": service_name,
+        "service_state": state,
+        "service_detail": service_detail,
+        "port_owners": owners,
+        "unreadable_processes": unreadable,
+        "unsafe": _unsafe_service_state(state) or bool(owners),
+    }
+
+
+def describe_comm(packet_handler, code):
+    """Return a stable communication-error label."""
+    if code == LOCAL_INCOMPLETE_DATA:
+        return "incomplete register data"
+    return packet_handler.getTxRxResult(code)
+
+
+def describe_device(packet_handler, code):
+    """Return a stable Dynamixel status-error label."""
+    return packet_handler.getRxPacketError(code)
+
+
+def read_register(port_handler, packet_handler, dxl_id, address, length, timeout_ms):
+    """Read exactly one register using only Protocol 2.0 read operations."""
+    comm_result = packet_handler.readTx(port_handler, dxl_id, address, length)
+    if comm_result != COMM_SUCCESS:
+        return None, comm_result, 0
+
+    port_handler.setPacketTimeoutMillis(timeout_ms)
+    data, comm_result, device_error = packet_handler.readRx(
+        port_handler, dxl_id, length
+    )
+    if comm_result != COMM_SUCCESS:
+        return None, comm_result, device_error
+    if len(data) != length:
+        return None, LOCAL_INCOMPLETE_DATA, device_error
+    value = int.from_bytes(bytes(data), byteorder="little", signed=False)
+    return value, comm_result, device_error
+
+
+def _new_read_stats(attempted=0):
+    """Create an internal read statistics accumulator."""
+    return {
+        "attempted": attempted,
+        "success": 0,
+        "communication_errors": Counter(),
+        "device_errors": Counter(),
+    }
+
+
+def _record_read(stats, packet_handler, value, comm_result, device_error):
+    """Record one read result and return whether it was fully successful."""
+    if comm_result != COMM_SUCCESS:
+        key = f"{comm_result}: {describe_comm(packet_handler, comm_result)}"
+        stats["communication_errors"][key] += 1
+        return False
+    if device_error:
+        key = f"0x{device_error:02x}: {describe_device(packet_handler, device_error)}"
+        stats["device_errors"][key] += 1
+        return False
+    if value is None:
+        stats["communication_errors"]["missing value"] += 1
+        return False
+    stats["success"] += 1
+    return True
+
+
+def wait_interval(interval_ms, wait_mode="sleep"):
+    """Wait between transactions using the selected diagnostic mechanism."""
+    if not interval_ms:
+        return
+    seconds = interval_ms / 1000.0
+    if wait_mode == "sleep":
+        time.sleep(seconds)
+        return
+    if wait_mode != "busy":
+        raise ValueError(f"unsupported interval wait mode: {wait_mode}")
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        pass
+
+
+def verify_torque_disabled(port_handler, packet_handler, ids, timeout_ms):
+    """Read Torque Enable for every ID and fail closed on any uncertainty."""
+    stats = _new_read_stats(len(ids))
+    stats["values"] = {}
+    stats["unsafe_ids"] = []
+    for dxl_id in ids:
+        value, comm_result, device_error = read_register(
+            port_handler, packet_handler, dxl_id,
+            TORQUE_ENABLE_ADDRESS, 1, timeout_ms,
+        )
+        ok = _record_read(
+            stats, packet_handler, value, comm_result, device_error
+        )
+        stats["values"][str(dxl_id)] = value
+        if not ok or value != 0:
+            stats["unsafe_ids"].append(dxl_id)
+    stats["all_disabled"] = not stats["unsafe_ids"]
+    return stats
+
+
+def decode_hardware_error_status(raw):
+    """Decode X-series Hardware Error Status bits without hiding unknown bits."""
+    flags = [name for mask, name in HARDWARE_ERROR_FLAGS if raw & mask]
+    known_mask = sum(mask for mask, _ in HARDWARE_ERROR_FLAGS)
+    unknown_bits = raw & ~known_mask
+    return {
+        "flags": flags,
+        "unknown_bits": f"0x{unknown_bits:02x}",
+    }
+
+
+def _health_read(
+        port_handler, packet_handler, dxl_id, address, length, timeout_ms,
+        decoder):
+    """Read and describe one health register."""
+    raw, comm_result, device_error = read_register(
+        port_handler, packet_handler, dxl_id, address, length, timeout_ms
+    )
+    comm_ok = comm_result == COMM_SUCCESS
+    device_ok = device_error == 0
+    return {
+        "address": address,
+        "length": length,
+        "raw": raw,
+        "decoded": decoder(raw) if raw is not None else None,
+        "communication": {
+            "code": comm_result,
+            "description": describe_comm(packet_handler, comm_result),
+        },
+        "device_error": {
+            "code": device_error,
+            "description": (
+                describe_device(packet_handler, device_error)
+                if device_error else "none"
+            ),
+        },
+        "read_ok": comm_ok and device_ok and raw is not None,
+    }
+
+
+def read_health_snapshot(port_handler, packet_handler, ids, timeout_ms):
+    """Read non-mutating health telemetry for every safety ID."""
+    snapshot = {
+        "per_id": {},
+        "communication_errors": Counter(),
+        "device_errors": Counter(),
+        "nonzero_hardware_error_ids": [],
+    }
+    for dxl_id in ids:
+        hardware_error = _health_read(
+            port_handler, packet_handler, dxl_id,
+            HARDWARE_ERROR_STATUS_ADDRESS, 1, timeout_ms,
+            decode_hardware_error_status,
+        )
+        voltage = _health_read(
+            port_handler, packet_handler, dxl_id,
+            PRESENT_INPUT_VOLTAGE_ADDRESS, 2, timeout_ms,
+            lambda raw: {"volts": round(raw * 0.1, 1)},
+        )
+        temperature = _health_read(
+            port_handler, packet_handler, dxl_id,
+            PRESENT_TEMPERATURE_ADDRESS, 1, timeout_ms,
+            lambda raw: {"celsius": raw},
+        )
+        registers = {
+            "hardware_error_status": hardware_error,
+            "present_input_voltage": voltage,
+            "present_temperature": temperature,
+        }
+        snapshot["per_id"][str(dxl_id)] = registers
+        for register in registers.values():
+            if register["communication"]["code"] != COMM_SUCCESS:
+                key = (
+                    f'{register["communication"]["code"]}: '
+                    f'{register["communication"]["description"]}'
+                )
+                snapshot["communication_errors"][key] += 1
+            if register["device_error"]["code"]:
+                key = (
+                    f'0x{register["device_error"]["code"]:02x}: '
+                    f'{register["device_error"]["description"]}'
+                )
+                snapshot["device_errors"][key] += 1
+        if hardware_error["raw"] not in (None, 0):
+            snapshot["nonzero_hardware_error_ids"].append(dxl_id)
+
+    snapshot["all_reads_ok"] = all(
+        register["read_ok"]
+        for registers in snapshot["per_id"].values()
+        for register in registers.values()
+    )
+    snapshot["all_hardware_errors_clear"] = not snapshot[
+        "nonzero_hardware_error_ids"
+    ]
+    snapshot["healthy"] = (
+        snapshot["all_reads_ok"]
+        and snapshot["all_hardware_errors_clear"]
+    )
+    return snapshot
+
+
+def run_individual_trials(
+        port_handler, packet_handler, ids, trials, timeout_ms, interval_ms,
+        address=PRESENT_POSITION_ADDRESS, length=PRESENT_POSITION_LENGTH,
+        interval_wait="sleep"):
+    """Read one configured register range from each ID independently."""
+    per_id = {str(dxl_id): _new_read_stats() for dxl_id in ids}
+    for stats in per_id.values():
+        stats["minimum"] = None
+        stats["maximum"] = None
+
+    for _ in range(trials):
+        for dxl_id in ids:
+            stats = per_id[str(dxl_id)]
+            stats["attempted"] += 1
+            value, comm_result, device_error = read_register(
+                port_handler, packet_handler, dxl_id, address, length, timeout_ms,
+            )
+            if _record_read(
+                    stats, packet_handler, value, comm_result, device_error):
+                stats["minimum"] = (
+                    value if stats["minimum"] is None
+                    else min(stats["minimum"], value)
+                )
+                stats["maximum"] = (
+                    value if stats["maximum"] is None
+                    else max(stats["maximum"], value)
+                )
+            wait_interval(interval_ms, interval_wait)
+    return per_id
+
+
+def run_sync_trials(
+        port_handler, packet_handler, group_factory, ids, trials,
+        timeout_ms, interval_ms, address=PRESENT_POSITION_ADDRESS,
+        length=PRESENT_POSITION_LENGTH, retries=0, drain_after_tx=False,
+        interval_wait="sleep"):
+    """Read one configured register range with plain GroupSyncRead."""
+    group = group_factory(
+        port_handler, packet_handler, address, length,
+    )
+    for dxl_id in ids:
+        if not group.addParam(dxl_id):
+            raise RuntimeError(f"GroupSyncRead rejected ID {dxl_id}")
+
+    stats = _new_read_stats()
+    stats["unavailable_by_id"] = Counter()
+    stats["minimum_by_id"] = {str(dxl_id): None for dxl_id in ids}
+    stats["maximum_by_id"] = {str(dxl_id): None for dxl_id in ids}
+    stats["failure_by_expected_id"] = Counter()
+    stats["failure_by_expected_index"] = Counter()
+    stats["failure_events"] = []
+    stats["failure_events_truncated"] = 0
+    stats["physical_attempts"] = 0
+    stats["retry_attempts"] = 0
+    stats["recovered_after_retry"] = 0
+    for trial_index in range(trials):
+        stats["attempted"] += 1
+        comm_result = COMM_RX_FAIL
+        successful_attempt = None
+        for retry_index in range(retries + 1):
+            stats["physical_attempts"] += 1
+            if retry_index:
+                stats["retry_attempts"] += 1
+            comm_result = group.txPacket()
+            if comm_result == COMM_SUCCESS:
+                if drain_after_tx:
+                    # pyserial.flush() maps to tcdrain(2) on POSIX.  This does
+                    # not write an additional byte; it only ensures the USB
+                    # tty has physically completed this request before the
+                    # receive stopwatch begins.
+                    port_handler.ser.flush()
+                port_handler.setPacketTimeoutMillis(timeout_ms)
+                comm_result = group.rxPacket()
+            if comm_result == COMM_SUCCESS:
+                successful_attempt = retry_index
+                break
+
+            key = f"{comm_result}: {describe_comm(packet_handler, comm_result)}"
+            stats["communication_errors"][key] += 1
+            failure = getattr(group, "last_rx_failure", None)
+            if failure is not None:
+                stats["failure_by_expected_id"][
+                    str(failure["expected_id"])
+                ] += 1
+                stats["failure_by_expected_index"][
+                    str(failure["expected_index"])
+                ] += 1
+                event = dict(failure)
+                event["trial_index"] = trial_index
+                event["retry_index"] = retry_index
+                # usbmon timestamps use a monotonic boot-relative clock. Keep
+                # both clocks so a captured URB can be matched to this exact
+                # failed logical transaction without guessing from its index.
+                event["failure_monotonic_ns"] = time.monotonic_ns()
+                event["failure_wall_ns"] = time.time_ns()
+                if len(stats["failure_events"]) < MAX_RECORDED_FAILURE_EVENTS:
+                    stats["failure_events"].append(event)
+                else:
+                    stats["failure_events_truncated"] += 1
+
+        if successful_attempt is not None:
+            if successful_attempt:
+                stats["recovered_after_retry"] += 1
+            missing = False
+            for dxl_id in ids:
+                if not group.isAvailable(
+                        dxl_id, address, length):
+                    stats["unavailable_by_id"][str(dxl_id)] += 1
+                    missing = True
+                    continue
+                # The Python SDK's getData helper only decodes 1/2/4-byte
+                # values. Availability itself confirms receipt for the
+                # driver-shaped 14-byte phase.
+                if length in (1, 2, 4):
+                    value = group.getData(dxl_id, address, length)
+                    key = str(dxl_id)
+                    stats["minimum_by_id"][key] = (
+                        value if stats["minimum_by_id"][key] is None
+                        else min(stats["minimum_by_id"][key], value)
+                    )
+                    stats["maximum_by_id"][key] = (
+                        value if stats["maximum_by_id"][key] is None
+                        else max(stats["maximum_by_id"][key], value)
+                    )
+            if not missing:
+                stats["success"] += 1
+        wait_interval(interval_ms, interval_wait)
+    return stats
+
+
+def _json_ready(value):
+    """Recursively convert counters to ordinary JSON dictionaries."""
+    if isinstance(value, Counter):
+        return dict(value)
+    if isinstance(value, dict):
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _refusal(summary, reason, detail=None):
+    """Populate a standard fail-closed refusal result."""
+    summary["result"] = "refused"
+    summary["reason"] = reason
+    if detail is not None:
+        summary["detail"] = detail
+    return summary, EXIT_REFUSED
+
+
+def run(args):
+    """Run the guarded diagnostic and return its summary and exit code."""
+    summary = {
+        "schema_version": 1,
+        "started_at": utc_now(),
+        "mode": "read_only",
+        "configuration": {
+            "port_requested": args.port,
+            "protocol": PROTOCOL_VERSION,
+            "baud_rate": BAUD_RATE,
+            "test_ids": list(args.ids),
+            "torque_gate_ids": list(SAFETY_IDS),
+            "trials": args.trials,
+            "phase": args.phase,
+            "timeout_ms": args.timeout_ms,
+            "interval_ms": args.interval_ms,
+            "interval_wait": args.interval_wait,
+            "retries": args.retries,
+            "drain_after_tx": args.drain_after_tx,
+            "hardware_service": DEFAULT_SERVICE,
+            "torque_enable": {"address": TORQUE_ENABLE_ADDRESS, "length": 1},
+            "health_snapshot": {
+                "hardware_error_status": {
+                    "address": HARDWARE_ERROR_STATUS_ADDRESS,
+                    "length": 1,
+                },
+                "present_input_voltage": {
+                    "address": PRESENT_INPUT_VOLTAGE_ADDRESS,
+                    "length": 2,
+                    "scale_volts_per_unit": 0.1,
+                },
+                "present_temperature": {
+                    "address": PRESENT_TEMPERATURE_ADDRESS,
+                    "length": 1,
+                    "scale_celsius_per_unit": 1.0,
+                },
+            },
+            "present_position": {
+                "address": PRESENT_POSITION_ADDRESS,
+                "length": PRESENT_POSITION_LENGTH,
+            },
+            "driver_indirect_block": {
+                "address": DRIVER_INDIRECT_ADDRESS,
+                "length": DRIVER_INDIRECT_LENGTH,
+            },
+        },
+    }
+
+    try:
+        requested = Path(args.port)
+        if not requested.is_absolute():
+            return _refusal(summary, "port path must be absolute")
+        resolved = requested.resolve(strict=True)
+        port_stat = resolved.stat()
+        if not stat.S_ISCHR(port_stat.st_mode):
+            return _refusal(summary, "resolved port is not a character device")
+    except (OSError, RuntimeError) as exc:
+        return _refusal(summary, "port validation failed", str(exc))
+    summary["configuration"]["port_resolved"] = str(resolved)
+
+    try:
+        initial_ownership = check_external_ownership(
+            str(resolved), DEFAULT_SERVICE
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return _refusal(summary, "ownership inspection failed", str(exc))
+    summary["ownership_before_open"] = initial_ownership
+    if initial_ownership["unsafe"]:
+        return _refusal(
+            summary, "hardware service is running or serial port is owned"
+        )
+
+    port_handler = PortHandler(str(resolved))
+    try:
+        try:
+            opened = port_handler.setBaudRate(BAUD_RATE)
+        except Exception as exc:  # SDK/pyserial exception types vary by version.
+            return _refusal(summary, "serial port open failed", str(exc))
+        if not opened or port_handler.ser is None:
+            return _refusal(summary, "serial port open failed")
+
+        descriptor = port_handler.ser.fileno()
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.ioctl(descriptor, termios.TIOCEXCL)
+        except OSError as exc:
+            return _refusal(summary, "could not obtain exclusive serial access", str(exc))
+
+        try:
+            locked_ownership = check_external_ownership(
+                str(resolved), DEFAULT_SERVICE, excluded_pids=(os.getpid(),)
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            return _refusal(summary, "locked ownership inspection failed", str(exc))
+        summary["ownership_after_lock"] = locked_ownership
+        if locked_ownership["unsafe"]:
+            return _refusal(
+                summary, "hardware service started or another process owns the port"
+            )
+
+        packet_handler = PacketHandler(PROTOCOL_VERSION)
+        port_handler.clearPort()
+        summary["torque_preflight"] = verify_torque_disabled(
+            port_handler, packet_handler, SAFETY_IDS, args.timeout_ms
+        )
+        if not summary["torque_preflight"]["all_disabled"]:
+            summary["result"] = "aborted"
+            summary["reason"] = (
+                "not every configured ID conclusively reported Torque Enable=0"
+            )
+            return summary, EXIT_TORQUE_UNSAFE
+
+        summary["health_preflight"] = read_health_snapshot(
+            port_handler, packet_handler, SAFETY_IDS, args.timeout_ms
+        )
+
+        if args.phase == PHASE_ALL:
+            summary["individual_present_position"] = run_individual_trials(
+                port_handler, packet_handler, args.ids, args.trials,
+                args.timeout_ms, args.interval_ms,
+                interval_wait=args.interval_wait,
+            )
+        if args.phase in (PHASE_ALL, PHASE_DRIVER_INDIVIDUAL_ONLY):
+            summary["individual_driver_indirect_block"] = run_individual_trials(
+                port_handler, packet_handler, args.ids, args.trials,
+                args.timeout_ms, args.interval_ms,
+                DRIVER_INDIRECT_ADDRESS, DRIVER_INDIRECT_LENGTH,
+                interval_wait=args.interval_wait,
+            )
+        if args.phase == PHASE_ALL:
+            summary["group_sync_read_present_position"] = run_sync_trials(
+                port_handler, packet_handler, DiagnosticGroupSyncRead,
+                args.ids, args.trials, args.timeout_ms, args.interval_ms,
+                retries=args.retries, drain_after_tx=args.drain_after_tx,
+                interval_wait=args.interval_wait,
+            )
+        if args.phase in (PHASE_ALL, PHASE_DRIVER_GROUP_ONLY):
+            summary["group_sync_read_driver_indirect_block"] = run_sync_trials(
+                port_handler, packet_handler, DiagnosticGroupSyncRead,
+                args.ids, args.trials, args.timeout_ms, args.interval_ms,
+                DRIVER_INDIRECT_ADDRESS, DRIVER_INDIRECT_LENGTH,
+                retries=args.retries, drain_after_tx=args.drain_after_tx,
+                interval_wait=args.interval_wait,
+            )
+
+        summary["health_postflight"] = read_health_snapshot(
+            port_handler, packet_handler, SAFETY_IDS, args.timeout_ms
+        )
+        summary["torque_postflight"] = verify_torque_disabled(
+            port_handler, packet_handler, SAFETY_IDS, args.timeout_ms
+        )
+        if args.phase == PHASE_ALL:
+            individual_ok = all(
+                item["success"] == item["attempted"]
+                for phase in (
+                    summary["individual_present_position"],
+                    summary["individual_driver_indirect_block"],
+                )
+                for item in phase.values()
+            )
+            sync_phases = (
+                summary["group_sync_read_present_position"],
+                summary["group_sync_read_driver_indirect_block"],
+            )
+        elif args.phase == PHASE_DRIVER_GROUP_ONLY:
+            individual_ok = True
+            sync_phases = (summary["group_sync_read_driver_indirect_block"],)
+        else:
+            individual_ok = all(
+                item["success"] == item["attempted"]
+                for item in summary["individual_driver_indirect_block"].values()
+            )
+            sync_phases = ()
+        completed_cleanly = (
+            individual_ok
+            and all(sync["success"] == sync["attempted"] for sync in sync_phases)
+            # A retry may recover a logical sample, but the diagnostic must
+            # still report the underlying transport fault rather than hiding
+            # it behind the successful retry.
+            and all(not sync.get("communication_errors") for sync in sync_phases)
+            and summary["health_preflight"]["healthy"]
+            and summary["health_postflight"]["healthy"]
+            and summary["torque_postflight"]["all_disabled"]
+        )
+
+        try:
+            final_ownership = check_external_ownership(
+                str(resolved), DEFAULT_SERVICE, excluded_pids=(os.getpid(),)
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            return _refusal(summary, "postflight ownership inspection failed", str(exc))
+        summary["ownership_after_tests"] = final_ownership
+        if final_ownership["unsafe"]:
+            return _refusal(
+                summary, "hardware service started or another process owns the port"
+            )
+        summary["result"] = "pass" if completed_cleanly else "read_errors"
+        summary["reason"] = (
+            "all requested reads succeeded"
+            if completed_cleanly
+            else (
+                "one or more read/health checks failed; no register was changed"
+            )
+        )
+        return summary, EXIT_OK if completed_cleanly else EXIT_READ_ERRORS
+    finally:
+        if port_handler.ser is not None:
+            try:
+                port_handler.closePort()
+            except Exception:
+                pass
+
+
+def main(argv=None):
+    """CLI entry point."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        summary, exit_code = run(args)
+    except KeyboardInterrupt:
+        summary = {
+            "schema_version": 1,
+            "finished_at": utc_now(),
+            "result": "interrupted",
+            "reason": "operator interrupted diagnostic; no register was changed",
+        }
+        exit_code = EXIT_INTERRUPTED
+    except Exception as exc:  # Always emit a machine-readable fail-closed result.
+        summary = {
+            "schema_version": 1,
+            "result": "internal_error",
+            "reason": "diagnostic aborted without changing a register",
+            "detail": f"{type(exc).__name__}: {exc}",
+        }
+        exit_code = EXIT_REFUSED
+    summary["finished_at"] = utc_now()
+    print(json.dumps(_json_ready(summary), indent=2, sort_keys=True))
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

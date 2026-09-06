@@ -1,0 +1,24 @@
+string[] joint_names
+float64[] start_joint_positions
+float64[] target_joint_positions
+float64[] detour_joint_positions
+float64 hit_fraction
+om6dof_dd_gng/EnvironmentGraph environment
+---
+bool evaluated
+string reason
+geometry_msgs/Pose start_pose
+geometry_msgs/Pose target_pose
+geometry_msgs/Pose hit_pose
+bool start_self_valid
+bool target_self_valid
+bool detour_self_valid
+bool clear_capsule_direct_valid
+bool clear_exact_direct_valid
+bool dynamic_start_valid
+bool dynamic_target_valid
+bool dynamic_detour_state_valid
+bool dynamic_capsule_direct_valid
+bool dynamic_exact_direct_valid
+bool dynamic_capsule_detour_valid
+bool dynamic_exact_detour_valid

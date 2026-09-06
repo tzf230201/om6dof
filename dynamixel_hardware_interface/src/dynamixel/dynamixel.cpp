@@ -16,13 +16,15 @@
 
 #include "dynamixel_hardware_interface/dynamixel/dynamixel.hpp"
 
-#include <queue>
-#include <vector>
-#include <string>
-#include <memory>
-#include <functional>
-#include <thread>
 #include <chrono>
+#include <functional>
+#include <memory>
+#include <queue>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "dynamixel_hardware_interface/sequential_read_transaction.hpp"
 
 namespace dynamixel_hardware_interface
 {
@@ -47,6 +49,7 @@ Dynamixel::Dynamixel(const char * path)
 Dynamixel::~Dynamixel()
 {
   fprintf(stderr, "Dynamixel destructor start\n");
+  sequential_single_sync_read_handlers_.clear();
   if (group_sync_read_) {
     delete group_sync_read_;
     group_sync_read_ = nullptr;
@@ -393,6 +396,7 @@ DxlError Dynamixel::Reboot(uint8_t id)
 
 void Dynamixel::RWDataReset()
 {
+  sequential_single_sync_read_handlers_.clear();
   read_data_list_.clear();
   write_data_list_.clear();
 }
@@ -473,7 +477,18 @@ DxlError Dynamixel::SetMultiDxlRead()
 {
   read_type_ = checkReadType();
 
+  if (read_transport_mode_ == ReadTransportMode::SEQUENTIAL_SINGLE_SYNC &&
+    read_type_ != SYNC)
+  {
+    fprintf(
+      stderr,
+      "read_transport_mode=sequential_single_sync requires an indirect SyncRead-compatible "
+      "layout; refusing BulkRead fallback.\n");
+    return DxlError::SET_SYNC_READ_FAIL;
+  }
+
   fprintf(stderr, "Dynamixel Read Type : %s\n", read_type_ ? "bulk read" : "sync read");
+  fprintf(stderr, "Dynamixel Read Transport : %s\n", ReadTransportModeName(read_transport_mode_));
   if (read_type_ == SYNC) {
     fprintf(stderr, "ID : ");
     for (auto it_read_data_list : read_data_list_) {
@@ -1032,16 +1047,19 @@ std::string Dynamixel::DxlErrorToString(DxlError error_num)
   }
 }
 
-DxlError Dynamixel::ReadMultiDxlData(double period_ms)
+DxlError Dynamixel::ReadMultiDxlData(double packet_timeout_ms)
 {
   if (read_data_list_.empty()) {
     return DxlError::OK;
   }
 
   if (read_type_ == SYNC) {
-    return GetDxlValueFromSyncRead(period_ms);
+    if (read_transport_mode_ == ReadTransportMode::SEQUENTIAL_SINGLE_SYNC) {
+      return GetDxlValueFromSequentialSingleSyncRead(packet_timeout_ms);
+    }
+    return GetDxlValueFromSyncRead(packet_timeout_ms);
   } else {
-    return GetDxlValueFromBulkRead(period_ms);
+    return GetDxlValueFromBulkRead(packet_timeout_ms);
   }
 }
 
@@ -1207,7 +1225,10 @@ DxlError Dynamixel::SetSyncReadItemAndHandler()
     }
   }
 
-  if (SetSyncReadHandler(id_arr) != DxlError::OK) {
+  const DxlError handler_result =
+    read_transport_mode_ == ReadTransportMode::SEQUENTIAL_SINGLE_SYNC ?
+    SetSequentialSingleSyncReadHandlers(id_arr) : SetSyncReadHandler(id_arr);
+  if (handler_result != DxlError::OK) {
     fprintf(stderr, "Cannot set the SyncRead handler.\n");
     return DxlError::SYNC_READ_FAIL;
   }
@@ -1259,6 +1280,7 @@ DxlError Dynamixel::SetFastSyncReadHandler(std::vector<uint8_t> id_arr)
 
 DxlError Dynamixel::SetSyncReadHandler(std::vector<uint8_t> id_arr)
 {
+  sequential_single_sync_read_handlers_.clear();
   if (id_arr.size() == 0) {
     fprintf(stderr, "No Sync Read Item, not setting sync read handler\n");
     return DxlError::OK;
@@ -1318,7 +1340,214 @@ DxlError Dynamixel::SetSyncReadHandler(std::vector<uint8_t> id_arr)
   return DxlError::OK;
 }
 
-DxlError Dynamixel::GetDxlValueFromSyncRead(double period_ms)
+DxlError Dynamixel::SetSequentialSingleSyncReadHandlers(
+  const std::vector<uint8_t> & id_arr)
+{
+  if (id_arr.empty()) {
+    fprintf(stderr, "No Sync Read Item, not setting sequential SyncRead handlers\n");
+    return DxlError::OK;
+  }
+
+  // Build into a temporary map so a partially configured handler set can
+  // never become active. Each communication ID must own exactly one handler.
+  std::map<uint8_t, std::unique_ptr<dynamixel::GroupSyncRead>> new_handlers;
+  std::map<uint8_t, uint16_t> new_indirect_data_addresses;
+  for (const uint8_t comm_id : id_arr) {
+    if (new_handlers.find(comm_id) != new_handlers.end()) {
+      fprintf(stderr, "[ID:%03d] duplicate sequential SyncRead communication ID\n", comm_id);
+      return DxlError::SET_SYNC_READ_FAIL;
+    }
+
+    uint16_t indirect_addr = 0;
+    uint8_t indirect_item_size = 0;
+    if (!dxl_info_.GetDxlControlItem(
+        comm_id, comm_id, "Indirect Data Read", indirect_addr,
+        indirect_item_size))
+    {
+      fprintf(
+        stderr,
+        "[ID:%03d] cannot find Indirect Data Read for sequential SyncRead\n",
+        comm_id);
+      return DxlError::SET_SYNC_READ_FAIL;
+    }
+
+    const auto indirect = indirect_info_read_.find(comm_id);
+    if (indirect == indirect_info_read_.end() || indirect->second.size == 0) {
+      fprintf(
+        stderr,
+        "[ID:%03d] sequential SyncRead indirect block is not configured\n",
+        comm_id);
+      return DxlError::SET_SYNC_READ_FAIL;
+    }
+
+    std::unique_ptr<dynamixel::GroupSyncRead> handler(
+      new dynamixel::GroupSyncRead(
+        port_handler_, packet_handler_, indirect_addr, indirect->second.size));
+    if (!handler->addParam(comm_id)) {
+      fprintf(
+        stderr, "[ID:%03d] one-ID groupSyncRead addParam failed\n",
+        comm_id);
+      return DxlError::SET_SYNC_READ_FAIL;
+    }
+    new_handlers.emplace(comm_id, std::move(handler));
+    new_indirect_data_addresses.emplace(comm_id, indirect_addr);
+  }
+
+  // ResetIndirectRead deliberately clears this address. Restore it only after
+  // every one-ID handler has been built successfully; ProcessReadData uses it
+  // as the getData/isAvailable offset during each atomic commit.
+  for (const auto & address : new_indirect_data_addresses) {
+    indirect_info_read_[address.first].indirect_data_addr = address.second;
+  }
+
+  if (group_sync_read_) {
+    delete group_sync_read_;
+    group_sync_read_ = nullptr;
+  }
+  if (group_fast_sync_read_) {
+    delete group_fast_sync_read_;
+    group_fast_sync_read_ = nullptr;
+  }
+  sequential_single_sync_read_handlers_ = std::move(new_handlers);
+
+  fprintf(stderr, "Sequential one-ID SyncRead handlers set for IDs: ");
+  for (const uint8_t comm_id : id_arr) {
+    fprintf(stderr, "%d, ", comm_id);
+  }
+  fprintf(stderr, "\n");
+  return DxlError::OK;
+}
+
+DxlError Dynamixel::ProcessSequentialSingleSyncReadCommunication(
+  const RWItemList & item,
+  dynamixel::GroupSyncRead * handler,
+  double packet_timeout_ms)
+{
+  const uint8_t comm_id = item.comm_id;
+  if (!handler) {
+    return DxlError::SET_SYNC_READ_FAIL;
+  }
+
+  int dxl_comm_result = handler->txPacket();
+  if (dxl_comm_result != COMM_SUCCESS) {
+    fprintf(
+      stderr, "SequentialSyncRead Tx Fail [ID:%03d] [Error code:%d]\n",
+      comm_id, dxl_comm_result);
+    return DxlError::SYNC_READ_FAIL;
+  }
+
+  if (packet_timeout_ms > 0) {
+    port_handler_->setPacketTimeout(
+      packet_timeout_ms < 5.0 ? 5.0 : packet_timeout_ms);
+  }
+
+  const auto rx_start = std::chrono::steady_clock::now();
+  dxl_comm_result = handler->rxPacket();
+  if (dxl_comm_result != COMM_SUCCESS) {
+    const double elapsed_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - rx_start).count();
+    fprintf(
+      stderr,
+      "SequentialSyncRead Rx Fail [ID:%03d] [Error code:%d] "
+      "[Rx elapsed:%.3f ms] [Queued bytes after failure:%d]\n",
+      comm_id, dxl_comm_result, elapsed_ms, port_handler_->getBytesAvailable());
+    return DxlError::SYNC_READ_FAIL;
+  }
+
+  uint8_t device_error = 0;
+  if (!handler->getError(comm_id, &device_error)) {
+    fprintf(
+      stderr,
+      "SequentialSyncRead payload has no status error field [ID:%03d]\n",
+      comm_id);
+    return DxlError::SYNC_READ_FAIL;
+  }
+  if (device_error != 0) {
+    fprintf(
+      stderr,
+      "SequentialSyncRead device error [ID:%03d] [Error:0x%02X] [%s]\n",
+      comm_id, device_error, packet_handler_->getRxPacketError(device_error));
+    return DxlError::DXL_HARDWARE_ERROR;
+  }
+
+  const auto indirect = indirect_info_read_.find(comm_id);
+  if (indirect == indirect_info_read_.end() ||
+    indirect->second.indirect_data_addr == 0 ||
+    item.item_size.size() != item.item_name.size() ||
+    item.item_size.size() != item.item_data_ptr_vec.size())
+  {
+    fprintf(
+      stderr, "SequentialSyncRead payload metadata invalid [ID:%03d]\n",
+      comm_id);
+    return DxlError::SET_SYNC_READ_FAIL;
+  }
+
+  uint16_t current_addr = indirect->second.indirect_data_addr;
+  for (size_t item_index = 0; item_index < item.item_size.size(); ++item_index) {
+    const uint8_t item_size = item.item_size[item_index];
+    if ((item_size != 1 && item_size != 2 && item_size != 4) ||
+      !handler->isAvailable(comm_id, current_addr, item_size))
+    {
+      fprintf(
+        stderr,
+        "SequentialSyncRead payload unavailable [ID:%03d] [Item:%zu] "
+        "[Address:%u] [Size:%u]\n",
+        comm_id, item_index, current_addr, item_size);
+      return DxlError::SYNC_READ_FAIL;
+    }
+    current_addr = static_cast<uint16_t>(current_addr + item_size);
+  }
+  return DxlError::OK;
+}
+
+DxlError Dynamixel::GetDxlValueFromSequentialSingleSyncRead(double packet_timeout_ms)
+{
+  std::vector<const RWItemList *> items;
+  items.reserve(read_data_list_.size());
+  for (const auto & item : read_data_list_) {
+    items.push_back(&item);
+  }
+
+  DxlError acquisition_result = DxlError::OK;
+  const bool complete = AcquireAllThenCommit(
+    items,
+    [this, packet_timeout_ms, &acquisition_result](const RWItemList * item) {
+      const auto handler = sequential_single_sync_read_handlers_.find(item->comm_id);
+      if (handler == sequential_single_sync_read_handlers_.end()) {
+        fprintf(
+          stderr, "[ID:%03d] sequential SyncRead handler is missing\n",
+          item->comm_id);
+        acquisition_result = DxlError::SET_SYNC_READ_FAIL;
+        return false;
+      }
+      acquisition_result = ProcessSequentialSingleSyncReadCommunication(
+        *item, handler->second.get(), packet_timeout_ms);
+      return acquisition_result == DxlError::OK;
+    },
+    [this](const RWItemList * item) {
+      const uint8_t comm_id = item->comm_id;
+      const auto handler = sequential_single_sync_read_handlers_.find(comm_id);
+      const auto indirect = indirect_info_read_.find(comm_id);
+      // Handler and indirect metadata were both validated during acquisition
+      // and setup, respectively. No exported pointer is touched before this
+      // second, commit-only pass.
+      dynamixel::GroupSyncRead * const group = handler->second.get();
+      ProcessReadData(
+        comm_id,
+        indirect->second.indirect_data_addr,
+        item->id_arr,
+        indirect->second.item_name,
+        indirect->second.item_size,
+        item->item_data_ptr_vec,
+        [group](uint8_t id, uint16_t addr, uint8_t size) {
+          return group->getData(id, addr, size);
+        });
+    });
+
+  return complete ? DxlError::OK : acquisition_result;
+}
+
+DxlError Dynamixel::GetDxlValueFromSyncRead(double packet_timeout_ms)
 {
   // Try fast sync read for the first 10 attempts after startup/handler setup.
   // If any of the first 10 attempts succeeds, use fast sync read permanently.
@@ -1326,7 +1555,7 @@ DxlError Dynamixel::GetDxlValueFromSyncRead(double period_ms)
   if (use_fast_read_protocol_ && group_fast_sync_read_ &&
     (fast_read_permanent_ || fast_read_fail_count_ < 10))
   {
-    DxlError comm_result = ProcessReadCommunication(port_handler_, period_ms, true, true);
+    DxlError comm_result = ProcessReadCommunication(port_handler_, packet_timeout_ms, true, true);
     if (comm_result == DxlError::OK) {
       // Success, process data, and use fast sync read permanently
       for (auto it_read_data : read_data_list_) {
@@ -1371,7 +1600,7 @@ DxlError Dynamixel::GetDxlValueFromSyncRead(double period_ms)
     }
   }
   // Use normal sync read
-  DxlError comm_result = ProcessReadCommunication(port_handler_, period_ms, true, false);
+  DxlError comm_result = ProcessReadCommunication(port_handler_, packet_timeout_ms, true, false);
   if (comm_result != DxlError::OK) {
     return comm_result;
   }
@@ -1638,7 +1867,7 @@ DxlError Dynamixel::AddDirectRead(
   return DxlError::OK;
 }
 
-DxlError Dynamixel::GetDxlValueFromBulkRead(double period_ms)
+DxlError Dynamixel::GetDxlValueFromBulkRead(double packet_timeout_ms)
 {
   // Try fast bulk read for the first 10 attempts after startup/handler setup.
   // If any of the first 10 attempts succeeds, use fast bulk read permanently.
@@ -1646,7 +1875,7 @@ DxlError Dynamixel::GetDxlValueFromBulkRead(double period_ms)
   if (use_fast_read_protocol_ && group_fast_bulk_read_ &&
     (fast_read_permanent_ || fast_read_fail_count_ < 10))
   {
-    DxlError comm_result = ProcessReadCommunication(port_handler_, period_ms, false, true);
+    DxlError comm_result = ProcessReadCommunication(port_handler_, packet_timeout_ms, false, true);
     if (comm_result == DxlError::OK) {
       // Success, process data, and use fast bulk read permanently
       if (group_bulk_read_) {
@@ -1715,7 +1944,7 @@ DxlError Dynamixel::GetDxlValueFromBulkRead(double period_ms)
       return comm_result;
     }
   }
-  DxlError comm_result = ProcessReadCommunication(port_handler_, period_ms, false, false);
+  DxlError comm_result = ProcessReadCommunication(port_handler_, packet_timeout_ms, false, false);
   if (comm_result != DxlError::OK) {
     return comm_result;
   }
@@ -1751,7 +1980,7 @@ DxlError Dynamixel::GetDxlValueFromBulkRead(double period_ms)
 
 DxlError Dynamixel::ProcessReadCommunication(
   dynamixel::PortHandler * port_handler,
-  double period_ms,
+  double packet_timeout_ms,
   bool is_sync,
   bool is_fast)
 {
@@ -1760,18 +1989,36 @@ DxlError Dynamixel::ProcessReadCommunication(
   // of identical lines per second when the bus is intermittent; the caller
   // still records the current communication state and consecutive count.
   const auto log_communication_failure =
-    [this, is_sync, is_fast](const char * phase, int error_code) {
+    [this, is_sync, is_fast](
+    const char * phase, int error_code, double rx_elapsed_ms = -1.0,
+    int queued_bytes_after_failure = -1) {
       static auto last_log_time = std::chrono::steady_clock::time_point{};
       const auto now = std::chrono::steady_clock::now();
       if (now - last_log_time < std::chrono::seconds(5)) {
         return;
       }
       last_log_time = now;
-      fprintf(
-        stderr, "%s %s Fail [Dxl Size : %ld] [Error code : %d]\n",
-        is_sync ? (is_fast ? "FastSyncRead" : "SyncRead") :
-        (is_fast ? "FastBulkRead" : "BulkRead"),
-        phase, read_data_list_.size(), error_code);
+      const char * operation = is_sync ?
+        (is_fast ? "FastSyncRead" : "SyncRead") :
+        (is_fast ? "FastBulkRead" : "BulkRead");
+      if (rx_elapsed_ms >= 0.0) {
+        // COMM_RX_CORRUPT can mean either a complete packet with bad CRC or
+        // a partial packet when the receive deadline expires.  A failure
+        // close to the configured deadline points to the latter; a much
+        // earlier failure points to CRC/framing.  This queue depth is what
+        // remains in the kernel after SDK parsing, not the number of bytes
+        // already consumed from the failed packet.
+        fprintf(
+          stderr,
+          "%s %s Fail [Dxl Size : %ld] [Error code : %d] "
+          "[Rx elapsed : %.3f ms] [Queued bytes after failure : %d]\n",
+          operation, phase, read_data_list_.size(), error_code,
+          rx_elapsed_ms, queued_bytes_after_failure);
+      } else {
+        fprintf(
+          stderr, "%s %s Fail [Dxl Size : %ld] [Error code : %d]\n",
+          operation, phase, read_data_list_.size(), error_code);
+      }
     };
 
   // Send packet
@@ -1802,15 +2049,16 @@ DxlError Dynamixel::ProcessReadCommunication(
     }
   }
 
-  // Set timeout if period_ms is specified. Clamp to a floor: the first
-  // controller cycle after activation can have a near-zero period, and a
-  // sub-millisecond rx timeout is physically impossible to meet (guaranteed
-  // -3001 COMM_RX_TIMEOUT even though the servos answer fine).
-  if (period_ms > 0) {
-    port_handler->setPacketTimeout(period_ms < 5.0 ? 5.0 : period_ms);
+  // Apply the caller's bounded receive deadline. Retain a defensive floor for
+  // other library callers: a sub-5ms timeout is physically unreliable for a
+  // multi-servo USB serial response.
+  if (packet_timeout_ms > 0) {
+    port_handler->setPacketTimeout(
+      packet_timeout_ms < 5.0 ? 5.0 : packet_timeout_ms);
   }
 
   // Receive packet
+  const auto rx_start = std::chrono::steady_clock::now();
   if (is_sync) {
     if (is_fast && group_fast_sync_read_) {
       dxl_comm_result = group_fast_sync_read_->rxPacket();
@@ -1820,7 +2068,10 @@ DxlError Dynamixel::ProcessReadCommunication(
       return DxlError::SYNC_READ_FAIL;
     }
     if (dxl_comm_result != COMM_SUCCESS) {
-      log_communication_failure("Rx", dxl_comm_result);
+      const double elapsed_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - rx_start).count();
+      log_communication_failure(
+        "Rx", dxl_comm_result, elapsed_ms, port_handler->getBytesAvailable());
       return DxlError::SYNC_READ_FAIL;
     }
   } else {
@@ -1833,7 +2084,10 @@ DxlError Dynamixel::ProcessReadCommunication(
       return DxlError::BULK_READ_FAIL;
     }
     if (dxl_comm_result != COMM_SUCCESS) {
-      log_communication_failure("Rx", dxl_comm_result);
+      const double elapsed_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - rx_start).count();
+      log_communication_failure(
+        "Rx", dxl_comm_result, elapsed_ms, port_handler->getBytesAvailable());
       return DxlError::BULK_READ_FAIL;
     }
   }

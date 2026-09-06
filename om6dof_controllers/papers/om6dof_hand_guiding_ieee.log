@@ -1,0 +1,816 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.8.29)  6 SEP 2026 11:40
+entering extended mode
+ restricted \write18 enabled.
+ %&-line parsing enabled.
+**om6dof_hand_guiding_ieee.tex
+(./om6dof_hand_guiding_ieee.tex
+LaTeX2e <2021-11-15> patch level 1
+L3 programming layer <2022-01-21>
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/IEEEtran.cls
+Document Class: IEEEtran 2015/08/26 V1.8b by Michael Shell
+-- See the "IEEEtran_HOWTO" manual for usage information.
+-- http://www.michaelshell.org/tex/ieeetran/
+\@IEEEtrantmpdimenA=\dimen138
+\@IEEEtrantmpdimenB=\dimen139
+\@IEEEtrantmpdimenC=\dimen140
+\@IEEEtrantmpcountA=\count185
+\@IEEEtrantmpcountB=\count186
+\@IEEEtrantmpcountC=\count187
+\@IEEEtrantmptoksA=\toks16
+LaTeX Font Info:    Trying to load font information for OT1+ptm on input line 5
+03.
+(/usr/share/texlive/texmf-dist/tex/latex/psnfss/ot1ptm.fd
+File: ot1ptm.fd 2001/06/04 font definitions for OT1/ptm.
+)
+-- Using 8.5in x 11in (letter) paper.
+-- Using PDF output.
+\@IEEEnormalsizeunitybaselineskip=\dimen141
+-- This is a 10 point document.
+\CLASSINFOnormalsizebaselineskip=\dimen142
+\CLASSINFOnormalsizeunitybaselineskip=\dimen143
+\IEEEnormaljot=\dimen144
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <5> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <5> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <7> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <8> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <8> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <9> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <9> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <10> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <11> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <11> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <12> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <12> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <17> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <17> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <20> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <20> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <24> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 1090.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <24> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 1090.
+
+\IEEEquantizedlength=\dimen145
+\IEEEquantizedlengthdiff=\dimen146
+\IEEEquantizedtextheightdiff=\dimen147
+\IEEEilabelindentA=\dimen148
+\IEEEilabelindentB=\dimen149
+\IEEEilabelindent=\dimen150
+\IEEEelabelindent=\dimen151
+\IEEEdlabelindent=\dimen152
+\IEEElabelindent=\dimen153
+\IEEEiednormlabelsep=\dimen154
+\IEEEiedmathlabelsep=\dimen155
+\IEEEiedtopsep=\skip47
+\c@section=\count188
+\c@subsection=\count189
+\c@subsubsection=\count190
+\c@paragraph=\count191
+\c@IEEEsubequation=\count192
+\abovecaptionskip=\skip48
+\belowcaptionskip=\skip49
+\c@figure=\count193
+\c@table=\count194
+\@IEEEeqnnumcols=\count195
+\@IEEEeqncolcnt=\count196
+\@IEEEsubeqnnumrollback=\count197
+\@IEEEquantizeheightA=\dimen156
+\@IEEEquantizeheightB=\dimen157
+\@IEEEquantizeheightC=\dimen158
+\@IEEEquantizeprevdepth=\dimen159
+\@IEEEquantizemultiple=\count198
+\@IEEEquantizeboxA=\box50
+\@IEEEtmpitemindent=\dimen160
+\IEEEPARstartletwidth=\dimen161
+\c@IEEEbiography=\count199
+\@IEEEtranrubishbin=\box51
+)
+** ATTENTION: Overriding command lockouts (line 2).
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/amsmath.sty
+Package: amsmath 2021/10/15 v2.17l AMS math features
+\@mathmargin=\skip50
+
+For additional information on amsmath, use the `?' option.
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/amstext.sty
+Package: amstext 2021/08/26 v2.01 AMS text
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/amsgen.sty
+File: amsgen.sty 1999/11/30 v2.0 generic functions
+\@emptytoks=\toks17
+\ex@=\dimen162
+))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/amsbsy.sty
+Package: amsbsy 1999/11/29 v1.2d Bold Symbols
+\pmbraise@=\dimen163
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/amsopn.sty
+Package: amsopn 2021/08/26 v2.02 operator names
+)
+\inf@bad=\count266
+LaTeX Info: Redefining \frac on input line 234.
+\uproot@=\count267
+\leftroot@=\count268
+LaTeX Info: Redefining \overline on input line 399.
+\classnum@=\count269
+\DOTSCASE@=\count270
+LaTeX Info: Redefining \ldots on input line 496.
+LaTeX Info: Redefining \dots on input line 499.
+LaTeX Info: Redefining \cdots on input line 620.
+\Mathstrutbox@=\box52
+\strutbox@=\box53
+\big@size=\dimen164
+LaTeX Font Info:    Redeclaring font encoding OML on input line 743.
+LaTeX Font Info:    Redeclaring font encoding OMS on input line 744.
+\macc@depth=\count271
+\c@MaxMatrixCols=\count272
+\dotsspace@=\muskip16
+\c@parentequation=\count273
+\dspbrk@lvl=\count274
+\tag@help=\toks18
+\row@=\count275
+\column@=\count276
+\maxfields@=\count277
+\andhelp@=\toks19
+\eqnshift@=\dimen165
+\alignsep@=\dimen166
+\tagshift@=\dimen167
+\tagwidth@=\dimen168
+\totwidth@=\dimen169
+\lineht@=\dimen170
+\@envbody=\toks20
+\multlinegap=\skip51
+\multlinetaggap=\skip52
+\mathdisplay@stack=\toks21
+LaTeX Info: Redefining \[ on input line 2938.
+LaTeX Info: Redefining \] on input line 2939.
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/amssymb.sty
+Package: amssymb 2013/01/14 v3.01 AMS font symbols
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/amsfonts.sty
+Package: amsfonts 2013/01/14 v3.01 Basic AMSFonts support
+\symAMSa=\mathgroup4
+\symAMSb=\mathgroup5
+LaTeX Font Info:    Redeclaring math symbol \hbar on input line 98.
+LaTeX Font Info:    Overwriting math alphabet `\mathfrak' in version `bold'
+(Font)                  U/euf/m/n --> U/euf/b/n on input line 106.
+))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/booktabs.sty
+Package: booktabs 2020/01/12 v1.61803398 Publication quality tables
+\heavyrulewidth=\dimen171
+\lightrulewidth=\dimen172
+\cmidrulewidth=\dimen173
+\belowrulesep=\dimen174
+\belowbottomsep=\dimen175
+\aboverulesep=\dimen176
+\abovetopsep=\dimen177
+\cmidrulesep=\dimen178
+\cmidrulekern=\dimen179
+\defaultaddspace=\dimen180
+\@cmidla=\count278
+\@cmidlb=\count279
+\@aboverulesep=\dimen181
+\@belowrulesep=\dimen182
+\@thisruleclass=\count280
+\@lastruleclass=\count281
+\@thisrulewidth=\dimen183
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/url.sty
+\Urlmuskip=\muskip17
+Package: url 2013/09/16  ver 3.4  Verb mode for urls, etc.
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/graphicx.sty
+Package: graphicx 2021/09/16 v1.2d Enhanced LaTeX Graphics (DPC,SPQR)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/keyval.sty
+Package: keyval 2014/10/28 v1.15 key=value parser (DPC)
+\KV@toks@=\toks22
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/graphics.sty
+Package: graphics 2021/03/04 v1.4d Standard LaTeX Graphics (DPC,SPQR)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/trig.sty
+Package: trig 2021/08/11 v1.11 sin cos tan (DPC)
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/graphics.cfg
+File: graphics.cfg 2016/06/04 v1.11 sample graphics configuration
+)
+Package graphics Info: Driver file: pdftex.def on input line 107.
+
+(/usr/share/texlive/texmf-dist/tex/latex/graphics-def/pdftex.def
+File: pdftex.def 2020/10/05 v1.2a Graphics/color driver for pdftex
+))
+\Gin@req@height=\dimen184
+\Gin@req@width=\dimen185
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/tikz.sty
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgf.sty
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfrcs.sty
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfutil-common.tex
+\pgfutil@everybye=\toks23
+\pgfutil@tempdima=\dimen186
+\pgfutil@tempdimb=\dimen187
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfutil-common-lists.tex))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfutil-latex.def
+\pgfutil@abb=\box54
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfrcs.code.tex
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgf.revision.tex)
+Package: pgfrcs 2021/05/15 v3.1.9a (3.1.9a)
+))
+Package: pgf 2021/05/15 v3.1.9a (3.1.9a)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcore.sty
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfsys.sty
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfsys.code.tex
+Package: pgfsys 2021/05/15 v3.1.9a (3.1.9a)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfkeys.code.tex
+\pgfkeys@pathtoks=\toks24
+\pgfkeys@temptoks=\toks25
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfkeysfiltered.code.tex
+\pgfkeys@tmptoks=\toks26
+))
+\pgf@x=\dimen188
+\pgf@y=\dimen189
+\pgf@xa=\dimen190
+\pgf@ya=\dimen191
+\pgf@xb=\dimen192
+\pgf@yb=\dimen193
+\pgf@xc=\dimen194
+\pgf@yc=\dimen195
+\pgf@xd=\dimen196
+\pgf@yd=\dimen197
+\w@pgf@writea=\write3
+\r@pgf@reada=\read2
+\c@pgf@counta=\count282
+\c@pgf@countb=\count283
+\c@pgf@countc=\count284
+\c@pgf@countd=\count285
+\t@pgf@toka=\toks27
+\t@pgf@tokb=\toks28
+\t@pgf@tokc=\toks29
+\pgf@sys@id@count=\count286
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgf.cfg
+File: pgf.cfg 2021/05/15 v3.1.9a (3.1.9a)
+)
+Driver file for pgf: pgfsys-pdftex.def
+
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/systemlayer/pgfsys-pdftex.def
+File: pgfsys-pdftex.def 2021/05/15 v3.1.9a (3.1.9a)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfsys-common-pdf.def
+File: pgfsys-common-pdf.def 2021/05/15 v3.1.9a (3.1.9a)
+)))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfsyssoftpath.code.tex
+File: pgfsyssoftpath.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgfsyssoftpath@smallbuffer@items=\count287
+\pgfsyssoftpath@bigbuffer@items=\count288
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfsysprotocol.code.tex
+File: pgfsysprotocol.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/xcolor.sty
+Package: xcolor 2021/10/31 v2.13 LaTeX color extensions (UK)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/color.cfg
+File: color.cfg 2016/01/02 v1.6 sample color configuration
+)
+Package xcolor Info: Driver file: pdftex.def on input line 227.
+Package xcolor Info: Model `cmy' substituted by `cmy0' on input line 1352.
+Package xcolor Info: Model `hsb' substituted by `rgb' on input line 1356.
+Package xcolor Info: Model `RGB' extended on input line 1368.
+Package xcolor Info: Model `HTML' substituted by `rgb' on input line 1370.
+Package xcolor Info: Model `Hsb' substituted by `hsb' on input line 1371.
+Package xcolor Info: Model `tHsb' substituted by `hsb' on input line 1372.
+Package xcolor Info: Model `HSB' substituted by `hsb' on input line 1373.
+Package xcolor Info: Model `Gray' substituted by `gray' on input line 1374.
+Package xcolor Info: Model `wave' substituted by `hsb' on input line 1375.
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcore.code.tex
+Package: pgfcore 2021/05/15 v3.1.9a (3.1.9a)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmath.code.tex
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathcalc.code.tex
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathutil.code.tex)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathparser.code.tex
+\pgfmath@dimen=\dimen198
+\pgfmath@count=\count289
+\pgfmath@box=\box55
+\pgfmath@toks=\toks30
+\pgfmath@stack@operand=\toks31
+\pgfmath@stack@operation=\toks32
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfunctions.code.tex
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfunctions.basic.code.tex)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfunctions.trigonometric.code.tex)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfunctions.random.code.tex)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfunctions.comparison.code.tex)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfunctions.base.code.tex)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfunctions.round.code.tex)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfunctions.misc.code.tex)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfunctions.integerarithmetics.code.tex)))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmathfloat.code.tex
+\c@pgfmathroundto@lastzeros=\count290
+))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfint.code.tex)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorepoints.code.tex
+File: pgfcorepoints.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgf@picminx=\dimen199
+\pgf@picmaxx=\dimen256
+\pgf@picminy=\dimen257
+\pgf@picmaxy=\dimen258
+\pgf@pathminx=\dimen259
+\pgf@pathmaxx=\dimen260
+\pgf@pathminy=\dimen261
+\pgf@pathmaxy=\dimen262
+\pgf@xx=\dimen263
+\pgf@xy=\dimen264
+\pgf@yx=\dimen265
+\pgf@yy=\dimen266
+\pgf@zx=\dimen267
+\pgf@zy=\dimen268
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorepathconstruct.code.tex
+File: pgfcorepathconstruct.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgf@path@lastx=\dimen269
+\pgf@path@lasty=\dimen270
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorepathusage.code.tex
+File: pgfcorepathusage.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgf@shorten@end@additional=\dimen271
+\pgf@shorten@start@additional=\dimen272
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorescopes.code.tex
+File: pgfcorescopes.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgfpic=\box56
+\pgf@hbox=\box57
+\pgf@layerbox@main=\box58
+\pgf@picture@serial@count=\count291
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcoregraphicstate.code.tex
+File: pgfcoregraphicstate.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgflinewidth=\dimen273
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcoretransformations.code.tex
+File: pgfcoretransformations.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgf@pt@x=\dimen274
+\pgf@pt@y=\dimen275
+\pgf@pt@temp=\dimen276
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorequick.code.tex
+File: pgfcorequick.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcoreobjects.code.tex
+File: pgfcoreobjects.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorepathprocessing.code.tex
+File: pgfcorepathprocessing.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorearrows.code.tex
+File: pgfcorearrows.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgfarrowsep=\dimen277
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcoreshade.code.tex
+File: pgfcoreshade.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgf@max=\dimen278
+\pgf@sys@shading@range@num=\count292
+\pgf@shadingcount=\count293
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcoreimage.code.tex
+File: pgfcoreimage.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcoreexternal.code.tex
+File: pgfcoreexternal.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgfexternal@startupbox=\box59
+))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorelayers.code.tex
+File: pgfcorelayers.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcoretransparency.code.tex
+File: pgfcoretransparency.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorepatterns.code.tex
+File: pgfcorepatterns.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcorerdf.code.tex
+File: pgfcorerdf.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmoduleshapes.code.tex
+File: pgfmoduleshapes.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgfnodeparttextbox=\box60
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmoduleplot.code.tex
+File: pgfmoduleplot.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcomp-version-0-65.sty
+Package: pgfcomp-version-0-65 2021/05/15 v3.1.9a (3.1.9a)
+\pgf@nodesepstart=\dimen279
+\pgf@nodesepend=\dimen280
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfcomp-version-1-18.sty
+Package: pgfcomp-version-1-18 2021/05/15 v3.1.9a (3.1.9a)
+))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgffor.sty
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfkeys.sty
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfkeys.code.tex))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmath.sty
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmath.code.tex))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgffor.code.tex
+Package: pgffor 2021/05/15 v3.1.9a (3.1.9a)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmath.code.tex)
+\pgffor@iter=\dimen281
+\pgffor@skip=\dimen282
+\pgffor@stack=\toks33
+\pgffor@toks=\toks34
+))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/tikz.code.tex
+Package: tikz 2021/05/15 v3.1.9a (3.1.9a)
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgflibraryplothandlers.code.tex
+File: pgflibraryplothandlers.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgf@plot@mark@count=\count294
+\pgfplotmarksize=\dimen283
+)
+\tikz@lastx=\dimen284
+\tikz@lasty=\dimen285
+\tikz@lastxsaved=\dimen286
+\tikz@lastysaved=\dimen287
+\tikz@lastmovetox=\dimen288
+\tikz@lastmovetoy=\dimen289
+\tikzleveldistance=\dimen290
+\tikzsiblingdistance=\dimen291
+\tikz@figbox=\box61
+\tikz@figbox@bg=\box62
+\tikz@tempbox=\box63
+\tikz@tempbox@bg=\box64
+\tikztreelevel=\count295
+\tikznumberofchildren=\count296
+\tikznumberofcurrentchild=\count297
+\tikz@fig@count=\count298
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgfmodulematrix.code.tex
+File: pgfmodulematrix.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgfmatrixcurrentrow=\count299
+\pgfmatrixcurrentcolumn=\count300
+\pgf@matrix@numberofcolumns=\count301
+)
+\tikz@expandcount=\count302
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/tikzlibrarytopaths.code.tex
+File: tikzlibrarytopaths.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)))
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/pgflibraryarrows.meta.code.tex
+File: pgflibraryarrows.meta.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+\pgfarrowinset=\dimen292
+\pgfarrowlength=\dimen293
+\pgfarrowwidth=\dimen294
+\pgfarrowlinewidth=\dimen295
+)
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/tikzlibrarypositioning.code.tex
+File: tikzlibrarypositioning.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibraryshapes.geometric.code.tex
+File: tikzlibraryshapes.geometric.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/shapes/pgflibraryshape
+s.geometric.code.tex
+File: pgflibraryshapes.geometric.code.tex 2021/05/15 v3.1.9a (3.1.9a)
+))
+(/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def
+File: l3backend-pdftex.def 2022-01-12 L3 backend support: PDF output (pdfTeX)
+\l__color_backend_stack_int=\count303
+\l__pdf_internal_box=\box65
+)
+(./om6dof_hand_guiding_ieee.aux)
+\openout1 = `om6dof_hand_guiding_ieee.aux'.
+
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+
+-- Lines per column: 56 (exact).
+(/usr/share/texlive/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+\scratchcounter=\count304
+\scratchdimen=\dimen296
+\scratchbox=\box66
+\nofMPsegments=\count305
+\nofMParguments=\count306
+\everyMPshowfont=\toks35
+\MPscratchCnt=\count307
+\MPscratchDim=\dimen297
+\MPnumerator=\count308
+\makeMPintoPDFobject=\count309
+\everyMPtoPDFconversion=\toks36
+) (/usr/share/texlive/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
+Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
+Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
+85.
+
+(/usr/share/texlive/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg
+File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
+e
+))
+LaTeX Font Info:    Trying to load font information for U+msa on input line 36.
+
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/umsa.fd
+File: umsa.fd 2013/01/14 v3.01 AMS symbols A
+)
+LaTeX Font Info:    Trying to load font information for U+msb on input line 36.
+
+
+(/home/kublab/.cache/tectonic/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b86
+9a90bad1204f3bf4d9683f597c7c/umsb.fd
+File: umsb.fd 2013/01/14 v3.01 AMS symbols B
+) [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}
+
+
+]
+Underfull \hbox (badness 1622) in paragraph at lines 113--117
+\OT1/ptm/m/n/10 safety-limited signed-current de-ploy-ment stages, to-
+ []
+
+
+Underfull \hbox (badness 7221) in paragraph at lines 159--159
+[]\OT1/ptm/m/n/8 Current di-rect teach-ing
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 160--160
+[]\OT1/ptm/m/n/8 Dynamic iden-ti-fi-ca-tion
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 161--161
+[]\OT1/ptm/m/n/8 Calibration toolchains
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 163--163
+[]\OT1/ptm/m/n/8 Complete frame-work for-mu-la-tion; pre-lim-i-nary
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 173--179
+\OT1/ptm/m/n/10 Direct-teaching com-mis-sion-ing uses contact-free, low-
+ []
+
+[2] [3]
+LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 3
+80.
+ (/usr/share/texlive/texmf-dist/tex/latex/psnfss/ot1pcr.fd
+File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
+)
+<figures/multisine_motion_measurements.pdf, id=30, 525.88419pt x 330.03253pt>
+File: figures/multisine_motion_measurements.pdf Graphic file (type pdf)
+<use figures/multisine_motion_measurements.pdf>
+Package pdftex.def Info: figures/multisine_motion_measurements.pdf  used on inp
+ut line 407.
+(pdftex.def)             Requested size: 516.0pt x 323.83253pt.
+<figures/multisine_heldout_current_fit.pdf, id=31, 525.88419pt x 171.03851pt>
+File: figures/multisine_heldout_current_fit.pdf Graphic file (type pdf)
+<use figures/multisine_heldout_current_fit.pdf>
+Package pdftex.def Info: figures/multisine_heldout_current_fit.pdf  used on inp
+ut line 457.
+(pdftex.def)             Requested size: 516.0pt x 167.82538pt.
+ [4] [5 <./figures/multisine_motion_measurements.pdf>]
+Underfull \hbox (badness 10000) in paragraph at lines 533--533
+[]\OT1/ptm/m/n/7 RQ1
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 533--534
+[]\OT1/ptm/m/n/7 interventions; com-ple-tion;
+ []
+
+
+Underfull \hbox (badness 5105) in paragraph at lines 534--534
+[]\OT1/ptm/m/n/7 manual, random-safe,
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 534--535
+[]\OT1/ptm/m/n/7 rank; $\OML/cmm/m/it/7 ^^[[]$\OT1/ptm/m/n/7 ; con-di-tion;
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 535--535
+[]\OT1/ptm/m/n/7 RQ3
+ []
+
+
+Underfull \hbox (badness 1629) in paragraph at lines 535--535
+[]\OT1/ptm/m/n/7 nominal and in-jected
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 535--536
+[]\OT1/ptm/m/n/7 clearance; peak cur-rent;
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 536--536
+[]\OT1/ptm/m/n/7 2/3/4/6-DOF and
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 537--537
+[]\OT1/ptm/m/n/7 RQ5
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 537--537
+[]\OT1/ptm/m/n/7 Mode 5, nom-i-nal
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 537--537
+\OT1/ptm/m/n/7 Mode 0, cal-i-brated
+ []
+
+
+Underfull \vbox (badness 10000) has occurred while \output is active []
+
+ [6 <./figures/multisine_heldout_current_fit.pdf>] (./om6dof_hand_guiding_ieee.
+bbl)
+
+** Conference Paper **
+Before submitting the final camera ready copy, remember to:
+
+ 1. Manually equalize the lengths of two columns on the last page
+ of your paper;
+
+ 2. Ensure that any PostScript and/or PDF output post-processing
+ uses only Type 1 fonts and that every step in the generation
+ process uses the appropriate paper size.
+
+[7] (./om6dof_hand_guiding_ieee.aux) ) 
+Here is how much of TeX's memory you used:
+ 15049 strings out of 480247
+ 316795 string characters out of 5896151
+ 603488 words of memory out of 5000000
+ 32751 multiletter control sequences out of 15000+600000
+ 509423 words of font info for 108 fonts, out of 8000000 for 9000
+ 14 hyphenation exceptions out of 8191
+ 84i,13n,89p,506b,758s stack positions out of 5000i,500n,10000p,200000b,80000s
+{/usr/share/texlive/texmf-dist/fonts/enc/
+dvips/base/8r.enc}</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm
+/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi1
+0.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb><
+/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/sh
+are/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/share/tex
+live/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/te
+xmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/share/texlive/texmf-dis
+t/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts
+/type1/public/amsfonts/cm/cmr5.pfb></usr/share/texlive/texmf-dist/fonts/type1/p
+ublic/amsfonts/cm/cmr6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/am
+sfonts/cm/cmr7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/c
+m/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10
+.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></
+usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></u
+sr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texl
+ive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/
+fonts/type1/urw/times/utmbi8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/ur
+w/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a
+.pfb>
+Output written on om6dof_hand_guiding_ieee.pdf (7 pages, 309302 bytes).
+PDF statistics:
+ 160 PDF objects out of 1000 (max. 8388607)
+ 99 compressed objects within 1 object stream
+ 0 named destinations out of 1000 (max. 500000)
+ 23 words of extra memory for PDF output out of 10000 (max. 10000000)
+

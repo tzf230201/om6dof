@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "catalog_id": "om6dof_atomic_query_integration_smoke_20260824",
+  "frame_id": "world",
+  "joint_names": ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"],
+  "model": {
+    "expanded_urdf_sha256": "485617d99a2483abd6327b03bb6d3a0a52f71be08adba6234343e1e4a1cd328a",
+    "srdf_sha256": "730e590951a205ec639ff20613ce3305e18290f0c9a599130d38ce7c86d3d424"
+  },
+  "generator": {
+    "algorithm": "fixed-anchor-integration-smoke-only",
+    "confirmatory": false
+  },
+  "scenes": [
+    {
+      "scene_id": "atomic_smoke_000",
+      "catalog_index": 0,
+      "stratum": {"difficulty": "integration", "obstacle_kind": "point"},
+      "start_joint_positions": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "target": {
+        "id": 900001,
+        "class_id": 1,
+        "confidence": 1.0,
+        "position": [0.1622375619994582, 0.0, 0.2540819536713998],
+        "source_joint_positions": [0.0, -0.6806, 1.3613, 0.0, 0.8901, 0.0]
+      },
+      "dynamic": {
+        "kind": "point",
+        "nodes": [
+          {
+            "id": 900002,
+            "class_id": -1,
+            "confidence": 1.0,
+            "position": [0.08711878099972911, 0.0, 0.3607909768356999]
+          }
+        ],
+        "edges": []
+      },
+      "oracle": {
+        "source": "legacy fixed-anchor smoke",
+        "clear_exact_valid_pre_query_interface": true,
+        "dynamic_exact_valid_pre_query_interface": true
+      }
+    }
+  ]
+}

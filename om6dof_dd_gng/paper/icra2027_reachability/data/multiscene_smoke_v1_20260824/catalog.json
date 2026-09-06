@@ -1,0 +1,781 @@
+{
+  "catalog_id": "om6dof_scene_catalog_smoke_v1_20260824",
+  "end_effector_link": "end_effector_link",
+  "frame_id": "world",
+  "generator": {
+    "algorithm": "sha256-counter-u53-v1",
+    "counters_examined": 4,
+    "joint_limit_margin_fraction": 0.05,
+    "joint_lower_bounds": [
+      -2.827433388230814,
+      -2.0420352248333655,
+      -1.8849555921538759,
+      -2.827433388230814,
+      -1.9792033717615696,
+      -2.827433388230814
+    ],
+    "joint_upper_bounds": [
+      2.827433388230814,
+      2.1048670779051615,
+      2.1362830044410597,
+      2.827433388230814,
+      2.1048670779051615,
+      2.827433388230814
+    ],
+    "master_key_hex": "600025f316f133ef34d1baf8bb9107b3aed500e069247baa4ebb5d6af45ad92f",
+    "max_detour_attempts": 24,
+    "max_source_counters": 500,
+    "minimum_target_obstacle_distance_m": 0.08,
+    "namespace": "om6dof-reachability-scene-v1",
+    "obstacle_clearance_m": 0.035,
+    "point_radius_m": 0.012,
+    "roadmap_independent": true,
+    "segment_half_length_m": 0.06,
+    "segment_radius_m": 0.006,
+    "target_exclusion_radius_m": 0.055,
+    "validation_step_rad": 0.05
+  },
+  "group_name": "arm",
+  "joint_names": [
+    "joint1",
+    "joint2",
+    "joint3",
+    "joint4",
+    "joint5",
+    "joint6"
+  ],
+  "model": {
+    "expanded_urdf_sha256": "485617d99a2483abd6327b03bb6d3a0a52f71be08adba6234343e1e4a1cd328a",
+    "reachability_parameters_sha256": "abf60d6f21bbb0e9b77558316dfb746dacf3af37814a349c60308f7dcfd22175",
+    "srdf_sha256": "730e590951a205ec639ff20613ce3305e18290f0c9a599130d38ce7c86d3d424"
+  },
+  "scenes": [
+    {
+      "catalog_index": 0,
+      "detour_attempt": 1,
+      "dynamic": {
+        "edges": [],
+        "kind": "point",
+        "nodes": [
+          {
+            "class_id": -1,
+            "confidence": 1.0,
+            "id": 1000001,
+            "position": [
+              -0.052118562158823364,
+              0.34102484565532726,
+              0.04078261097909876
+            ]
+          }
+        ]
+      },
+      "oracle": {
+        "clear_capsule_direct_valid": true,
+        "clear_exact_direct_valid": true,
+        "detour_joint_positions": [
+          -1.3437287550995478,
+          -0.23683342134328234,
+          -0.3715699449323788,
+          1.3344851980803853,
+          -1.5190793609264028,
+          1.9295319051770274
+        ],
+        "dynamic_capsule_detour_valid": true,
+        "dynamic_capsule_direct_blocked": true,
+        "dynamic_detour_state_valid": true,
+        "dynamic_exact_detour_valid": true,
+        "dynamic_exact_direct_blocked": true,
+        "dynamic_start_valid": true,
+        "dynamic_target_valid": true,
+        "hit_ee_pose": {
+          "orientation_xyzw": [
+            -0.8401920897448809,
+            -0.039692776135567695,
+            -0.11983903818264316,
+            0.5273901219972184
+          ],
+          "position": [
+            -0.052118562158823364,
+            0.34102484565532726,
+            0.04078261097909876
+          ]
+        },
+        "hit_fraction": 0.41145143272313156,
+        "joint_distance_normalized": 0.5551911846587806,
+        "target_obstacle_distance_m": 0.418797933663298
+      },
+      "scene_id": "scene_000",
+      "source_counter": 3,
+      "start_ee_pose": {
+        "orientation_xyzw": [
+          0.8924231861268331,
+          -0.43978322190664476,
+          -0.0077498705221623184,
+          -0.10055602468043598
+        ],
+        "position": [
+          -0.01138166423949121,
+          0.2015064227457518,
+          -0.1781007917416516
+        ]
+      },
+      "start_joint_positions": [
+        1.7752548523920488,
+        1.6044041162471503,
+        1.0279372763339176,
+        -0.3227321209990244,
+        0.35716105300378564,
+        -0.15639639286260154
+      ],
+      "stratum": {
+        "difficulty": "low",
+        "obstacle_kind": "point"
+      },
+      "target": {
+        "class_id": 1,
+        "confidence": 1.0,
+        "id": 1000000,
+        "position": [
+          0.03565730003435841,
+          0.13433292501929256,
+          0.39428728874260277
+        ],
+        "source_joint_positions": [
+          2.327447000153411,
+          0.4751231722522191,
+          0.047371602575595695,
+          -2.214765529834385,
+          1.0009625543894802,
+          -1.1074636880422513
+        ],
+        "source_pose": {
+          "orientation_xyzw": [
+            -0.3361740605609592,
+            0.16460752116142713,
+            -0.527019338996415,
+            0.7629822942289217
+          ],
+          "position": [
+            0.03565730003435841,
+            0.13433292501929256,
+            0.39428728874260277
+          ]
+        }
+      }
+    },
+    {
+      "catalog_index": 1,
+      "detour_attempt": 1,
+      "dynamic": {
+        "edges": [
+          {
+            "cost": 0.12,
+            "source_id": 1000011,
+            "target_id": 1000012
+          }
+        ],
+        "kind": "segment",
+        "nodes": [
+          {
+            "class_id": -1,
+            "confidence": 1.0,
+            "id": 1000011,
+            "position": [
+              -0.1012664558912936,
+              0.30660850445435395,
+              0.04078261097909876
+            ]
+          },
+          {
+            "class_id": -1,
+            "confidence": 1.0,
+            "id": 1000012,
+            "position": [
+              -0.002970668426353129,
+              0.37544118685630057,
+              0.04078261097909876
+            ]
+          }
+        ]
+      },
+      "oracle": {
+        "clear_capsule_direct_valid": true,
+        "clear_exact_direct_valid": true,
+        "detour_joint_positions": [
+          -1.3437287550995478,
+          -0.23683342134328234,
+          -0.3715699449323788,
+          1.3344851980803853,
+          -1.5190793609264028,
+          1.9295319051770274
+        ],
+        "dynamic_capsule_detour_valid": true,
+        "dynamic_capsule_direct_blocked": true,
+        "dynamic_detour_state_valid": true,
+        "dynamic_exact_detour_valid": true,
+        "dynamic_exact_direct_blocked": true,
+        "dynamic_start_valid": true,
+        "dynamic_target_valid": true,
+        "hit_ee_pose": {
+          "orientation_xyzw": [
+            -0.8401920897448809,
+            -0.039692776135567695,
+            -0.11983903818264316,
+            0.5273901219972184
+          ],
+          "position": [
+            -0.052118562158823364,
+            0.34102484565532726,
+            0.04078261097909876
+          ]
+        },
+        "hit_fraction": 0.41145143272313156,
+        "joint_distance_normalized": 0.5551911846587806,
+        "target_obstacle_distance_m": 0.4161905613073958
+      },
+      "scene_id": "scene_001",
+      "source_counter": 3,
+      "start_ee_pose": {
+        "orientation_xyzw": [
+          0.8924231861268331,
+          -0.43978322190664476,
+          -0.0077498705221623184,
+          -0.10055602468043598
+        ],
+        "position": [
+          -0.01138166423949121,
+          0.2015064227457518,
+          -0.1781007917416516
+        ]
+      },
+      "start_joint_positions": [
+        1.7752548523920488,
+        1.6044041162471503,
+        1.0279372763339176,
+        -0.3227321209990244,
+        0.35716105300378564,
+        -0.15639639286260154
+      ],
+      "stratum": {
+        "difficulty": "low",
+        "obstacle_kind": "segment"
+      },
+      "target": {
+        "class_id": 1,
+        "confidence": 1.0,
+        "id": 1000010,
+        "position": [
+          0.03565730003435841,
+          0.13433292501929256,
+          0.39428728874260277
+        ],
+        "source_joint_positions": [
+          2.327447000153411,
+          0.4751231722522191,
+          0.047371602575595695,
+          -2.214765529834385,
+          1.0009625543894802,
+          -1.1074636880422513
+        ],
+        "source_pose": {
+          "orientation_xyzw": [
+            -0.3361740605609592,
+            0.16460752116142713,
+            -0.527019338996415,
+            0.7629822942289217
+          ],
+          "position": [
+            0.03565730003435841,
+            0.13433292501929256,
+            0.39428728874260277
+          ]
+        }
+      }
+    },
+    {
+      "catalog_index": 2,
+      "detour_attempt": 0,
+      "dynamic": {
+        "edges": [],
+        "kind": "point",
+        "nodes": [
+          {
+            "class_id": -1,
+            "confidence": 1.0,
+            "id": 1000021,
+            "position": [
+              -0.11363855191739541,
+              -0.32878100818226097,
+              0.07263131673296912
+            ]
+          }
+        ]
+      },
+      "oracle": {
+        "clear_capsule_direct_valid": true,
+        "clear_exact_direct_valid": true,
+        "detour_joint_positions": [
+          2.043781115626331,
+          0.09148968344166719,
+          -1.4109574323645404,
+          -2.2620112298494184,
+          1.4036665206166112,
+          -0.025409844695973405
+        ],
+        "dynamic_capsule_detour_valid": true,
+        "dynamic_capsule_direct_blocked": true,
+        "dynamic_detour_state_valid": true,
+        "dynamic_exact_detour_valid": true,
+        "dynamic_exact_direct_blocked": true,
+        "dynamic_start_valid": true,
+        "dynamic_target_valid": true,
+        "hit_ee_pose": {
+          "orientation_xyzw": [
+            -0.4774360673568427,
+            0.7208169507138953,
+            -0.20864586854846942,
+            -0.4571046124116547
+          ],
+          "position": [
+            -0.11363855191739541,
+            -0.32878100818226097,
+            0.07263131673296912
+          ]
+        },
+        "hit_fraction": 0.5706967718132159,
+        "joint_distance_normalized": 0.5838057285747573,
+        "target_obstacle_distance_m": 0.20823346449578212
+      },
+      "scene_id": "scene_002",
+      "source_counter": 1,
+      "start_ee_pose": {
+        "orientation_xyzw": [
+          -0.25024141764943897,
+          -0.7095240835210032,
+          -0.039440169772093685,
+          0.6575707420535284
+        ],
+        "position": [
+          -0.18738117916439023,
+          -0.01811176591804932,
+          0.26258861789674776
+        ]
+      },
+      "start_joint_positions": [
+        1.0075096843396212,
+        -0.41001328024971984,
+        -0.04579821135638351,
+        -1.365396529458779,
+        -1.618045939770905,
+        0.7289194655407472
+      ],
+      "stratum": {
+        "difficulty": "medium",
+        "obstacle_kind": "point"
+      },
+      "target": {
+        "class_id": 1,
+        "confidence": 1.0,
+        "id": 1000020,
+        "position": [
+          0.03264309242939785,
+          -0.3532775500232304,
+          -0.07352878623958653
+        ],
+        "source_joint_positions": [
+          1.575649157855965,
+          -1.7801594446100768,
+          -0.1066332636582279,
+          0.39050643819192565,
+          -0.31099375994305833,
+          -0.11930073153858922
+        ],
+        "source_pose": {
+          "orientation_xyzw": [
+            -0.5639662273710696,
+            0.6814314777709164,
+            -0.39891998749789215,
+            -0.24177692003677664
+          ],
+          "position": [
+            0.03264309242939785,
+            -0.3532775500232304,
+            -0.07352878623958653
+          ]
+        }
+      }
+    },
+    {
+      "catalog_index": 3,
+      "detour_attempt": 0,
+      "dynamic": {
+        "edges": [
+          {
+            "cost": 0.12000000000000001,
+            "source_id": 1000031,
+            "target_id": 1000032
+          }
+        ],
+        "kind": "segment",
+        "nodes": [
+          {
+            "class_id": -1,
+            "confidence": 1.0,
+            "id": 1000031,
+            "position": [
+              -0.16379650235848595,
+              -0.3617078970050621,
+              0.07263131673296912
+            ]
+          },
+          {
+            "class_id": -1,
+            "confidence": 1.0,
+            "id": 1000032,
+            "position": [
+              -0.06348060147630488,
+              -0.2958541193594598,
+              0.07263131673296912
+            ]
+          }
+        ]
+      },
+      "oracle": {
+        "clear_capsule_direct_valid": true,
+        "clear_exact_direct_valid": true,
+        "detour_joint_positions": [
+          2.043781115626331,
+          0.09148968344166719,
+          -1.4109574323645404,
+          -2.2620112298494184,
+          1.4036665206166112,
+          -0.025409844695973405
+        ],
+        "dynamic_capsule_detour_valid": true,
+        "dynamic_capsule_direct_blocked": true,
+        "dynamic_detour_state_valid": true,
+        "dynamic_exact_detour_valid": true,
+        "dynamic_exact_direct_blocked": true,
+        "dynamic_start_valid": true,
+        "dynamic_target_valid": true,
+        "hit_ee_pose": {
+          "orientation_xyzw": [
+            -0.4774360673568427,
+            0.7208169507138953,
+            -0.20864586854846942,
+            -0.4571046124116547
+          ],
+          "position": [
+            -0.11363855191739541,
+            -0.32878100818226097,
+            0.07263131673296912
+          ]
+        },
+        "hit_fraction": 0.5706967718132159,
+        "joint_distance_normalized": 0.5838057285747573,
+        "target_obstacle_distance_m": 0.18411950092323784
+      },
+      "scene_id": "scene_003",
+      "source_counter": 1,
+      "start_ee_pose": {
+        "orientation_xyzw": [
+          -0.25024141764943897,
+          -0.7095240835210032,
+          -0.039440169772093685,
+          0.6575707420535284
+        ],
+        "position": [
+          -0.18738117916439023,
+          -0.01811176591804932,
+          0.26258861789674776
+        ]
+      },
+      "start_joint_positions": [
+        1.0075096843396212,
+        -0.41001328024971984,
+        -0.04579821135638351,
+        -1.365396529458779,
+        -1.618045939770905,
+        0.7289194655407472
+      ],
+      "stratum": {
+        "difficulty": "medium",
+        "obstacle_kind": "segment"
+      },
+      "target": {
+        "class_id": 1,
+        "confidence": 1.0,
+        "id": 1000030,
+        "position": [
+          0.03264309242939785,
+          -0.3532775500232304,
+          -0.07352878623958653
+        ],
+        "source_joint_positions": [
+          1.575649157855965,
+          -1.7801594446100768,
+          -0.1066332636582279,
+          0.39050643819192565,
+          -0.31099375994305833,
+          -0.11930073153858922
+        ],
+        "source_pose": {
+          "orientation_xyzw": [
+            -0.5639662273710696,
+            0.6814314777709164,
+            -0.39891998749789215,
+            -0.24177692003677664
+          ],
+          "position": [
+            0.03264309242939785,
+            -0.3532775500232304,
+            -0.07352878623958653
+          ]
+        }
+      }
+    },
+    {
+      "catalog_index": 4,
+      "detour_attempt": 0,
+      "dynamic": {
+        "edges": [],
+        "kind": "point",
+        "nodes": [
+          {
+            "class_id": -1,
+            "confidence": 1.0,
+            "id": 1000041,
+            "position": [
+              0.00865878139062866,
+              0.12174161970720657,
+              0.43309183764777226
+            ]
+          }
+        ]
+      },
+      "oracle": {
+        "clear_capsule_direct_valid": true,
+        "clear_exact_direct_valid": true,
+        "detour_joint_positions": [
+          1.619274115090172,
+          0.15759455832956393,
+          1.3904897210184535,
+          -0.4010455008323266,
+          1.0756365423735914,
+          0.6777815622779899
+        ],
+        "dynamic_capsule_detour_valid": true,
+        "dynamic_capsule_direct_blocked": true,
+        "dynamic_detour_state_valid": true,
+        "dynamic_exact_detour_valid": true,
+        "dynamic_exact_direct_blocked": true,
+        "dynamic_start_valid": true,
+        "dynamic_target_valid": true,
+        "hit_ee_pose": {
+          "orientation_xyzw": [
+            -0.2336621562228966,
+            0.05567702652249175,
+            0.1974425524128729,
+            0.9504306939296365
+          ],
+          "position": [
+            0.00865878139062866,
+            0.12174161970720657,
+            0.43309183764777226
+          ]
+        },
+        "hit_fraction": 0.5110910273261466,
+        "joint_distance_normalized": 1.1605634002487986,
+        "target_obstacle_distance_m": 0.26299485971210373
+      },
+      "scene_id": "scene_004",
+      "source_counter": 0,
+      "start_ee_pose": {
+        "orientation_xyzw": [
+          0.36191850191843034,
+          0.4831134724515178,
+          -0.12138299808962622,
+          0.787961000608361
+        ],
+        "position": [
+          0.2357441117366787,
+          0.07376399928547131,
+          0.18249939511936136
+        ]
+      },
+      "start_joint_positions": [
+        -2.1230190502539448,
+        -1.4147414260453588,
+        0.26437216882660053,
+        1.2194913724220147,
+        1.672180996987046,
+        1.5886364397727109
+      ],
+      "stratum": {
+        "difficulty": "high",
+        "obstacle_kind": "point"
+      },
+      "target": {
+        "class_id": 1,
+        "confidence": 1.0,
+        "id": 1000040,
+        "position": [
+          -0.04611698697205266,
+          -0.024969701214781266,
+          0.2218060128781193
+        ],
+        "source_joint_positions": [
+          -0.8077631532677074,
+          1.4835615271554126,
+          -1.4581959606298902,
+          0.3785138032566211,
+          -1.4084514626399218,
+          0.613324509477494
+        ],
+        "source_pose": {
+          "orientation_xyzw": [
+            -0.3148289036476709,
+            -0.5553949916450314,
+            0.06771816030687519,
+            0.7667029512453135
+          ],
+          "position": [
+            -0.04611698697205266,
+            -0.024969701214781266,
+            0.2218060128781193
+          ]
+        }
+      }
+    },
+    {
+      "catalog_index": 5,
+      "detour_attempt": 0,
+      "dynamic": {
+        "edges": [
+          {
+            "cost": 0.11999999999999998,
+            "source_id": 1000051,
+            "target_id": 1000052
+          }
+        ],
+        "kind": "segment",
+        "nodes": [
+          {
+            "class_id": -1,
+            "confidence": 1.0,
+            "id": 1000051,
+            "position": [
+              -0.011176976077767615,
+              0.17836796274342037,
+              0.43309183764777226
+            ]
+          },
+          {
+            "class_id": -1,
+            "confidence": 1.0,
+            "id": 1000052,
+            "position": [
+              0.028494538859024934,
+              0.06511527667099276,
+              0.43309183764777226
+            ]
+          }
+        ]
+      },
+      "oracle": {
+        "clear_capsule_direct_valid": true,
+        "clear_exact_direct_valid": true,
+        "detour_joint_positions": [
+          1.619274115090172,
+          0.15759455832956393,
+          1.3904897210184535,
+          -0.4010455008323266,
+          1.0756365423735914,
+          0.6777815622779899
+        ],
+        "dynamic_capsule_detour_valid": true,
+        "dynamic_capsule_direct_blocked": true,
+        "dynamic_detour_state_valid": true,
+        "dynamic_exact_detour_valid": true,
+        "dynamic_exact_direct_blocked": true,
+        "dynamic_start_valid": true,
+        "dynamic_target_valid": true,
+        "hit_ee_pose": {
+          "orientation_xyzw": [
+            -0.2336621562228966,
+            0.05567702652249175,
+            0.1974425524128729,
+            0.9504306939296365
+          ],
+          "position": [
+            0.00865878139062866,
+            0.12174161970720657,
+            0.43309183764777226
+          ]
+        },
+        "hit_fraction": 0.5110910273261466,
+        "joint_distance_normalized": 1.1605634002487986,
+        "target_obstacle_distance_m": 0.2415033804651903
+      },
+      "scene_id": "scene_005",
+      "source_counter": 0,
+      "start_ee_pose": {
+        "orientation_xyzw": [
+          0.36191850191843034,
+          0.4831134724515178,
+          -0.12138299808962622,
+          0.787961000608361
+        ],
+        "position": [
+          0.2357441117366787,
+          0.07376399928547131,
+          0.18249939511936136
+        ]
+      },
+      "start_joint_positions": [
+        -2.1230190502539448,
+        -1.4147414260453588,
+        0.26437216882660053,
+        1.2194913724220147,
+        1.672180996987046,
+        1.5886364397727109
+      ],
+      "stratum": {
+        "difficulty": "high",
+        "obstacle_kind": "segment"
+      },
+      "target": {
+        "class_id": 1,
+        "confidence": 1.0,
+        "id": 1000050,
+        "position": [
+          -0.04611698697205266,
+          -0.024969701214781266,
+          0.2218060128781193
+        ],
+        "source_joint_positions": [
+          -0.8077631532677074,
+          1.4835615271554126,
+          -1.4581959606298902,
+          0.3785138032566211,
+          -1.4084514626399218,
+          0.613324509477494
+        ],
+        "source_pose": {
+          "orientation_xyzw": [
+            -0.3148289036476709,
+            -0.5553949916450314,
+            0.06771816030687519,
+            0.7667029512453135
+          ],
+          "position": [
+            -0.04611698697205266,
+            -0.024969701214781266,
+            0.2218060128781193
+          ]
+        }
+      }
+    }
+  ],
+  "schema_version": 1
+}

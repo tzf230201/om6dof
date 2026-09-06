@@ -1,0 +1,2839 @@
+{
+  "audit": {
+    "counts": {
+      "base_trajectories": 30,
+      "graphs": 180,
+      "methods": 3,
+      "queries": 21600,
+      "scenes": 60,
+      "streams": 60
+    },
+    "difficulty_strata_present": true,
+    "fail_fast": true,
+    "invariants": [
+      "complete stream-method graph Cartesian product",
+      "complete stream-method-scene-phase query Cartesian product",
+      "unique correlated query IDs and graph revisions",
+      "no timeout or infrastructure-error row",
+      "valid equals exact_valid",
+      "start/target echoes and successful path-cost decomposition",
+      "preview-only, localhost-only, and no controller publications",
+      "phase order follows balanced stream+catalog parity",
+      "exact point/segment pairing per base trajectory and source counter"
+    ],
+    "method_order": {
+      "all_permutations_present": true,
+      "count_range": [
+        10,
+        10
+      ],
+      "permutation_counts": [
+        {
+          "count": 10,
+          "order": [
+            "gng",
+            "guarded_gng",
+            "halton_prm"
+          ]
+        },
+        {
+          "count": 10,
+          "order": [
+            "gng",
+            "halton_prm",
+            "guarded_gng"
+          ]
+        },
+        {
+          "count": 10,
+          "order": [
+            "guarded_gng",
+            "gng",
+            "halton_prm"
+          ]
+        },
+        {
+          "count": 10,
+          "order": [
+            "guarded_gng",
+            "halton_prm",
+            "gng"
+          ]
+        },
+        {
+          "count": 10,
+          "order": [
+            "halton_prm",
+            "gng",
+            "guarded_gng"
+          ]
+        },
+        {
+          "count": 10,
+          "order": [
+            "halton_prm",
+            "guarded_gng",
+            "gng"
+          ]
+        }
+      ]
+    },
+    "passed": true,
+    "phase_order": {
+      "balanced": true,
+      "first_position_counts": {
+        "clear": 1800,
+        "dynamic": 1800
+      },
+      "present": true,
+      "scheme": "clear_position=(stream_ordinal+catalog_index)%2;dynamic=complement"
+    },
+    "phase_order_position_present": true,
+    "raw_inputs_unchanged": true,
+    "run_manifest_schema": "om6dof-reachability-multiscene-run-v2",
+    "scene_order": {
+      "expected_catalog_rotation": true,
+      "formula": "position=(catalog_index-stream_ordinal)%scene_count",
+      "identical_across_methods": true
+    },
+    "trajectory_pairing": {
+      "base_trajectory_count": 30,
+      "exact_point_segment_pairs": true,
+      "present": true
+    },
+    "v2_frozen_inputs_verified": true,
+    "v2_provenance_verified": true,
+    "v2_run_config_verified": true,
+    "v2_runtime_telemetry": {
+      "complete": true,
+      "graph_fields_present": true,
+      "query_fields_present": true
+    }
+  },
+  "generated_utc": "2026-08-25T11:29:32.908771+00:00",
+  "inputs": {
+    "graphs": {
+      "path": "/home/kublab/ros2_ws/reachability_icra_confirmatory_v4/graphs.csv",
+      "sha256": "fc0397c79623fb04fdfcfbc498db3d57769d3a76c3f40b6839dd34c66e287d63"
+    },
+    "manifest": {
+      "path": "/home/kublab/ros2_ws/reachability_icra_confirmatory_v4/manifest.json",
+      "sha256": "f03e0f494d236f2cfb9f06a8bf7772b311bece51b517ce5701514ae1b1f7b30a"
+    },
+    "queries": {
+      "path": "/home/kublab/ros2_ws/reachability_icra_confirmatory_v4/queries.csv",
+      "sha256": "c23fc7cb2cf97781aaa0d451c2845fa652dd21d6748243aa54166756dc7f6069"
+    },
+    "run_config": {
+      "path": "/home/kublab/ros2_ws/reachability_icra_confirmatory_v4/run_config.json",
+      "sha256": "2405f07a6256aebfd33cd0c6fc99c385a6f41ce61a19f70646e7855da028c3cb"
+    }
+  },
+  "methods": {
+    "gng": {
+      "build_time_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 1724.61316684,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 1750.9808036933339,
+          "valid_replicates": 50000
+        },
+        "definition": "Roadmap build time",
+        "distribution": {
+          "max": 1911.985568,
+          "mean": 1736.9112597333333,
+          "median": 1721.4705920000001,
+          "min": 1663.173184,
+          "n": 60,
+          "q1": 1708.056312,
+          "q3": 1743.5308400000001,
+          "sd": 52.469875905520546
+        },
+        "eligible_or_count": 60,
+        "estimate": 1736.9112597333333,
+        "numerator_or_sum": 104214.675584,
+        "unit": "ms"
+      },
+      "clear_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.7377777777777778,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.7611111111111111,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.7494444444444445,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 3600,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.43339317488502727
+        },
+        "eligible_or_count": 3600,
+        "estimate": 0.7494444444444445,
+        "numerator_or_sum": 2698.0,
+        "unit": "proportion"
+      },
+      "conditional_retention": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.9783420463032113,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.9892988929889299,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic success conditional on clear success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.9840622683469237,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 2698,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.12525787643711542
+        },
+        "eligible_or_count": 2698,
+        "estimate": 0.9840622683469237,
+        "numerator_or_sum": 2655.0,
+        "unit": "proportion"
+      },
+      "dynamic_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.7258333333333333,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.7497222222222222,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.7377777777777778,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 3600,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.43990394712460873
+        },
+        "eligible_or_count": 3600,
+        "estimate": 0.7377777777777778,
+        "numerator_or_sum": 2656.0,
+        "unit": "proportion"
+      },
+      "path_change_joint_success": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.3515242754986827,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.3958492520342536,
+          "valid_replicates": 50000
+        },
+        "definition": "Path changed among clear+dynamic joint successes",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.3736346516007533,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2655,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.483859462558271
+        },
+        "eligible_or_count": 2655,
+        "estimate": 0.3736346516007533,
+        "numerator_or_sum": 992.0,
+        "unit": "proportion"
+      },
+      "path_cost_clear": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 11.399688979760215,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 11.656483715658089,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear total joint-path cost (successes only)",
+        "distribution": {
+          "max": 26.147618011925555,
+          "mean": 11.529211651673704,
+          "median": 11.558300513790053,
+          "min": 1.5373529304648674,
+          "n": 2698,
+          "q1": 9.219291126071104,
+          "q3": 13.951250163825376,
+          "sd": 3.369180929125195
+        },
+        "eligible_or_count": 2698,
+        "estimate": 11.529211651673705,
+        "numerator_or_sum": 31105.813036215655,
+        "unit": "joint-space cost"
+      },
+      "path_cost_dynamic": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 12.030649507282918,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 12.290021202152559,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic total joint-path cost (successes only)",
+        "distribution": {
+          "max": 26.207127447120325,
+          "mean": 12.158925200702225,
+          "median": 12.227399079379346,
+          "min": 1.5373529304648674,
+          "n": 2656,
+          "q1": 9.741645142146638,
+          "q3": 14.567779532868032,
+          "sd": 3.400533397278202
+        },
+        "eligible_or_count": 2656,
+        "estimate": 12.158925200702223,
+        "numerator_or_sum": 32294.105333065105,
+        "unit": "joint-space cost"
+      },
+      "planning_time_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 5.085933398246786,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 5.200014312083573,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear internal planning time (exact-success only)",
+        "distribution": {
+          "max": 13.647776,
+          "mean": 5.14282533432172,
+          "median": 5.074176,
+          "min": 1.539744,
+          "n": 2698,
+          "q1": 4.243016,
+          "q3": 5.962008000000001,
+          "sd": 1.294986184119699
+        },
+        "eligible_or_count": 2698,
+        "estimate": 5.142825334321722,
+        "numerator_or_sum": 13875.342752000004,
+        "unit": "ms"
+      },
+      "planning_time_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 13.964690197161866,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 14.191124558929076,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic internal planning time (exact-success only)",
+        "distribution": {
+          "max": 62.835424,
+          "mean": 14.079650433734939,
+          "median": 11.738576,
+          "min": 4.115072,
+          "n": 2656,
+          "q1": 8.504024000000001,
+          "q3": 18.820168,
+          "sd": 6.786206039242603
+        },
+        "eligible_or_count": 2656,
+        "estimate": 14.079650433734942,
+        "numerator_or_sum": 37395.551552000004,
+        "unit": "ms"
+      },
+      "query_latency_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 6.584172202375864,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 6.834543819849488,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 43.457280000438914,
+          "mean": 6.709282879738668,
+          "median": 6.76339199708309,
+          "min": 1.060959999449551,
+          "n": 3600,
+          "q1": 4.48823998158332,
+          "q3": 8.241511997766793,
+          "sd": 3.552211151790384
+        },
+        "eligible_or_count": 3600,
+        "estimate": 6.709282879738668,
+        "numerator_or_sum": 24153.418367059203,
+        "unit": "ms"
+      },
+      "query_latency_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 15.905735355404735,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 16.227955655122866,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 65.36419200710952,
+          "mean": 16.067835413074743,
+          "median": 14.165343993226998,
+          "min": 1.865055994130671,
+          "n": 3600,
+          "q1": 9.994831998483278,
+          "q3": 21.20551999541931,
+          "sd": 7.8270478341047625
+        },
+        "eligible_or_count": 3600,
+        "estimate": 16.067835413074743,
+        "numerator_or_sum": 57844.20748706907,
+        "unit": "ms"
+      }
+    },
+    "guarded_gng": {
+      "build_time_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 1590.4039711466667,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 1609.8958562933333,
+          "valid_replicates": 50000
+        },
+        "definition": "Roadmap build time",
+        "distribution": {
+          "max": 1744.095168,
+          "mean": 1599.7489450666665,
+          "median": 1594.114896,
+          "min": 1538.008032,
+          "n": 60,
+          "q1": 1576.629688,
+          "q3": 1618.277904,
+          "sd": 38.673912192825966
+        },
+        "eligible_or_count": 60,
+        "estimate": 1599.7489450666667,
+        "numerator_or_sum": 95984.936704,
+        "unit": "ms"
+      },
+      "clear_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.7633333333333333,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.7988888888888889,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.7811111111111111,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 3600,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.4135505409141689
+        },
+        "eligible_or_count": 3600,
+        "estimate": 0.7811111111111111,
+        "numerator_or_sum": 2812.0,
+        "unit": "proportion"
+      },
+      "conditional_retention": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.9863349684653119,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.9953405017921146,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic success conditional on clear success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.9911095305832148,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 2812,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.09388590732722796
+        },
+        "eligible_or_count": 2812,
+        "estimate": 0.9911095305832148,
+        "numerator_or_sum": 2787.0,
+        "unit": "proportion"
+      },
+      "dynamic_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.7569444444444444,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.7916666666666666,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.7744444444444445,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 3600,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.4180057208777755
+        },
+        "eligible_or_count": 3600,
+        "estimate": 0.7744444444444445,
+        "numerator_or_sum": 2788.0,
+        "unit": "proportion"
+      },
+      "path_change_joint_success": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.30510314875135724,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.34920099357718326,
+          "valid_replicates": 50000
+        },
+        "definition": "Path changed among clear+dynamic joint successes",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.32687477574452817,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2787,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.46915523327934955
+        },
+        "eligible_or_count": 2787,
+        "estimate": 0.32687477574452817,
+        "numerator_or_sum": 911.0,
+        "unit": "proportion"
+      },
+      "path_cost_clear": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 14.246800187520138,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 14.607800051613095,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear total joint-path cost (successes only)",
+        "distribution": {
+          "max": 30.553948585696116,
+          "mean": 14.425589125113609,
+          "median": 14.31910968982931,
+          "min": 1.0393172728962095,
+          "n": 2812,
+          "q1": 10.972566274269225,
+          "q3": 17.541655384152566,
+          "sd": 4.693459310837974
+        },
+        "eligible_or_count": 2812,
+        "estimate": 14.425589125113607,
+        "numerator_or_sum": 40564.75661981946,
+        "unit": "joint-space cost"
+      },
+      "path_cost_dynamic": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 14.850237598228354,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 15.235949639088178,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic total joint-path cost (successes only)",
+        "distribution": {
+          "max": 32.573803749394735,
+          "mean": 15.040354599474497,
+          "median": 14.834717378222344,
+          "min": 1.0393172728962095,
+          "n": 2788,
+          "q1": 11.691752629265473,
+          "q3": 18.10339676941011,
+          "sd": 4.764644338430033
+        },
+        "eligible_or_count": 2788,
+        "estimate": 15.040354599474501,
+        "numerator_or_sum": 41932.50862333491,
+        "unit": "joint-space cost"
+      },
+      "planning_time_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 5.956652444684583,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 6.1158352608631645,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear internal planning time (exact-success only)",
+        "distribution": {
+          "max": 18.262656,
+          "mean": 6.036147926031295,
+          "median": 5.848256,
+          "min": 1.157216,
+          "n": 2812,
+          "q1": 4.609824000000001,
+          "q3": 7.1462,
+          "sd": 2.018621857915175
+        },
+        "eligible_or_count": 2812,
+        "estimate": 6.036147926031293,
+        "numerator_or_sum": 16973.647967999997,
+        "unit": "ms"
+      },
+      "planning_time_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 14.626657735596423,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 14.875653423126005,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic internal planning time (exact-success only)",
+        "distribution": {
+          "max": 56.229632,
+          "mean": 14.752362410329985,
+          "median": 12.572096,
+          "min": 3.392384,
+          "n": 2788,
+          "q1": 9.21964,
+          "q3": 19.791448000000003,
+          "sd": 6.747310676846784
+        },
+        "eligible_or_count": 2788,
+        "estimate": 14.752362410329985,
+        "numerator_or_sum": 41129.5864,
+        "unit": "ms"
+      },
+      "query_latency_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 7.231203115971463,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 7.510899838180194,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 32.61001600185409,
+          "mean": 7.369784595317065,
+          "median": 7.39407999208197,
+          "min": 1.0528639832045883,
+          "n": 3600,
+          "q1": 4.890335985692218,
+          "q3": 9.30644801701419,
+          "sd": 3.4583445887665465
+        },
+        "eligible_or_count": 3600,
+        "estimate": 7.369784595317065,
+        "numerator_or_sum": 26531.224543141434,
+        "unit": "ms"
+      },
+      "query_latency_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 15.938614639998278,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 16.277098362652197,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 58.36291200830601,
+          "mean": 16.108024062503116,
+          "median": 14.389183997991495,
+          "min": 2.193664025980979,
+          "n": 3600,
+          "q1": 10.575112006335985,
+          "q3": 21.280336019117385,
+          "sd": 7.473104305292369
+        },
+        "eligible_or_count": 3600,
+        "estimate": 16.108024062503116,
+        "numerator_or_sum": 57988.88662501122,
+        "unit": "ms"
+      }
+    },
+    "halton_prm": {
+      "build_time_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 1391.2451990266673,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 1408.9955392,
+          "valid_replicates": 50000
+        },
+        "definition": "Roadmap build time",
+        "distribution": {
+          "max": 1517.766688,
+          "mean": 1399.6935269333333,
+          "median": 1393.798384,
+          "min": 1342.689696,
+          "n": 60,
+          "q1": 1377.715256,
+          "q3": 1411.229296,
+          "sd": 35.373030561072426
+        },
+        "eligible_or_count": 60,
+        "estimate": 1399.693526933334,
+        "numerator_or_sum": 83981.61161600004,
+        "unit": "ms"
+      },
+      "clear_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.7927777777777778,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.8255555555555556,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.8088888888888889,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 3600,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.39323098462284334
+        },
+        "eligible_or_count": 3600,
+        "estimate": 0.8088888888888889,
+        "numerator_or_sum": 2912.0,
+        "unit": "proportion"
+      },
+      "conditional_retention": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.9918200408997955,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.9975456250472996,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic success conditional on clear success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.9948489010989011,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 2912,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.07159836237781556
+        },
+        "eligible_or_count": 2912,
+        "estimate": 0.9948489010989011,
+        "numerator_or_sum": 2897.0,
+        "unit": "proportion"
+      },
+      "dynamic_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.7886111111111112,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.8213888888888888,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.805,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 3600,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.3962557460558782
+        },
+        "eligible_or_count": 3600,
+        "estimate": 0.805,
+        "numerator_or_sum": 2898.0,
+        "unit": "proportion"
+      },
+      "path_change_joint_success": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.2523032826438221,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.2899348325031685,
+          "valid_replicates": 50000
+        },
+        "definition": "Path changed among clear+dynamic joint successes",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.2709699689333794,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 2897,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.4445373527687672
+        },
+        "eligible_or_count": 2897,
+        "estimate": 0.2709699689333794,
+        "numerator_or_sum": 785.0,
+        "unit": "proportion"
+      },
+      "path_cost_clear": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 15.107576002821704,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 15.540736759557737,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear total joint-path cost (successes only)",
+        "distribution": {
+          "max": 32.66942709717215,
+          "mean": 15.32365873035341,
+          "median": 15.284360684041392,
+          "min": 0.973108320155596,
+          "n": 2912,
+          "q1": 11.385576843172428,
+          "q3": 18.878502955544015,
+          "sd": 5.174381557259818
+        },
+        "eligible_or_count": 2912,
+        "estimate": 15.323658730353415,
+        "numerator_or_sum": 44622.494222789144,
+        "unit": "joint-space cost"
+      },
+      "path_cost_dynamic": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 15.670705100056562,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 16.091353616880422,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic total joint-path cost (successes only)",
+        "distribution": {
+          "max": 35.85676044467403,
+          "mean": 15.879349127353715,
+          "median": 15.664957751624797,
+          "min": 0.973108320155596,
+          "n": 2898,
+          "q1": 12.04198305191413,
+          "q3": 19.340431534511417,
+          "sd": 5.212082290777549
+        },
+        "eligible_or_count": 2898,
+        "estimate": 15.879349127353713,
+        "numerator_or_sum": 46018.35377107106,
+        "unit": "joint-space cost"
+      },
+      "planning_time_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 6.4573357509453455,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 6.701454622937123,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear internal planning time (exact-success only)",
+        "distribution": {
+          "max": 23.502944,
+          "mean": 6.577950307692308,
+          "median": 6.223696,
+          "min": 1.091488,
+          "n": 2912,
+          "q1": 4.773272,
+          "q3": 7.928288,
+          "sd": 2.5047878466540916
+        },
+        "eligible_or_count": 2912,
+        "estimate": 6.577950307692309,
+        "numerator_or_sum": 19154.991296000004,
+        "unit": "ms"
+      },
+      "planning_time_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 14.42750482684483,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 14.77330958519957,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic internal planning time (exact-success only)",
+        "distribution": {
+          "max": 42.612864,
+          "mean": 14.600769358178054,
+          "median": 12.92976,
+          "min": 2.712544,
+          "n": 2898,
+          "q1": 9.317512,
+          "q3": 19.153232000000003,
+          "sd": 6.4255012120479735
+        },
+        "eligible_or_count": 2898,
+        "estimate": 14.600769358178049,
+        "numerator_or_sum": 42313.02959999999,
+        "unit": "ms"
+      },
+      "query_latency_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 7.813886893930733,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 8.158879220461637,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 33.170336013427004,
+          "mean": 7.985990453461353,
+          "median": 7.830703994841315,
+          "min": 1.0388480150140822,
+          "n": 3600,
+          "q1": 5.4512000060640275,
+          "q3": 10.147264008992352,
+          "sd": 3.7737332455701718
+        },
+        "eligible_or_count": 3600,
+        "estimate": 7.985990453461353,
+        "numerator_or_sum": 28749.56563246087,
+        "unit": "ms"
+      },
+      "query_latency_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 15.90537705696099,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 16.29597407838709,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 46.13766400143504,
+          "mean": 16.100812577909284,
+          "median": 14.80889601225499,
+          "min": 1.9562240049708635,
+          "n": 3600,
+          "q1": 10.745687992312014,
+          "q3": 21.108968008775264,
+          "sd": 7.138209339819594
+        },
+        "eligible_or_count": 3600,
+        "estimate": 16.100812577909284,
+        "numerator_or_sum": 57962.92528047343,
+        "unit": "ms"
+      }
+    }
+  },
+  "metric_definitions": {
+    "build_time_ms": {
+      "family": "continuous",
+      "label": "Roadmap build time",
+      "unit": "ms"
+    },
+    "clear_success": {
+      "family": "rate",
+      "label": "Clear exact-valid success",
+      "unit": "proportion"
+    },
+    "conditional_retention": {
+      "family": "rate",
+      "label": "Dynamic success conditional on clear success",
+      "unit": "proportion"
+    },
+    "dynamic_success": {
+      "family": "rate",
+      "label": "Dynamic exact-valid success",
+      "unit": "proportion"
+    },
+    "path_change_joint_success": {
+      "family": "rate",
+      "label": "Path changed among clear+dynamic joint successes",
+      "unit": "proportion"
+    },
+    "path_cost_clear": {
+      "family": "continuous",
+      "label": "Clear total joint-path cost (successes only)",
+      "unit": "joint-space cost"
+    },
+    "path_cost_dynamic": {
+      "family": "continuous",
+      "label": "Dynamic total joint-path cost (successes only)",
+      "unit": "joint-space cost"
+    },
+    "planning_time_clear_ms": {
+      "family": "continuous",
+      "label": "Clear internal planning time (exact-success only)",
+      "unit": "ms"
+    },
+    "planning_time_dynamic_ms": {
+      "family": "continuous",
+      "label": "Dynamic internal planning time (exact-success only)",
+      "unit": "ms"
+    },
+    "query_latency_clear_ms": {
+      "family": "continuous",
+      "label": "Clear publish-to-plan latency (all outcomes)",
+      "unit": "ms"
+    },
+    "query_latency_dynamic_ms": {
+      "family": "continuous",
+      "label": "Dynamic publish-to-plan latency (all outcomes)",
+      "unit": "ms"
+    }
+  },
+  "pairwise_comparisons": [
+    {
+      "binary_pair_description": {
+        "both_success": 2258,
+        "discordant_odds_ratio": 1.259090909090909,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 554,
+        "matched_pairs": 3600,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 348,
+        "right_only_success": 440
+      },
+      "definition": "Clear exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.7811111111111111,
+      "left_method": "guarded_gng",
+      "metric": "clear_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.010555555555555556,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.05277777777777778,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.03166666666666667,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.001195120320007348,
+        "negative": 14,
+        "paired_standardized_mean_difference_dz": 0.3749004531107454,
+        "paired_streams": 60,
+        "positive": 38,
+        "sign_dominance": 0.46153846153846156,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 8,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.7494444444444445,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 2208,
+        "discordant_odds_ratio": 1.2946428571428572,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 580,
+        "matched_pairs": 3600,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 364,
+        "right_only_success": 448
+      },
+      "definition": "Dynamic exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": "mean_over_roadmap_streams_of_within_stream_dynamic_exact_valid_risk_difference_over_the_frozen_scene_catalog",
+      "hypothesis_role": "primary_confirmatory",
+      "inferential_use": true,
+      "left_estimate": 0.7744444444444445,
+      "left_method": "guarded_gng",
+      "metric": "dynamic_success",
+      "paired_cluster_bootstrap_ci": {
+        "catalog_treatment": "fixed_scene_catalog_not_resampled",
+        "level": 0.95,
+        "lower": 0.015548611111111402,
+        "requested_replicates": 50000,
+        "resampling_seed": 8617206132795804324,
+        "resampling_unit": "paired_whole_roadmap_stream",
+        "upper": 0.0575,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.03666666666666667,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.0005354355028570623,
+        "negative": 14,
+        "paired_standardized_mean_difference_dz": 0.4381326332927161,
+        "paired_streams": 60,
+        "positive": 40,
+        "sign_dominance": 0.48148148148148145,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 6,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": {
+        "degenerate_case": null,
+        "exchangeability_assumption": "method_labels_exchangeable_within_stream",
+        "extreme_permutations": 159,
+        "holm_adjusted_p_primary_family": 0.0031999680003199967,
+        "holm_family": [
+          "guarded_gng_minus_gng_dynamic_exact_valid_risk_difference",
+          "guarded_gng_minus_halton_prm_dynamic_exact_valid_risk_difference"
+        ],
+        "holm_family_size": 2,
+        "observed_statistic": 3.393760784345382,
+        "observed_statistic_is_infinite": false,
+        "plus_one_correction": true,
+        "requested_permutations": 100000,
+        "statistic": "studentized_mean_stream_risk_difference",
+        "test": "monte_carlo_paired_label_swap",
+        "two_sided_p": 0.0015999840001599984,
+        "valid_permutations": 100000
+      },
+      "right_estimate": 0.7377777777777778,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": {
+        "analysis_role": "scene_generalization_sensitivity_not_primary",
+        "base_trajectory_pairing_available": true,
+        "difficulty_base_counts": {
+          "high": 10,
+          "low": 10,
+          "medium": 10
+        },
+        "difficulty_stratified": true,
+        "level": 0.95,
+        "lower": -0.02722222222222222,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_x_base_trajectory_with_point_segment_together",
+        "upper": 0.10333333333333333,
+        "valid_replicates": 50000
+      },
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Dynamic success conditional on clear success",
+      "effect_definition": "difference of method-specific conditional rates",
+      "eligible_common_cells": null,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.9911095305832148,
+      "left_method": "guarded_gng",
+      "metric": "conditional_retention",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": null,
+        "not_computed_reason": "method-specific conditioning sets differ; descriptive only",
+        "requested_replicates": 50000,
+        "resampling_unit": null,
+        "upper": null,
+        "valid_replicates": 0
+      },
+      "paired_effect": 0.007047262236291152,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": null,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": null,
+        "paired_streams": 0,
+        "positive": 0,
+        "sign_dominance": null,
+        "test_unit": null,
+        "ties": 0,
+        "zero_difference_handling": null
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.9840622683469237,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "method_specific_clear_success_denominators",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Path changed among clear+dynamic joint successes",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2206,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.3168631006346328,
+      "left_method": "guarded_gng",
+      "metric": "path_change_joint_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.0823695382148912,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.018124113584185496,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.050770625566636446,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.009073340339587177,
+        "negative": 37,
+        "paired_standardized_mean_difference_dz": -0.403649554064627,
+        "paired_streams": 60,
+        "positive": 17,
+        "sign_dominance": -0.37037037037037035,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 6,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.3676337262012693,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_four_way_clear_dynamic_joint_success_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Roadmap build time",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 60,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 1599.7489450666667,
+      "left_method": "guarded_gng",
+      "metric": "build_time_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -153.29530599999998,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -121.72896321333336,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -137.16231466666665,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.0581813203458523e-16,
+        "negative": 59,
+        "paired_standardized_mean_difference_dz": -2.1811746410517707,
+        "paired_streams": 60,
+        "positive": 1,
+        "sign_dominance": -0.9666666666666667,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 1736.9112597333333,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_paired_roadmap_streams",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2258,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 6.030880368467671,
+      "left_method": "guarded_gng",
+      "metric": "planning_time_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.8443623870851696,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 1.0258145873508533,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.935150228520815,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.0581813203458523e-16,
+        "negative": 1,
+        "paired_standardized_mean_difference_dz": 2.561181822887937,
+        "paired_streams": 60,
+        "positive": 59,
+        "sign_dominance": 0.9666666666666667,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 5.095730139946857,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2208,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 14.424714869565216,
+      "left_method": "guarded_gng",
+      "metric": "planning_time_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.09878298507409078,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.39413172426028736,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.24583168115942036,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.002670436282807066,
+        "negative": 18,
+        "paired_standardized_mean_difference_dz": 0.4085137985662115,
+        "paired_streams": 60,
+        "positive": 42,
+        "sign_dominance": 0.4,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 14.178883188405791,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 7.369784595317065,
+      "left_method": "guarded_gng",
+      "metric": "query_latency_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.4911838655316388,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.8236902657808969,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.6605017155783975,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.6163814566157175e-07,
+        "negative": 10,
+        "paired_standardized_mean_difference_dz": 0.998574894501934,
+        "paired_streams": 60,
+        "positive": 50,
+        "sign_dominance": 0.6666666666666666,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 6.709282879738668,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_clear_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 16.108024062503116,
+      "left_method": "guarded_gng",
+      "metric": "query_latency_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.19353732610195742,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.27401032092327826,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.04018864942837455,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.6988834276200057,
+        "negative": 28,
+        "paired_standardized_mean_difference_dz": 0.04320738844768701,
+        "paired_streams": 60,
+        "positive": 32,
+        "sign_dominance": 0.06666666666666667,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 16.067835413074743,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_dynamic_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2258,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 14.485677859497951,
+      "left_method": "guarded_gng",
+      "metric": "path_cost_clear",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 2.869058663741094,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 3.2973569600000903,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 3.082092205476272,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.734723475976807e-18,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 3.5736195327561493,
+        "paired_streams": 60,
+        "positive": 60,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 11.403585654021684,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "definition": "Dynamic total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2208,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 15.103306982908519,
+      "left_method": "guarded_gng",
+      "metric": "path_cost_dynamic",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 2.8292355943170957,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 3.2904383068405796,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 3.0567976883762245,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.734723475976807e-18,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 3.319259910807446,
+        "paired_streams": 60,
+        "positive": 60,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 12.046509294532294,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 2294,
+        "discordant_odds_ratio": 0.6537216828478964,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 404,
+        "matched_pairs": 3600,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 284,
+        "right_only_success": 618
+      },
+      "definition": "Clear exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.7494444444444445,
+      "left_method": "gng",
+      "metric": "clear_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.07777777777777778,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.04111111111111111,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.059444444444444446,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 5.703811637403078e-05,
+        "negative": 40,
+        "paired_standardized_mean_difference_dz": -0.8212832769011315,
+        "paired_streams": 60,
+        "positive": 11,
+        "sign_dominance": -0.5686274509803921,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 9,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.8088888888888889,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 2243,
+        "discordant_odds_ratio": 0.6305343511450382,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 413,
+        "matched_pairs": 3600,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 289,
+        "right_only_success": 655
+      },
+      "definition": "Dynamic exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.7377777777777778,
+      "left_method": "gng",
+      "metric": "dynamic_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.085,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.04972222222222222,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.06722222222222222,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 4.336383137015787e-07,
+        "negative": 46,
+        "paired_standardized_mean_difference_dz": -0.9570250245408359,
+        "paired_streams": 60,
+        "positive": 9,
+        "sign_dominance": -0.6727272727272727,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 5,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.805,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Dynamic success conditional on clear success",
+      "effect_definition": "difference of method-specific conditional rates",
+      "eligible_common_cells": null,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.9840622683469237,
+      "left_method": "gng",
+      "metric": "conditional_retention",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": null,
+        "not_computed_reason": "method-specific conditioning sets differ; descriptive only",
+        "requested_replicates": 50000,
+        "resampling_unit": null,
+        "upper": null,
+        "valid_replicates": 0
+      },
+      "paired_effect": -0.010786632751977443,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": null,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": null,
+        "paired_streams": 0,
+        "positive": 0,
+        "sign_dominance": null,
+        "test_unit": null,
+        "ties": 0,
+        "zero_difference_handling": null
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.9948489010989011,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "method_specific_clear_success_denominators",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Path changed among clear+dynamic joint successes",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2241,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.3819723337795627,
+      "left_method": "gng",
+      "metric": "path_change_joint_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.09397163120567376,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.15645962005723166,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.1253904506916555,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.822834494458192e-09,
+        "negative": 6,
+        "paired_standardized_mean_difference_dz": 1.0390017153632047,
+        "paired_streams": 60,
+        "positive": 49,
+        "sign_dominance": 0.7818181818181819,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 5,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.2565818830879072,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_four_way_clear_dynamic_joint_success_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Roadmap build time",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 60,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 1736.9112597333333,
+      "left_method": "gng",
+      "metric": "build_time_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 320.6476201199999,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 354.82194154666655,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 337.2177328,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.734723475976807e-18,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 4.970289007263184,
+        "paired_streams": 60,
+        "positive": 60,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 1399.693526933334,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_paired_roadmap_streams",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2294,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 5.086554224934611,
+      "left_method": "gng",
+      "metric": "planning_time_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -1.5622210025004344,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -1.3246546163954482,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -1.442862716652136,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.734723475976807e-18,
+        "negative": 60,
+        "paired_standardized_mean_difference_dz": -3.1632094131354394,
+        "paired_streams": 60,
+        "positive": 0,
+        "sign_dominance": -1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 6.529416941586748,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2243,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 14.085809633526525,
+      "left_method": "gng",
+      "metric": "planning_time_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.23188179955148044,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.11947517651272664,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.05500066696388766,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.36629400670329104,
+        "negative": 26,
+        "paired_standardized_mean_difference_dz": -0.09161701934047121,
+        "paired_streams": 60,
+        "positive": 34,
+        "sign_dominance": 0.13333333333333333,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 14.14081030049041,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 6.709282879738668,
+      "left_method": "gng",
+      "metric": "query_latency_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -1.4843581919578557,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -1.0742934662984125,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -1.2767075737226858,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.0382663478969434e-11,
+        "negative": 55,
+        "paired_standardized_mean_difference_dz": -1.5572179230536531,
+        "paired_streams": 60,
+        "positive": 5,
+        "sign_dominance": -0.8333333333333334,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 7.985990453461353,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_clear_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 16.067835413074743,
+      "left_method": "gng",
+      "metric": "query_latency_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.2637944907395043,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.1974601408914575,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.03297716483454375,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.6988834276200057,
+        "negative": 32,
+        "paired_standardized_mean_difference_dz": -0.03584942758785634,
+        "paired_streams": 60,
+        "positive": 28,
+        "sign_dominance": -0.06666666666666667,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 16.100812577909284,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_dynamic_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2294,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 11.369443379882833,
+      "left_method": "gng",
+      "metric": "path_cost_clear",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -4.135974508301612,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -3.6629437258793494,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -3.898426798166888,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.734723475976807e-18,
+        "negative": 60,
+        "paired_standardized_mean_difference_dz": -4.2003303814731945,
+        "paired_streams": 60,
+        "positive": 0,
+        "sign_dominance": -1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 15.267870178049726,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "definition": "Dynamic total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2243,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 12.014109355339963,
+      "left_method": "gng",
+      "metric": "path_cost_dynamic",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -4.0652244392930745,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -3.5609515383491974,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -3.814365363339264,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.734723475976807e-18,
+        "negative": 60,
+        "paired_standardized_mean_difference_dz": -3.865068543210282,
+        "paired_streams": 60,
+        "positive": 0,
+        "sign_dominance": -1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 15.828474718679225,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 2430,
+        "discordant_odds_ratio": 0.7925311203319502,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 382,
+        "matched_pairs": 3600,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 306,
+        "right_only_success": 482
+      },
+      "definition": "Clear exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.7811111111111111,
+      "left_method": "guarded_gng",
+      "metric": "clear_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.05,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.005555555555555556,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.027777777777777776,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.11892045255943628,
+        "negative": 31,
+        "paired_standardized_mean_difference_dz": -0.311470614503241,
+        "paired_streams": 60,
+        "positive": 19,
+        "sign_dominance": -0.24,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 10,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.8088888888888889,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 2398,
+        "discordant_odds_ratio": 0.78,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 390,
+        "matched_pairs": 3600,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 312,
+        "right_only_success": 500
+      },
+      "definition": "Dynamic exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": "mean_over_roadmap_streams_of_within_stream_dynamic_exact_valid_risk_difference_over_the_frozen_scene_catalog",
+      "hypothesis_role": "primary_confirmatory",
+      "inferential_use": true,
+      "left_estimate": 0.7744444444444445,
+      "left_method": "guarded_gng",
+      "metric": "dynamic_success",
+      "paired_cluster_bootstrap_ci": {
+        "catalog_treatment": "fixed_scene_catalog_not_resampled",
+        "level": 0.95,
+        "lower": -0.0525,
+        "requested_replicates": 50000,
+        "resampling_seed": 8617206132795804324,
+        "resampling_unit": "paired_whole_roadmap_stream",
+        "upper": -0.008611111111111113,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.030555555555555555,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.07590472948910143,
+        "negative": 34,
+        "paired_standardized_mean_difference_dz": -0.34962090675449153,
+        "paired_streams": 60,
+        "positive": 20,
+        "sign_dominance": -0.25925925925925924,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 6,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": {
+        "degenerate_case": null,
+        "exchangeability_assumption": "method_labels_exchangeable_within_stream",
+        "extreme_permutations": 877,
+        "holm_adjusted_p_primary_family": 0.00877991220087799,
+        "holm_family": [
+          "guarded_gng_minus_gng_dynamic_exact_valid_risk_difference",
+          "guarded_gng_minus_halton_prm_dynamic_exact_valid_risk_difference"
+        ],
+        "holm_family_size": 2,
+        "observed_statistic": -2.708151898692164,
+        "observed_statistic_is_infinite": false,
+        "plus_one_correction": true,
+        "requested_permutations": 100000,
+        "statistic": "studentized_mean_stream_risk_difference",
+        "test": "monte_carlo_paired_label_swap",
+        "two_sided_p": 0.00877991220087799,
+        "valid_permutations": 100000
+      },
+      "right_estimate": 0.805,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": {
+        "analysis_role": "scene_generalization_sensitivity_not_primary",
+        "base_trajectory_pairing_available": true,
+        "difficulty_base_counts": {
+          "high": 10,
+          "low": 10,
+          "medium": 10
+        },
+        "difficulty_stratified": true,
+        "level": 0.95,
+        "lower": -0.06805555555555555,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_x_base_trajectory_with_point_segment_together",
+        "upper": 0.006111111111111111,
+        "valid_replicates": 50000
+      },
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Dynamic success conditional on clear success",
+      "effect_definition": "difference of method-specific conditional rates",
+      "eligible_common_cells": null,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.9911095305832148,
+      "left_method": "guarded_gng",
+      "metric": "conditional_retention",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": null,
+        "not_computed_reason": "method-specific conditioning sets differ; descriptive only",
+        "requested_replicates": 50000,
+        "resampling_unit": null,
+        "upper": null,
+        "valid_replicates": 0
+      },
+      "paired_effect": -0.003739370515686291,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": null,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": null,
+        "paired_streams": 0,
+        "positive": 0,
+        "sign_dominance": null,
+        "test_unit": null,
+        "ties": 0,
+        "zero_difference_handling": null
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.9948489010989011,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "method_specific_clear_success_denominators",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Path changed among clear+dynamic joint successes",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2397,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.32957863996662495,
+      "left_method": "guarded_gng",
+      "metric": "path_change_joint_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.032679461262655266,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.09426759356794014,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.06341259908218606,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.00017512673440589488,
+        "negative": 13,
+        "paired_standardized_mean_difference_dz": 0.5428296541777583,
+        "paired_streams": 60,
+        "positive": 41,
+        "sign_dominance": 0.5185185185185185,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 6,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.2661660408844389,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_four_way_clear_dynamic_joint_success_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Roadmap build time",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 60,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 1599.7489450666667,
+      "left_method": "guarded_gng",
+      "metric": "build_time_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 189.13212985333325,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 211.44672508000008,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 200.0554181333333,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.734723475976807e-18,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 4.4958562693701225,
+        "paired_streams": 60,
+        "positive": 60,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 1399.693526933334,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_paired_roadmap_streams",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2430,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 5.948774887242796,
+      "left_method": "guarded_gng",
+      "metric": "planning_time_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.6982013127968676,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.40561726699186973,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.5504759835390945,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 5.205691473372798e-09,
+        "negative": 52,
+        "paired_standardized_mean_difference_dz": -0.9570445222492981,
+        "paired_streams": 60,
+        "positive": 8,
+        "sign_dominance": -0.7333333333333333,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 6.499250870781893,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2398,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 14.685737327773145,
+      "left_method": "guarded_gng",
+      "metric": "planning_time_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.038064812047947545,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.37906339147072915,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.17306667556296915,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.1550019040032606,
+        "negative": 24,
+        "paired_standardized_mean_difference_dz": 0.21396485819945218,
+        "paired_streams": 60,
+        "positive": 36,
+        "sign_dominance": 0.2,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 14.512670652210176,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 7.369784595317065,
+      "left_method": "guarded_gng",
+      "metric": "query_latency_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.8241929581312838,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.4050903541754248,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.6162058581442883,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.2146708022957309e-05,
+        "negative": 47,
+        "paired_standardized_mean_difference_dz": -0.7365277133810377,
+        "paired_streams": 60,
+        "positive": 13,
+        "sign_dominance": -0.5666666666666667,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 7.985990453461353,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_clear_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 3600,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 16.108024062503116,
+      "left_method": "guarded_gng",
+      "metric": "query_latency_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.23947909126582084,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.2606045854350264,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.007211484593830796,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.8974218269914305,
+        "negative": 31,
+        "paired_standardized_mean_difference_dz": 0.0072770622454399175,
+        "paired_streams": 60,
+        "positive": 29,
+        "sign_dominance": -0.03333333333333333,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 16.100812577909284,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_dynamic_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2430,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 14.192088586649339,
+      "left_method": "guarded_gng",
+      "metric": "path_cost_clear",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -1.0984845617889862,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.5779316608371019,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.839901122120378,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 7.561280982396751e-07,
+        "negative": 49,
+        "paired_standardized_mean_difference_dz": -0.8254577758629504,
+        "paired_streams": 60,
+        "positive": 11,
+        "sign_dominance": -0.6333333333333333,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 15.031989708769727,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "definition": "Dynamic total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 2398,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 14.806186328640047,
+      "left_method": "guarded_gng",
+      "metric": "path_cost_dynamic",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -1.0196719803963388,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.47426881431534,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.7506298617624052,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 3.183628737933597e-06,
+        "negative": 48,
+        "paired_standardized_mean_difference_dz": -0.7088445965602398,
+        "paired_streams": 60,
+        "positive": 12,
+        "sign_dominance": -0.6,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 15.556816190402445,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "joint-space cost"
+    }
+  ],
+  "schema": "om6dof-reachability-multiscene-analysis-v2",
+  "source_provenance": {
+    "artifacts": {
+      "frozen_inputs": {
+        "analyze_reachability_multiscene.py": "9a2453505b4e0f17fece4d7b103c5207889a1314cfe0f86ca523d3d8a03627b8",
+        "catalog.json": "ac5205e9c4fae67a9f9af3f84176d61d459eb4daae2c4f50ea0e2d6b2d59b023",
+        "catalog_generation.log": "7373bb697a6aea069c60c746b1ddebaec8d1773b4d326cd1ab22e948aaac3402",
+        "confirmatory_protocol.md": "642c61bfba071792ef23e0e23abf55adb1e4b78c5df3bd3f7d6e7d61e2324461",
+        "source_snapshot.tar.gz": "8e5cae23fca7a07421cca0df4f538601d6d65b315a9d201655134b521054b63f"
+      },
+      "graphs.csv": "fc0397c79623fb04fdfcfbc498db3d57769d3a76c3f40b6839dd34c66e287d63",
+      "logs": {
+        "run_0000_stream_100_gng_domain_20.log": "9dfa91efb382f5bed3bdd0de1246b236486c487c17878f3caedb0328ecfce8cc",
+        "run_0001_stream_100_guarded_gng_domain_21.log": "8e987455149f49d63637f5c149d032efa75dcbbf88720d133a77529580e0b51c",
+        "run_0002_stream_100_halton_prm_domain_22.log": "61cd966835bc7413256445de3e9ce9e711599fda4212c09c06f67e9f5a7f1ce8",
+        "run_0003_stream_101_gng_domain_23.log": "52c157d5b2f6a16c02f710e4f8878466d7d89057490c1d926926dba906bf9e90",
+        "run_0004_stream_101_halton_prm_domain_24.log": "04a04ea986f6bf9a6a15111e6db0b86dbe6ad063bb6570098e4ca6e3a9b079b9",
+        "run_0005_stream_101_guarded_gng_domain_25.log": "c9b78150c35d87d87c9576e7250db08c90ee0f3c9ae0672bfa0a2a595b9ed598",
+        "run_0006_stream_102_guarded_gng_domain_26.log": "580a2e1eb5cff23d12100708c5dae6a2993061783ee3de7e4b703acf257c8bc3",
+        "run_0007_stream_102_gng_domain_27.log": "4440f9730b42b9a82d86a4f4887bfff86e2837f774ba1ed4d12440b8d69cb5ca",
+        "run_0008_stream_102_halton_prm_domain_28.log": "7fe8d53dc6a21905bff7df946d682a53db1f9f109a785f745ad242fdad02115f",
+        "run_0009_stream_103_guarded_gng_domain_29.log": "2b309d76f26dae196e54e16505427c428437ae7bd4ca3c81e75965408b23bd8b",
+        "run_0010_stream_103_halton_prm_domain_30.log": "ffcadd07f0d2bccda82c50b536d4a41ba8ce4dd36d752549cd48f63f276a3513",
+        "run_0011_stream_103_gng_domain_31.log": "8a8eee05c45c7c58f4ef947be6e7c6ce1207a74ef881db6ac900fbc9634df7f6",
+        "run_0012_stream_104_halton_prm_domain_32.log": "9622785ff0de295046cb9d7b89558b7e79cedb459aeb9fd0fac16746e2d86aaa",
+        "run_0013_stream_104_gng_domain_33.log": "9f69a1bfcd1ad410879c5efb693ee72f8a9d0aa3e8d4ddbc087b8eda79ec77c1",
+        "run_0014_stream_104_guarded_gng_domain_34.log": "54be6f96255565cc669caf9321d33ff0bbe724d84045f9546f9da211fd16b289",
+        "run_0015_stream_105_halton_prm_domain_35.log": "4a0a54264ae8f66aeb5043e659678720bd2666bde3036d47babca01aa8317d93",
+        "run_0016_stream_105_guarded_gng_domain_36.log": "d7884315679640a339cb33fb41165d22b007833b2e88814c2d361f22666c8568",
+        "run_0017_stream_105_gng_domain_37.log": "c5e91d9b826c1f66de36c703d6aa0964a2782c99504f580a66dc49883dc4e2c4",
+        "run_0018_stream_106_gng_domain_38.log": "938bedaed9196c72c52c1bff714e7dd44b18788fe32a57a6d0adf08e132ca01d",
+        "run_0019_stream_106_guarded_gng_domain_39.log": "a99a4be4e91d56923461c6ed7bd12ed127336b6ec5367024af267c6ca566003d",
+        "run_0020_stream_106_halton_prm_domain_40.log": "81b4cdc99e817f044084ced4fae9c6cb397c347b4c033f46d26f8a8971ad7922",
+        "run_0021_stream_107_gng_domain_41.log": "bd881d8ea3c4c78173885bc058591592952fb0bc2838cefbf21a3966c9e53d14",
+        "run_0022_stream_107_halton_prm_domain_42.log": "b455808a5600b14abefc6e4635df6e3ecb8b8ad232bc155c1df513b713568822",
+        "run_0023_stream_107_guarded_gng_domain_43.log": "6bb8f8a258e24c2fbdaf62f896030904f3732db838328008904e5ab0e89467ef",
+        "run_0024_stream_108_guarded_gng_domain_44.log": "3ffd7e0dee2afa5960c9a3a7891362f5710851b880ae82e75ee38a0a5952cea6",
+        "run_0025_stream_108_gng_domain_45.log": "c18006274248af8c2eab8e1374694b5c7e932c4b1ffe409c59eeb5ade6062c17",
+        "run_0026_stream_108_halton_prm_domain_46.log": "56940fcb30a63ce49edc11439a3d16b8a22b10436cd80dc8698d462f0b75b76d",
+        "run_0027_stream_109_guarded_gng_domain_47.log": "e6c556815c3c6bf661b450312de2f76eae05d6dee9552b8770420200317506a8",
+        "run_0028_stream_109_halton_prm_domain_48.log": "3531f0b29115e1bcdbb9683334b718c1b38af24b24125ba0bf242dbc53974203",
+        "run_0029_stream_109_gng_domain_49.log": "a83066a9998981441746fbd03292eb31f39cca9a66821f1a0c42be5d4e92b66a",
+        "run_0030_stream_110_halton_prm_domain_50.log": "db9303e8a23475e63d3a1b35881f893b088177eaf778985cd7eb5f82c2b58b1b",
+        "run_0031_stream_110_gng_domain_51.log": "1bab551e2adb0f817d56d4d16cbd64d5ba623bbc9992aaa0dfbafe84bbb36f43",
+        "run_0032_stream_110_guarded_gng_domain_52.log": "7df1665615105a4601f17bfa956d89b27881eeb89c2d39ae77ff9a94a3b4a9ac",
+        "run_0033_stream_111_halton_prm_domain_53.log": "e96b3e1aef07970178b0537b9384dd6f7dec89a47a2e5335a88f99a7edf6f54c",
+        "run_0034_stream_111_guarded_gng_domain_54.log": "12cc605e9f9e40860303714c9332be9c6b716d15fcafd5e159bfd7ec8dd4437a",
+        "run_0035_stream_111_gng_domain_55.log": "0164a657e202f67163d6621e4250499ef5edfbb5e1ef20791ae7dba5b4e3d78f",
+        "run_0036_stream_112_gng_domain_56.log": "edf03225613ca9d38437e8d8634ffa37cde162fe1601d4c9d05ec837f8620365",
+        "run_0037_stream_112_guarded_gng_domain_57.log": "2a7118a3a8b520b87325019ea612547daaa24d2b74d5bc2251ada5f7d3e74d20",
+        "run_0038_stream_112_halton_prm_domain_58.log": "9c26df824f2187ef9bcbe0709a35ef60505915a081fab098fb5e52c44e6525f1",
+        "run_0039_stream_113_gng_domain_59.log": "afc2db2eeb234dea7be2c8e0dc7f349110f9df6db4bf98162093632c81a9065e",
+        "run_0040_stream_113_halton_prm_domain_60.log": "9efc370eeeb343806a30ebed2252e7ad40df187e63ef1f7a99a7b29e9022daed",
+        "run_0041_stream_113_guarded_gng_domain_61.log": "1eb2ad3cace2414c83e8915de74a371bf704fb9ba7f39e14bc757529b3697f31",
+        "run_0042_stream_114_guarded_gng_domain_62.log": "79c54d02ca87c806918cc5041e7c733b7b150a687c55ec736d3ecc6b62682f18",
+        "run_0043_stream_114_gng_domain_63.log": "2982359ff7da8ee4fbf8ef76f2cb90bd3388212daa455f665291c5b8263cd450",
+        "run_0044_stream_114_halton_prm_domain_64.log": "4d1a112f5c2fab13db18a38e24c0048c8de8b69ede50654f5a2bb88e07ac8149",
+        "run_0045_stream_115_guarded_gng_domain_65.log": "ddea6c5a7b8ec53682022142f2ae29325482507e697c1ff6d35fe1d21e6fed6d",
+        "run_0046_stream_115_halton_prm_domain_66.log": "489db876c124994835123b84cb00664955a47ad70b99bf2173c63ccd3fc10e54",
+        "run_0047_stream_115_gng_domain_67.log": "02d1167dd2e87042c2fd00b70f502106be0e187d2207027a0eda3f0102989672",
+        "run_0048_stream_116_halton_prm_domain_68.log": "c58718fda87a40157f3dc0fa3526774262b89f0f334138eea4bcefda0c669290",
+        "run_0049_stream_116_gng_domain_69.log": "c2c91ac2be91eebcb233463d14af9b2d394c101f98180ee1ca7acebb5cb90502",
+        "run_0050_stream_116_guarded_gng_domain_70.log": "330fc666948352b41368656147d320cbb4ea52334a315eb0e320d1b26fbe3863",
+        "run_0051_stream_117_halton_prm_domain_71.log": "a4609905e087850afbaab948df131945d2a932406434e66bb8fffd8ee0927396",
+        "run_0052_stream_117_guarded_gng_domain_72.log": "eca6bbc77757d134bfecf99ab301f7d7e0886933672612fe313773d74903bd9d",
+        "run_0053_stream_117_gng_domain_73.log": "ce16b3f77ce5bffe2b64b3995b2cc61780f2d10c647ec466787a9ac2ed7058b3",
+        "run_0054_stream_118_gng_domain_74.log": "8ec7f43a33fc06a9100856b13228257bf1273e6237d09438c1e29b4e7adf03e4",
+        "run_0055_stream_118_guarded_gng_domain_75.log": "2c4edf403721b9c745db59d52c516edd9b82121a09d9e4af9a670e59d083ff99",
+        "run_0056_stream_118_halton_prm_domain_76.log": "35c6c668905bd1bcabb905723d0e4da5cc12ba66b4abd066bacd6e39ce1e83ca",
+        "run_0057_stream_119_gng_domain_77.log": "3faf4629028619ef28c4907efa4081b9cc2ca2a1b2a9222be3115619c492c775",
+        "run_0058_stream_119_halton_prm_domain_78.log": "d4e1637a01a0d260c790ff9e2627463db5785cc72bed551ccc2e0b7e1f2a311d",
+        "run_0059_stream_119_guarded_gng_domain_79.log": "434a300ae432ace040c299e6b5dca83bd6599f52bb54be635d2e89c6dcdae949",
+        "run_0060_stream_120_guarded_gng_domain_80.log": "5bc21d770fefb86514995512393400a3afa12c2e6686047f146270c38d2d48cf",
+        "run_0061_stream_120_gng_domain_81.log": "478fad705293d6e8c286d982fb5a1acdd9854ca14a3135fd73b016c69497048f",
+        "run_0062_stream_120_halton_prm_domain_82.log": "d4338eabf3ba753794fa1aec87a216b19bc8c9594d2d64b89d4920331b3d5ea1",
+        "run_0063_stream_121_guarded_gng_domain_83.log": "7c05884c7045191610a339802a04cc722c578685c0b36b92d57350291b9e44d1",
+        "run_0064_stream_121_halton_prm_domain_84.log": "d28c8a2d39b8a22c7cb46eba3b8d353108ae440c5d301bf91d13f4e67f47d7c2",
+        "run_0065_stream_121_gng_domain_85.log": "77c3b20dbb9f42b57dd7f2d498a0ea450cefdc6d4a390e73021d8b7ac911845a",
+        "run_0066_stream_122_halton_prm_domain_86.log": "0a4be0fb8f0b6e98eeca2c5d70b960866790483a487c4f5c04af74e04d96a8af",
+        "run_0067_stream_122_gng_domain_87.log": "0038553ac36ce3d8374ad13d3708dd96c1f4c2f8f3fe5f9656b87270eaecec63",
+        "run_0068_stream_122_guarded_gng_domain_88.log": "441962681f22fc2c171fc96ea567a344f182158c3fd857cba0cea41d29fcb129",
+        "run_0069_stream_123_halton_prm_domain_89.log": "d37f5f825181d566a13d2c94fa8c06b8d4728a7d7c8aab069820fe947fc01939",
+        "run_0070_stream_123_guarded_gng_domain_90.log": "0af7b9742beb5ebb34d1f53368a0fc6f249bfa49bb8771aa5200975eab2511ce",
+        "run_0071_stream_123_gng_domain_91.log": "f0ca317f7b6d7cd6c5b773e1603dad2388dfc0d3f8259c97f14005f5bfe6f943",
+        "run_0072_stream_124_gng_domain_92.log": "a16495883f408a9d694c119051f3a35b9da87b1005c0975e216321aa03ff7944",
+        "run_0073_stream_124_guarded_gng_domain_93.log": "8772f4d3f408bf3694628297ebb88aea2edc1700ebd792a0678a17c26b26ed3d",
+        "run_0074_stream_124_halton_prm_domain_94.log": "2f23ddaa9896c038b98eceda2f327193c898b9c401bdc455dc8edcb83011eca5",
+        "run_0075_stream_125_gng_domain_95.log": "1bccaac5419bd7236cb9b6e5cbb20001828e0df4e771482910d5b249bff9e2af",
+        "run_0076_stream_125_halton_prm_domain_96.log": "08bc667424b7b0e132d5754d5e47e85fd1733bc342090a793fd11e8805aac1df",
+        "run_0077_stream_125_guarded_gng_domain_97.log": "feea784f82d33dd8c9b9c7b71b68733a7067012c17ab5536622aa7a470ac1dcc",
+        "run_0078_stream_126_guarded_gng_domain_98.log": "9656f9194cc39ef3be639dd45d6471b72d23ae6454fb8676e0f6179a0bbfce31",
+        "run_0079_stream_126_gng_domain_99.log": "094996cf99d71515045a681cbe7c8f42011be0e0593c48a9ed6ca92e06d0aded",
+        "run_0080_stream_126_halton_prm_domain_20.log": "b5651551c77aa64d090ded93a016a4f71c5d0b011649fbf0f4311b08ffb536dd",
+        "run_0081_stream_127_guarded_gng_domain_21.log": "6670f66edb76c69ca509c518f3bf320111f9b57ee79f6485c5d247ae609a54ad",
+        "run_0082_stream_127_halton_prm_domain_22.log": "164ca385123b805b77bcd150b3fb5e07ba656527813eb05df782ce72b3d3a17c",
+        "run_0083_stream_127_gng_domain_23.log": "4fa3ed73f0bfc2201208bfd78677328f7272fa705f979a984b42a41e35f68bfb",
+        "run_0084_stream_128_halton_prm_domain_24.log": "4373dbb9f53e5c5a7c840ab560982586cf6d88dfd8ba717dfcf4495411d6e041",
+        "run_0085_stream_128_gng_domain_25.log": "b5ebb59a2f9d958fedaf81214328aa53f4e10d72d33bc719a39906ea096f6db9",
+        "run_0086_stream_128_guarded_gng_domain_26.log": "be22ab1aac6780b3d907b5b3d9c11e087d4cf56d00713f8fe1b322366c8c944e",
+        "run_0087_stream_129_halton_prm_domain_27.log": "04c245d30862b38b1a776a6222f104ae154e9a47cb3847cabb9edb8882f98bf1",
+        "run_0088_stream_129_guarded_gng_domain_28.log": "72a94733905cd8c88447e0da36e610a696fa6f55ee2ec4393bb008f4b40f9505",
+        "run_0089_stream_129_gng_domain_29.log": "0444f11f3e31794638e5b7c26b668c9d6995366f8acf0c2d2f78a229ff76f19e",
+        "run_0090_stream_130_gng_domain_30.log": "a6af783d2b8c4261d99f7e66911dd1f6d54c05ba0a3f9fe0448a81cc0f2b4efa",
+        "run_0091_stream_130_guarded_gng_domain_31.log": "1bbd787fba07f056b3ac9339b37e92623062160f5b86bd2ff3830a7d81bd359f",
+        "run_0092_stream_130_halton_prm_domain_32.log": "a150700aeed830f533fccb48863fea235aebe31e101c6cc73f5e447caefddc2d",
+        "run_0093_stream_131_gng_domain_33.log": "8a17f4679ed2462c65ab4a029853b8d318363e8ca4767fd6d90e7d2fa3e6bbe2",
+        "run_0094_stream_131_halton_prm_domain_34.log": "8494a585b123e68a20d0af852cb7245087405f8aad172f277b4d2e1f795ead0f",
+        "run_0095_stream_131_guarded_gng_domain_35.log": "2df8d6b9b8a92ccbcf56b4966a94c159179fced1ecf653d741e6a6f6e6086c76",
+        "run_0096_stream_132_guarded_gng_domain_36.log": "c3219ee7bf68d2791847ea41c56b5da084eb126162c8bca12ee970530d21d4de",
+        "run_0097_stream_132_gng_domain_37.log": "cd49f5c2b172a971c6dda7413a9c205c1c8cece1dffc360cc2e4473d9fb08f00",
+        "run_0098_stream_132_halton_prm_domain_38.log": "8cfed61e91e0f485531b7808fbdc905fe83d14a5ce0e7b9459c93dab73f3c2c8",
+        "run_0099_stream_133_guarded_gng_domain_39.log": "05811da5e8885806d37b7d107f4922d80aecd23ef01d0e164425b91a9a245e48",
+        "run_0100_stream_133_halton_prm_domain_40.log": "017283f690d50df2c92a99dfaf8a15a62e1c3736e2c30f4dcc8970237e9753cf",
+        "run_0101_stream_133_gng_domain_41.log": "0fa15cd0beffffd258674e064fe08cfb566e977c4ef69b005e34ac006d154090",
+        "run_0102_stream_134_halton_prm_domain_42.log": "0715168708c28e0839af5397bb07a0d969b655ab56dbc7fbc3daad5f5b023d1d",
+        "run_0103_stream_134_gng_domain_43.log": "91e61787bd5465ba14676474a6cc70f02e1efc7cd785cc35eb1e733c7cd0ba29",
+        "run_0104_stream_134_guarded_gng_domain_44.log": "c4bd7b4e533439ea237621b536d7515b3359674e5f1470df3da5f01593d33e33",
+        "run_0105_stream_135_halton_prm_domain_45.log": "c3209e8b38f9142e5c2f1061487cbada9deebb6aa160c6df9bfc848be0a8995d",
+        "run_0106_stream_135_guarded_gng_domain_46.log": "40dba44b3bb83d6f8f5ef005d9f0b12f7de0ba5aa4470736ef73876463cb2ec7",
+        "run_0107_stream_135_gng_domain_47.log": "e6d1392b13119176c1f5562c57ad90c766698ea7f1ff2036c7bc98e169f0d00f",
+        "run_0108_stream_136_gng_domain_48.log": "68c738dafefdcb1c92143baff9415f55589a1d4e26fde8313cd42bddf9850996",
+        "run_0109_stream_136_guarded_gng_domain_49.log": "e32b4d5a3621db26928effc3ed135d7f51e7fc62a87f9ab2d6700b05a11a4f62",
+        "run_0110_stream_136_halton_prm_domain_50.log": "d94c0b5599f3b7738fd230d2927dcea4a31a68cda8a9230eac6821b4f6d1b152",
+        "run_0111_stream_137_gng_domain_51.log": "8cf04a7ffc80ac3f3ea48e2e860888073f68e1f12fde6f4808c600fe4f58dac9",
+        "run_0112_stream_137_halton_prm_domain_52.log": "fc5815eb96b517e4c4b881291e5145944a11766a59f348324289f359eff4bb41",
+        "run_0113_stream_137_guarded_gng_domain_53.log": "864f7804d62bd35bfe6e160e6d77c288b52cc41b9496494dc2d9f7eabfc425aa",
+        "run_0114_stream_138_guarded_gng_domain_54.log": "21269b01b44b612e6d7dd14b1b19fc33a655d5074518ad468dae5b9c93717e44",
+        "run_0115_stream_138_gng_domain_55.log": "6a39da7f49fa999a4e7be36646a5ba3f9ebaa5f1d0f3a8c1c05325863557601d",
+        "run_0116_stream_138_halton_prm_domain_56.log": "1d17ab9b554a2609bacf0b9c4334eaa322cb506763c4c2bc5199413931cf9b9a",
+        "run_0117_stream_139_guarded_gng_domain_57.log": "57f7bfcf0682dbdabe969e71a55a7653a3ae775843eb69e68c40f76e345f2ab1",
+        "run_0118_stream_139_halton_prm_domain_58.log": "05447ccb09a5dd9127ba0615e3bb43d07c1a2393c845b4091f2ca25164ba0c37",
+        "run_0119_stream_139_gng_domain_59.log": "4515e05895a5b4f3f37b59374d607b3ece5cf4483ea08820665a5d7645d7f74e",
+        "run_0120_stream_140_halton_prm_domain_60.log": "91e37a609e824d7347c2e5e4c79b7e81a0bbfc347edbe2354ca77af151c7ecd9",
+        "run_0121_stream_140_gng_domain_61.log": "0202dc728a0165bc12567d63f8eb6c4c5db9c3fc22cef9b69272bf8ca6a586f0",
+        "run_0122_stream_140_guarded_gng_domain_62.log": "b6a9fd329b6f3605b1a531ccbec71572bb2affe749593fed343f1f8fe13ecd3d",
+        "run_0123_stream_141_halton_prm_domain_63.log": "0d1c20acf47621bdc40f8f52faee30b6ca0ff0db58d3afa9a258583722b4156e",
+        "run_0124_stream_141_guarded_gng_domain_64.log": "dbb91d96dbbaff8d6965505fe8ae0d552d9360c9ad17be83b59be3c512cd98ba",
+        "run_0125_stream_141_gng_domain_65.log": "459c40a49ff14ad150578c7a8c218dbecd079138a4ae2a6c0564b82cba8493de",
+        "run_0126_stream_142_gng_domain_66.log": "4dbfc9e86f887400831990ca25c6bbe279e7c89e7a005126a0d1eb7a23b107c8",
+        "run_0127_stream_142_guarded_gng_domain_67.log": "71769e3343a47945fc0d8193066944e23b55e47267fabafac6619e462189e003",
+        "run_0128_stream_142_halton_prm_domain_68.log": "378210b19eadf45f61b54ef0630abcef278318d054a908d1371cd247d81e012a",
+        "run_0129_stream_143_gng_domain_69.log": "59da439abe42d8fd47e88d0c501e3f549876c5795126607d1a15c23cefd70fef",
+        "run_0130_stream_143_halton_prm_domain_70.log": "ed6c9515915ccb96d7ef14b7b5c574826e70391674b21c5fe5674a0b339d5a91",
+        "run_0131_stream_143_guarded_gng_domain_71.log": "9cee4f3411322c830a3b882f88f9042be4ba2daa5f7c8c58863cba629ee77885",
+        "run_0132_stream_144_guarded_gng_domain_72.log": "0afa7230005117aaa2ee2a49b332af55bd3f9094ad96b92661e46c43c29a4cc2",
+        "run_0133_stream_144_gng_domain_73.log": "02b8b38d5e16845dc2e4744fd2daa8dbe6a30c0d5783f8a3b2aafd83b93cc5e8",
+        "run_0134_stream_144_halton_prm_domain_74.log": "32f588e89967f21737b8ac8b8e5f0be4dbc50929fe5e192a68189f3cad9a3a96",
+        "run_0135_stream_145_guarded_gng_domain_75.log": "90093a5e25a34630760ea2a067814bed4995fbbebe2d47d3b0cfb23ffcba7d3e",
+        "run_0136_stream_145_halton_prm_domain_76.log": "c0d39c467ac394407c0e3f27c531951ecb1deed2984e6428595ee3777a5a1961",
+        "run_0137_stream_145_gng_domain_77.log": "a2367c7e06ca262ec9bd8d0d259129330383bc0b3f8cd3c79c593e741715e833",
+        "run_0138_stream_146_halton_prm_domain_78.log": "e54b5231d34c9898e7c8e79d135ec7f6eb4fcc4127ae8b0822c38e01beaa2d65",
+        "run_0139_stream_146_gng_domain_79.log": "8d163358b4d86abad8b160faa26a37078d077b5e869188d5df312475b8c6d4a0",
+        "run_0140_stream_146_guarded_gng_domain_80.log": "6712bc72996221f939181c46ad1de2845c80ae98b127d3673f4409f8353e930f",
+        "run_0141_stream_147_halton_prm_domain_81.log": "f79b2ee07462e8a1baad57e615f5bcdceff4bf6d574dbc740ed869460e095a2c",
+        "run_0142_stream_147_guarded_gng_domain_82.log": "38de7fa8fdd66a87e4c5265c659a491b4de9dec4c459543cdf228e80d2026f66",
+        "run_0143_stream_147_gng_domain_83.log": "35fb2bccd6603734fd074a2efffebb0e8ab8ea1bdfc8e4e0bf438aaab5f93def",
+        "run_0144_stream_148_gng_domain_84.log": "d88da454d6d8ae76b6c965c89df4201af2481fde7f7be467ead9db118061b725",
+        "run_0145_stream_148_guarded_gng_domain_85.log": "d5bc677c561f29973423f3f35d1dbcd0d86e6fea40321a974a39bdd5d524cd4a",
+        "run_0146_stream_148_halton_prm_domain_86.log": "3ef0698979a68106e8332c9fc08f949b2fbadeb6dfd02492ae823e4cc0c5d4a9",
+        "run_0147_stream_149_gng_domain_87.log": "b4e7a0db4e8d860059e2e19d8b6536533cf3350d6c2933a0d8bc7bf985d00f96",
+        "run_0148_stream_149_halton_prm_domain_88.log": "db029cdee0c855a6dff7c7ef408ec0a8861489b25e9285e7327d685a8e197e64",
+        "run_0149_stream_149_guarded_gng_domain_89.log": "19803116e9b81a47c215ac41601c109e58ec82fc4f6e4cb92062863adac29cda",
+        "run_0150_stream_150_guarded_gng_domain_90.log": "cb9ec9d11f2ba7592a5a7182029ac1f4d63bc7043675c3bb7f1e3cab4780c637",
+        "run_0151_stream_150_gng_domain_91.log": "2f3cdc17ed09d96cd6d61509e3812ddce769b63bfd61060e1847ab2f446c431a",
+        "run_0152_stream_150_halton_prm_domain_92.log": "21eb2421d5e300032f423117c9d728e3df49e618279588b6c6c1291f6b05486c",
+        "run_0153_stream_151_guarded_gng_domain_93.log": "aeefb73f7ee069373f2d4ba534305186f760ae52584568b2f44c5ed732dc249b",
+        "run_0154_stream_151_halton_prm_domain_94.log": "ef58d82c91b16ad31028d1cf5fdb15f34cdc0e122b48e5f41d6325d0766469ee",
+        "run_0155_stream_151_gng_domain_95.log": "dcb8d8eeaa912781a4703935573a93fee1f677915b10e40966b5151bafd0430f",
+        "run_0156_stream_152_halton_prm_domain_96.log": "9ddefba1bdb7c221a8ef09a9e355f427fd4d308605922de5344aa3a6540b0029",
+        "run_0157_stream_152_gng_domain_97.log": "0911d7cc0b5ec263cd0dab98a4683fd94cbf24cbc77a3b5c0ff6212958ad0d8a",
+        "run_0158_stream_152_guarded_gng_domain_98.log": "8e2635022bece4dd70729fedac2343de913416af3cd6629950ff422f62126542",
+        "run_0159_stream_153_halton_prm_domain_99.log": "79a3074ab5dc92c37a43723ffc74b3e39d54f58a17cf354af55a72c337a4bcab",
+        "run_0160_stream_153_guarded_gng_domain_20.log": "63d6e007bbc1dbbf57eae45cc6d72e253f79b3c030b357a795acef587e85feef",
+        "run_0161_stream_153_gng_domain_21.log": "88d9d902eb91cc76a55cd8ff172182b1cd715a45a539f4bf228dbce28b9ed103",
+        "run_0162_stream_154_gng_domain_22.log": "37631106cfafbcda58e674950b2c37fb1d8edd0c4b3b5855872acbe29bab7d19",
+        "run_0163_stream_154_guarded_gng_domain_23.log": "7d93c925cf71c3c0c9a01a5019724c9893652a25c4c030d5279baeb0414b6d69",
+        "run_0164_stream_154_halton_prm_domain_24.log": "6fbd9d0d3a1324c9b33f581845b503200cac127695dfef8fb126592972d079aa",
+        "run_0165_stream_155_gng_domain_25.log": "5e76c5cfe98207843fd1a3323e7d6c33a40fe79708ea236eb352679a2915ffbf",
+        "run_0166_stream_155_halton_prm_domain_26.log": "ce56885c2e98a01717dee2f509ecfe8ec74e680045c6d90845f8225cf6da4fea",
+        "run_0167_stream_155_guarded_gng_domain_27.log": "3209988532a2e9ab89c6faf6c76d47c2ebbe48208c0fdb498872b25e762e1e01",
+        "run_0168_stream_156_guarded_gng_domain_28.log": "db6fbaf0c66bb3849252e4b1279bff13c17ac4c6b65a85b19bf8416602d611f1",
+        "run_0169_stream_156_gng_domain_29.log": "f9174c40779cbb13fbd2c197d5409bf32fb47b9cab464d3409df5548d46d1168",
+        "run_0170_stream_156_halton_prm_domain_30.log": "42d63fa94047533d153043f7010f58f4362cf7c7b68751f9cbf54d0e25e54b34",
+        "run_0171_stream_157_guarded_gng_domain_31.log": "7a6d77e4eeb3d81d18cb7eb33b47ea845305396a76af007ef353c1e1d299bb17",
+        "run_0172_stream_157_halton_prm_domain_32.log": "2f056620e7017d17600cb57bd1c14e7f0da0d167cb2dc862fb047231fac92867",
+        "run_0173_stream_157_gng_domain_33.log": "072f48e6e4f682e78039ab7c9086689848a3762edcc99b63fc93e575daa4063d",
+        "run_0174_stream_158_halton_prm_domain_34.log": "454bc1d016de1c9c383aa47637f3c594f97e35dd65a5d41e8e60660ec1022b6a",
+        "run_0175_stream_158_gng_domain_35.log": "1c187254caa4cf661f49492d9002af314645dca61652cd9fd32729432800bfac",
+        "run_0176_stream_158_guarded_gng_domain_36.log": "c62ffa3b73232fcb4c94b1cddbaef8c5d0acaf3088ad0c0ebde4159e57bec107",
+        "run_0177_stream_159_halton_prm_domain_37.log": "85f5abf8f5c96fdcffb7f82d923093a7a2a8c483703a269ab13960ce7a7fdd8d",
+        "run_0178_stream_159_guarded_gng_domain_38.log": "812713b1b0577673ff8bebe0888637ca33c4cf1215c00a7e6ab5caad77c5e282",
+        "run_0179_stream_159_gng_domain_39.log": "eccac9724f8ed0e0802964185c9e7acff1a5d507d6c4f804e39b79b4abbf76f2"
+      },
+      "queries.csv": "c23fc7cb2cf97781aaa0d451c2845fa652dd21d6748243aa54166756dc7f6069",
+      "run_config.json": "2405f07a6256aebfd33cd0c6fc99c385a6f41ce61a19f70646e7855da028c3cb"
+    },
+    "catalog_generator_implementation": {
+      "generator_script_sha256": "1f0c8de8086f2cccdca4dbcbb5b6bead996f8c18c78be090136f5bcf83e0e765",
+      "reachability_node_binary_sha256": "e3f324b3141a83a875a0e7d6197841701dfe84d2836613ae27b988f38842fde1"
+    },
+    "catalog_model": {
+      "expanded_urdf_sha256": "daf37611724f4c8efd69b3b470bf505cfce4732353ea985ec54fbbb01f6d412d",
+      "reachability_parameters_sha256": "abf60d6f21bbb0e9b77558316dfb746dacf3af37814a349c60308f7dcfd22175",
+      "srdf_sha256": "730e590951a205ec639ff20613ce3305e18290f0c9a599130d38ce7c86d3d424"
+    },
+    "implementation": {
+      "git": {
+        "describe": "6dbd71a-dirty",
+        "dirty": true,
+        "dirty_entry_count": 32,
+        "head": "6dbd71a29228098d88ffba02837b28b753123895"
+      },
+      "reachability_node_binary_sha256": "e3f324b3141a83a875a0e7d6197841701dfe84d2836613ae27b988f38842fde1",
+      "runner_script_sha256": "0c6556971efb63378cd96ec62c069f8cd14a9134a3623fe3af1bac0b7775ee13",
+      "source_tree_sha256": "50398ac54d00f1bcee28a0e54430fa91b69b2e073cc0ddc087b96a9b7d4df23f"
+    },
+    "phase_order_design": "paired_across_methods_counterbalanced_by_stream_ordinal_plus_catalog_index"
+  },
+  "stratified_dynamic_results": [
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "obstacle_kind",
+      "level": "point",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.7433333333333333,
+        "guarded_gng": 0.7777777777777778,
+        "halton_prm": 0.8066666666666666
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.0344444444444445,
+        "guarded_gng_minus_halton_prm": -0.028888888888888853
+      },
+      "scene_count": 30,
+      "stream_scene_cells_per_method": 1800
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "obstacle_kind",
+      "level": "segment",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.7322222222222222,
+        "guarded_gng": 0.7711111111111111,
+        "halton_prm": 0.8033333333333333
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.03888888888888886,
+        "guarded_gng_minus_halton_prm": -0.03222222222222226
+      },
+      "scene_count": 30,
+      "stream_scene_cells_per_method": 1800
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty",
+      "level": "low",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.7416666666666667,
+        "guarded_gng": 0.7491666666666666,
+        "halton_prm": 0.7808333333333334
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.007499999999999951,
+        "guarded_gng_minus_halton_prm": -0.03166666666666673
+      },
+      "scene_count": 20,
+      "stream_scene_cells_per_method": 1200
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty",
+      "level": "medium",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.7341666666666666,
+        "guarded_gng": 0.74,
+        "halton_prm": 0.7725
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.005833333333333357,
+        "guarded_gng_minus_halton_prm": -0.03249999999999997
+      },
+      "scene_count": 20,
+      "stream_scene_cells_per_method": 1200
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty",
+      "level": "high",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.7375,
+        "guarded_gng": 0.8341666666666666,
+        "halton_prm": 0.8616666666666667
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.09666666666666657,
+        "guarded_gng_minus_halton_prm": -0.02750000000000008
+      },
+      "scene_count": 20,
+      "stream_scene_cells_per_method": 1200
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "low:point",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.7583333333333333,
+        "guarded_gng": 0.7566666666666667,
+        "halton_prm": 0.785
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": -0.0016666666666665941,
+        "guarded_gng_minus_halton_prm": -0.02833333333333332
+      },
+      "scene_count": 10,
+      "stream_scene_cells_per_method": 600
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "low:segment",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.725,
+        "guarded_gng": 0.7416666666666667,
+        "halton_prm": 0.7766666666666666
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.01666666666666672,
+        "guarded_gng_minus_halton_prm": -0.03499999999999992
+      },
+      "scene_count": 10,
+      "stream_scene_cells_per_method": 600
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "medium:point",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.7333333333333333,
+        "guarded_gng": 0.7416666666666667,
+        "halton_prm": 0.7733333333333333
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.008333333333333415,
+        "guarded_gng_minus_halton_prm": -0.03166666666666662
+      },
+      "scene_count": 10,
+      "stream_scene_cells_per_method": 600
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "medium:segment",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.735,
+        "guarded_gng": 0.7383333333333333,
+        "halton_prm": 0.7716666666666666
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.0033333333333332993,
+        "guarded_gng_minus_halton_prm": -0.033333333333333326
+      },
+      "scene_count": 10,
+      "stream_scene_cells_per_method": 600
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "high:point",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.7383333333333333,
+        "guarded_gng": 0.835,
+        "halton_prm": 0.8616666666666667
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.09666666666666668,
+        "guarded_gng_minus_halton_prm": -0.026666666666666727
+      },
+      "scene_count": 10,
+      "stream_scene_cells_per_method": 600
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "high:segment",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.7366666666666667,
+        "guarded_gng": 0.8333333333333334,
+        "halton_prm": 0.8616666666666667
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.09666666666666668,
+        "guarded_gng_minus_halton_prm": -0.02833333333333332
+      },
+      "scene_count": 10,
+      "stream_scene_cells_per_method": 600
+    }
+  ],
+  "study": {
+    "bootstrap_repetitions": 50000,
+    "bootstrap_seed": 20260824,
+    "confidence_level": 0.95,
+    "confirmatory_thresholds": {
+      "minimum_base_trajectories": 30,
+      "minimum_bootstrap_repetitions": 50000,
+      "minimum_permutation_repetitions": 100000,
+      "minimum_streams": 50
+    },
+    "fixed_scene_catalog": true,
+    "inference_scope": "roadmap_stream_population_conditional_on_frozen_fixed_scene_catalog",
+    "kind": "confirmatory",
+    "multiplicity_control": "Holm across exactly two primary contrasts",
+    "permutation_repetitions": 100000,
+    "primary_contrasts": [
+      "guarded_gng_minus_gng",
+      "guarded_gng_minus_halton_prm"
+    ],
+    "primary_effect": "guarded_gng_minus_baseline_risk_difference",
+    "primary_endpoint": "dynamic_exact_valid_success",
+    "primary_estimand": "mean roadmap-stream risk difference over every scene in the frozen catalog",
+    "requested_kind": "confirmatory",
+    "smoke_results_are_descriptive_only": false,
+    "timing_context": "functional-run-not-controlled-timing"
+  }
+}

@@ -1,0 +1,65 @@
+\relax 
+\citation{zacharias2007,porges2014}
+\citation{kavraki1996}
+\citation{fritzke1995}
+\citation{kavraki1996}
+\citation{branicky2001}
+\citation{dobson2014,phillips2012,coleman2015}
+\citation{bohlin2000}
+\citation{kallmann2004,jaillet2004}
+\citation{ichter2018,qureshi2019,chamzas2021}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Problem Formulation}{1}{}\protected@file@percent }
+\newlabel{eq:dq}{{1}{1}}
+\newlabel{eq:intersection}{{2}{1}}
+\citation{coleman2014}
+\citation{pan2012}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Frozen roadmap and query parameters.}}{2}{}\protected@file@percent }
+\newlabel{tab:parameters}{{I}{2}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Dual-Topology Planner}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-A}Environment and Robot Graphs}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-B}Node-Budget-Matched Roadmaps}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-C}Broad-Phase Invalidation and Exact Replanning}{2}{}\protected@file@percent }
+\newlabel{eq:block}{{3}{2}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Experimental Protocol}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {V-A}Implementation and Safety Boundary}{2}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Environment-conditioned query procedure. A semantic target selects configuration-retaining goal candidates; cached capsules provide a conservative broad phase, Dijkstra searches the enabled roadmap, and interpolated MoveIt/FCL checks accept the path or reject one edge and trigger replanning. Rejections are scoped to the current environment revision.}}{3}{}\protected@file@percent }
+\newlabel{fig:query_pipeline}{{1}{3}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Method-specific node construction in a two-dimensional analogue of normalized configuration space, produced by the same deterministic GNG and digit-permuted Halton implementations the system deploys. Marker counts are scaled; labels give the deployed 800-node composition. Pure GNG quantizes the 4,000-sample validity-filtered candidate stream, guarded GNG reserves 599 globally supportive low-discrepancy samples, and Halton/PRM samples directly. Because the goal test is a workspace one, its configuration-space preimage is disjoint, so both inverse-kinematic branches of a single target are drawn. All methods subsequently use the same validated $k$-nearest-neighbor connector.}}{3}{}\protected@file@percent }
+\newlabel{fig:roadmap_construction}{{2}{3}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {V-B}Evidence Separation and Frozen Design}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {V-C}Confirmatory Statistics}{3}{}\protected@file@percent }
+\newlabel{eq:estimand}{{4}{3}}
+\bibstyle{IEEEtran}
+\bibdata{references}
+\bibcite{zacharias2007}{1}
+\bibcite{porges2014}{2}
+\bibcite{kavraki1996}{3}
+\bibcite{fritzke1995}{4}
+\bibcite{branicky2001}{5}
+\bibcite{dobson2014}{6}
+\bibcite{phillips2012}{7}
+\bibcite{coleman2015}{8}
+\bibcite{bohlin2000}{9}
+\bibcite{kallmann2004}{10}
+\bibcite{jaillet2004}{11}
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Results}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {VI-A}Primary Endpoint}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {VI-B}Secondary Outcomes}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Reproducibility and Safety}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Discussion and Limitations}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Conclusion}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{4}{}\protected@file@percent }
+\bibcite{ichter2018}{12}
+\bibcite{qureshi2019}{13}
+\bibcite{chamzas2021}{14}
+\bibcite{coleman2014}{15}
+\bibcite{pan2012}{16}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Frozen multi-scene results. Guarded GNG improves dynamic exact-valid success over pure GNG, while Halton/PRM remains higher than guarded GNG. Inference is conditional on the fixed catalog.}}{5}{}\protected@file@percent }
+\newlabel{fig:results}{{3}{5}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Per-method results over 60 streams $\times $ 60 fixed scenes. Success intervals resample whole roadmap streams. Other values are descriptive; time and path-cost summaries use exact-valid paths only.}}{5}{}\protected@file@percent }
+\newlabel{tab:methods}{{II}{5}}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Prespecified dynamic-success contrasts.}}{5}{}\protected@file@percent }
+\newlabel{tab:primary}{{III}{5}}
+\gdef \@abspage@last{5}

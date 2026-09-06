@@ -31,6 +31,8 @@
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "sensor_msgs/msg/point_cloud2.hpp"
+#include "sensor_msgs/point_cloud2_iterator.hpp"
 #include "std_msgs/msg/color_rgba.hpp"
 #include "std_srvs/srv/trigger.hpp"
 #include "nav_msgs/msg/path.hpp"
@@ -165,6 +167,10 @@ public:
       graph_data_topic_, latched_qos);
     marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
       marker_topic_, latched_qos);
+    training_samples_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(
+      training_samples_topic_, latched_qos);
+    training_samples_cloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+      training_samples_cloud_topic_, latched_qos);
     plan_pub_ = create_publisher<om6dof_dd_gng::msg::ReachabilityPlan>(
       plan_topic_, latched_qos);
     path_pub_ = create_publisher<nav_msgs::msg::Path>(path_topic_, latched_qos);
@@ -237,6 +243,7 @@ private:
     declare_parameter<double>("gng_error_reduction", 0.5);
     declare_parameter<double>("gng_error_decay", 0.995);
     declare_parameter<double>("gng_guard_fraction", 0.25);
+    declare_parameter<bool>("gng_debug_publish_training_samples", false);
     declare_parameter<int>("neighbors", 10);
     declare_parameter<double>("max_normalized_joint_distance", 0.75);
     declare_parameter<double>("max_cartesian_edge_length", 0.14);
@@ -287,6 +294,11 @@ private:
     declare_parameter<std::string>(
       "marker_topic", "/om6dof_topo_gng/reachability_graph");
     declare_parameter<std::string>(
+      "training_samples_topic", "/om6dof_topo_gng/reachability_training_samples");
+    declare_parameter<std::string>(
+      "training_samples_cloud_topic",
+      "/om6dof_topo_gng/reachability_training_samples_cloud");
+    declare_parameter<std::string>(
       "plan_topic", "/om6dof_topo_gng/reachability_plan");
     declare_parameter<std::string>(
       "path_topic", "/om6dof_topo_gng/reachability_path");
@@ -321,6 +333,8 @@ private:
     gng_error_reduction_ = get_parameter("gng_error_reduction").as_double();
     gng_error_decay_ = get_parameter("gng_error_decay").as_double();
     gng_guard_fraction_ = get_parameter("gng_guard_fraction").as_double();
+    gng_debug_publish_training_samples_ =
+      get_parameter("gng_debug_publish_training_samples").as_bool();
     neighbors_ = static_cast<int>(get_parameter("neighbors").as_int());
     max_normalized_joint_distance_ = get_parameter("max_normalized_joint_distance").as_double();
     max_cartesian_edge_length_ = get_parameter("max_cartesian_edge_length").as_double();
@@ -359,6 +373,8 @@ private:
     joint_state_topic_ = get_parameter("joint_state_topic").as_string();
     graph_data_topic_ = get_parameter("graph_data_topic").as_string();
     marker_topic_ = get_parameter("marker_topic").as_string();
+    training_samples_topic_ = get_parameter("training_samples_topic").as_string();
+    training_samples_cloud_topic_ = get_parameter("training_samples_cloud_topic").as_string();
     plan_topic_ = get_parameter("plan_topic").as_string();
     path_topic_ = get_parameter("path_topic").as_string();
     rebuild_service_name_ = get_parameter("rebuild_service").as_string();
@@ -555,6 +571,90 @@ private:
     return node;
   }
 
+  reach::Point3 endEffectorPositionForJoints(const std::vector<double> & joints) const
+  {
+    moveit::core::RobotState state(robot_model_);
+    state.setToDefaultValues();
+    state.setJointGroupPositions(joint_model_group_, joints);
+    state.update();
+    const Eigen::Isometry3d & transform = state.getGlobalLinkTransform(end_effector_link_);
+    return {transform.translation().x(), transform.translation().y(), transform.translation().z()};
+  }
+
+  // Debug-only visualization of the raw, pre-quantization Halton training
+  // stream that feeds growingNeuralGas(): every valid sample, not just the
+  // handful of GNG prototypes that survive quantization.
+  void publishTrainingSampleMarkers(
+    const std::vector<std::vector<double>> & normalized_training_samples) const
+  {
+    visualization_msgs::msg::MarkerArray array;
+    visualization_msgs::msg::Marker clear;
+    clear.header.frame_id = world_frame_;
+    clear.header.stamp = now();
+    clear.action = visualization_msgs::msg::Marker::DELETEALL;
+    array.markers.push_back(clear);
+
+    visualization_msgs::msg::Marker points;
+    points.header = clear.header;
+    points.ns = "gng_training_samples";
+    points.id = 0;
+    points.type = visualization_msgs::msg::Marker::POINTS;
+    points.action = visualization_msgs::msg::Marker::ADD;
+    points.pose.orientation.w = 1.0;
+    points.scale.x = node_marker_scale_ * 0.4;
+    points.scale.y = points.scale.x;
+    points.color = color(0.85F, 0.55F, 0.05F, 0.35F);
+    points.points.reserve(normalized_training_samples.size());
+    for (const auto & normalized : normalized_training_samples) {
+      std::vector<double> joints(normalized.size(), 0.0);
+      for (std::size_t variable = 0U; variable < normalized.size(); ++variable) {
+        joints[variable] = lower_bounds_[variable] +
+          std::clamp(normalized[variable], 0.0, 1.0) * joint_ranges_[variable];
+      }
+      points.points.push_back(toPointMessage(endEffectorPositionForJoints(joints)));
+    }
+    array.markers.push_back(points);
+    training_samples_pub_->publish(array);
+  }
+
+  // Same raw pre-GNG sample stream as publishTrainingSampleMarkers(), but as a
+  // real sensor_msgs/PointCloud2 so it can be opened in RViz's PointCloud2
+  // display or exported to PCL/CloudCompare-compatible tooling.
+  void publishTrainingSampleCloud(
+    const std::vector<std::vector<double>> & normalized_training_samples) const
+  {
+    sensor_msgs::msg::PointCloud2 cloud;
+    cloud.header.frame_id = world_frame_;
+    cloud.header.stamp = now();
+    cloud.height = 1U;
+    cloud.width = static_cast<std::uint32_t>(normalized_training_samples.size());
+    cloud.is_dense = true;
+    cloud.is_bigendian = false;
+
+    sensor_msgs::PointCloud2Modifier modifier(cloud);
+    modifier.setPointCloud2FieldsByString(1, "xyz");
+    modifier.resize(normalized_training_samples.size());
+
+    sensor_msgs::PointCloud2Iterator<float> iter_x(cloud, "x");
+    sensor_msgs::PointCloud2Iterator<float> iter_y(cloud, "y");
+    sensor_msgs::PointCloud2Iterator<float> iter_z(cloud, "z");
+    for (const auto & normalized : normalized_training_samples) {
+      std::vector<double> joints(normalized.size(), 0.0);
+      for (std::size_t variable = 0U; variable < normalized.size(); ++variable) {
+        joints[variable] = lower_bounds_[variable] +
+          std::clamp(normalized[variable], 0.0, 1.0) * joint_ranges_[variable];
+      }
+      const reach::Point3 position = endEffectorPositionForJoints(joints);
+      *iter_x = static_cast<float>(position.x);
+      *iter_y = static_cast<float>(position.y);
+      *iter_z = static_cast<float>(position.z);
+      ++iter_x;
+      ++iter_y;
+      ++iter_z;
+    }
+    training_samples_cloud_pub_->publish(cloud);
+  }
+
   bool appendNodeIfValid(const std::vector<double> & joints)
   {
     for (const reach::Node & existing : nodes_) {
@@ -703,6 +803,10 @@ private:
       normalized_training_samples.push_back(std::move(normalized));
     }
     last_gng_training_sample_count_ = normalized_training_samples.size();
+    if (gng_debug_publish_training_samples_) {
+      publishTrainingSampleMarkers(normalized_training_samples);
+      publishTrainingSampleCloud(normalized_training_samples);
+    }
     if (normalized_training_samples.size() < 2U) {
       return attempts;
     }
@@ -2015,6 +2119,7 @@ private:
   double gng_error_reduction_ = 0.5;
   double gng_error_decay_ = 0.995;
   double gng_guard_fraction_ = 0.25;
+  bool gng_debug_publish_training_samples_ = false;
   int neighbors_ = 10;
   double max_normalized_joint_distance_ = 0.75;
   double max_cartesian_edge_length_ = 0.14;
@@ -2045,6 +2150,8 @@ private:
   std::string joint_state_topic_;
   std::string graph_data_topic_;
   std::string marker_topic_;
+  std::string training_samples_topic_;
+  std::string training_samples_cloud_topic_;
   std::string plan_topic_;
   std::string path_topic_;
   std::string rebuild_service_name_;
@@ -2054,6 +2161,8 @@ private:
   // ROS interfaces: no controller publisher/action client by design.
   rclcpp::Publisher<om6dof_dd_gng::msg::ReachabilityGraph>::SharedPtr graph_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr training_samples_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr training_samples_cloud_pub_;
   rclcpp::Publisher<om6dof_dd_gng::msg::ReachabilityPlan>::SharedPtr plan_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
   rclcpp::Subscription<om6dof_dd_gng::msg::EnvironmentGraph>::SharedPtr environment_sub_;

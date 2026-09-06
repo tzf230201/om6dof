@@ -45,7 +45,13 @@ def generate_launch_description():
         .joint_limits(str(Path("config") / "joint_limits.yaml"))
         .trajectory_execution(str(Path("config") / "moveit_controllers.yaml"))
         .robot_description_kinematics(str(Path("config") / "kinematics.yaml"))
-        .planning_pipelines(default_planning_pipeline="ompl", pipelines=["ompl"])
+        .pilz_cartesian_limits(
+            str(Path("config") / "pilz_cartesian_limits.yaml")
+        )
+        .planning_pipelines(
+            default_planning_pipeline="ompl",
+            pipelines=["ompl", "pilz_industrial_motion_planner"],
+        )
         .to_moveit_configs()
     )
 

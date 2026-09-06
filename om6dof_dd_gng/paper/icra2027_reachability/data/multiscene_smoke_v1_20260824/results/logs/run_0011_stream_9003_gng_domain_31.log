@@ -1,0 +1,13 @@
+[INFO] [launch]: All log files can be found below /home/kublab/.ros/log/2026-08-24-07-44-19-350124-agx-95491
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [reachability_graph_node-1]: process started with pid [95517]
+[reachability_graph_node-1] [INFO] [1787525059.756620512] [reachability_graph_node]: Reachability node started in preview-only mode; it has no controller publisher or action client.
+[reachability_graph_node-1] [INFO] [1787525060.260469888] [moveit_robot_model.robot_model]: Loading robot model 'om6dof'...
+[reachability_graph_node-1] [INFO] [1787525060.260528064] [moveit_robot_model.robot_model]: No root/virtual joint specified in SRDF. Assuming fixed joint
+[reachability_graph_node-1] [INFO] [1787525061.079880352] [reachability_graph_node]: GNG sampling retained 798 prototypes and 0/0 deterministic guard samples
+[reachability_graph_node-1] [INFO] [1787525062.567852416] [reachability_graph_node]: Built method=gng with 800/800 nodes (2 anchors, 798 prototypes, 0/0 guards, 0 fill samples) after 4143 candidate attempts; retained 4551 validated edges in 2 components and cached 4551 full-body edge sweeps
+[reachability_graph_node-1] [INFO] [1787525062.570074880] [reachability_graph_node]: Reachability graph ready: method=gng, 800 nodes, 4551 edges, group=arm, tip=end_effector_link, strict_collision=true, exact_collision=true
+[WARNING] [launch]: user interrupted with ctrl-c (SIGINT)
+[INFO] [reachability_graph_node-1]: sending signal 'SIGINT' to process[reachability_graph_node-1]
+[reachability_graph_node-1] [INFO] [1787525062.947669056] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[ERROR] [reachability_graph_node-1]: process has died [pid 95517, exit code -2, cmd '/home/kublab/ros2_ws/install/om6dof_dd_gng/lib/om6dof_dd_gng/reachability_graph_node --ros-args -r __node:=reachability_graph_node --params-file /home/kublab/ros2_ws/install/om6dof_dd_gng/share/om6dof_dd_gng/config/topo_gng.yaml --params-file /tmp/launch_params_85mlul9z --params-file /tmp/launch_params_i1_aimu6 --params-file /tmp/launch_params_jh6bay_m'].

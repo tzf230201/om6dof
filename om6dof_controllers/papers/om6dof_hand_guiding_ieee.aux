@@ -1,0 +1,97 @@
+\relax 
+\citation{Chen2018}
+\citation{Chen2023}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
+\newlabel{eq:quasistatic}{{1}{1}}
+\citation{Yu2018}
+\citation{Chen2018}
+\citation{Chen2023}
+\citation{Li2025ZeroForce}
+\citation{Lin2019}
+\citation{Zhou2026}
+\citation{Gautier1991Base}
+\citation{Swevers1997Optimal}
+\citation{Jung2018Backward}
+\citation{Nguyen2023FIGAROH}
+\citation{Madsen2022AURT}
+\citation{Tian2024VirtualConstraints}
+\citation{Zhang2025SafeSysID}
+\citation{Chen2018}
+\citation{Chen2023}
+\citation{Li2025ZeroForce}
+\citation{Gautier1991Base}
+\citation{Swevers1997Optimal}
+\citation{Jung2018Backward}
+\citation{Nguyen2023FIGAROH}
+\citation{Madsen2022AURT}
+\citation{Tian2024VirtualConstraints}
+\citation{Zhang2025SafeSysID}
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work and Positioning}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Commissioning Problem Formulation}{2}{}\protected@file@percent }
+\newlabel{eq:dynamics}{{2}{2}}
+\newlabel{eq:current_observation}{{3}{2}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Proposed Autonomous Commissioning Framework}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Safety Set and Hardware Verification}{2}{}\protected@file@percent }
+\newlabel{eq:safe_set}{{4}{2}}
+\newlabel{eq:polarity}{{5}{2}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Observability and Experiment Selection}{2}{}\protected@file@percent }
+\newlabel{eq:gravity_regressor}{{6}{2}}
+\citation{Gautier2012DriveGains}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Positioning of the proposed commissioning framework.}}{3}{}\protected@file@percent }
+\newlabel{tab:related_work}{{I}{3}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Proposed autonomous commissioning loop. Safe calibration motions are epistemic actions selected to reduce uncertainty. Unknown torque scale routes the system to independent per-joint current-domain maps; only calibrated scale permits shared physical base-parameter and subtree reasoning. Both branches must pass friction and held-out deployment gates.}}{3}{}\protected@file@percent }
+\newlabel{fig:architecture}{{1}{3}}
+\newlabel{eq:experiment_design}{{7}{3}}
+\newlabel{eq:subtree}{{8}{3}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Current Scale, Gravity, and Friction}{3}{}\protected@file@percent }
+\newlabel{eq:current_domain}{{9}{3}}
+\newlabel{eq:payload_scale}{{10}{3}}
+\citation{RobotisXM430}
+\citation{ROS2Control}
+\citation{RobotisXM430}
+\newlabel{eq:friction}{{11}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Validation-Gated Deployment}{4}{}\protected@file@percent }
+\newlabel{eq:validation_gate}{{12}{4}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Preliminary OM6DOF Instantiation}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Platform and Existing Excitation}{4}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Chronological held-out raw-current prediction on the existing OM6DOF run.}}{4}{}\protected@file@percent }
+\newlabel{tab:fit}{{II}{4}}
+\newlabel{eq:multisine}{{13}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Chronological Current-Domain Fit}{4}{}\protected@file@percent }
+\newlabel{eq:regression}{{14}{4}}
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Preliminary Signed-Current Deployment}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Current-Based Position Control Baseline}{4}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Existing OM6DOF multisine data over the first 63\nobreakspace  {}s. Position and reported velocity are measured; $T_g^{\mathrm  {URDF}}$ is the whole-tree model prediction. This is preliminary manually bounded excitation, not yet an autonomously synthesized experiment.}}{5}{}\protected@file@percent }
+\newlabel{fig:multisine_motion}{{2}{5}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Pure Current Control}{5}{}\protected@file@percent }
+\newlabel{eq:command}{{15}{5}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Preliminary Commissioning Results}{5}{}\protected@file@percent }
+\newlabel{sec:commissioning}{{VII}{5}}
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Evaluation Plan}{5}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Held-out Present Current prediction. Parameters use only $[2,120)$\nobreakspace  {}s; displayed test samples begin at 122\nobreakspace  {}s. Both measured and predicted quantities are raw current, not torque.}}{6}{}\protected@file@percent }
+\newlabel{fig:heldout_current}{{3}{6}}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Evaluation matrix. Only the preliminary portion of RQ2 is currently reported in Table\nobreakspace  {}II\hbox {}.}}{6}{}\protected@file@percent }
+\newlabel{tab:protocol}{{III}{6}}
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Safety and Reproducibility}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {X}Limitations and Threats to Validity}{6}{}\protected@file@percent }
+\bibstyle{IEEEtran}
+\bibdata{om6dof_hand_guiding_ieee}
+\bibcite{Chen2018}{1}
+\bibcite{Chen2023}{2}
+\bibcite{Yu2018}{3}
+\bibcite{Li2025ZeroForce}{4}
+\bibcite{Lin2019}{5}
+\bibcite{Zhou2026}{6}
+\bibcite{Gautier1991Base}{7}
+\bibcite{Swevers1997Optimal}{8}
+\bibcite{Jung2018Backward}{9}
+\bibcite{Nguyen2023FIGAROH}{10}
+\bibcite{Madsen2022AURT}{11}
+\bibcite{Tian2024VirtualConstraints}{12}
+\bibcite{Zhang2025SafeSysID}{13}
+\bibcite{Gautier2012DriveGains}{14}
+\bibcite{RobotisXM430}{15}
+\bibcite{ROS2Control}{16}
+\@writefile{toc}{\contentsline {section}{\numberline {XI}Conclusion}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{7}{}\protected@file@percent }
+\gdef \@abspage@last{7}

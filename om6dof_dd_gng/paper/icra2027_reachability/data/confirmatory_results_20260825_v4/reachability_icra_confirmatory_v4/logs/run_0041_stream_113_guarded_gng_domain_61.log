@@ -1,0 +1,13 @@
+[INFO] [launch]: All log files can be found below /home/kublab/.ros/log/2026-08-25-20-08-33-206358-agx-407946
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [reachability_graph_node-1]: process started with pid [407973]
+[reachability_graph_node-1] [INFO] [1787656113.655037632] [reachability_graph_node]: Reachability node started in preview-only mode; it has no controller publisher or action client.
+[reachability_graph_node-1] [INFO] [1787656114.159372000] [moveit_robot_model.robot_model]: Loading robot model 'om6dof'...
+[reachability_graph_node-1] [INFO] [1787656114.159433696] [moveit_robot_model.robot_model]: No root/virtual joint specified in SRDF. Assuming fixed joint
+[reachability_graph_node-1] [INFO] [1787656114.950052960] [reachability_graph_node]: GNG sampling retained 199 prototypes and 599/599 deterministic guard samples
+[reachability_graph_node-1] [INFO] [1787656116.324191296] [reachability_graph_node]: Built method=guarded_gng with 800/800 nodes (2 anchors, 199 prototypes, 599/599 guards, 0 fill samples) after 4142 candidate attempts; retained 3470 validated edges in 12 components and cached 3470 full-body edge sweeps
+[reachability_graph_node-1] [INFO] [1787656116.325369664] [reachability_graph_node]: Reachability graph ready: method=guarded_gng, 800 nodes, 3470 edges, group=arm, tip=end_effector_link, strict_collision=true, exact_collision=true
+[WARNING] [launch]: user interrupted with ctrl-c (SIGINT)
+[INFO] [reachability_graph_node-1]: sending signal 'SIGINT' to process[reachability_graph_node-1]
+[reachability_graph_node-1] [INFO] [1787656118.111877440] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[ERROR] [reachability_graph_node-1]: process has died [pid 407973, exit code -2, cmd '/home/kublab/ros2_ws/install/om6dof_dd_gng/lib/om6dof_dd_gng/reachability_graph_node --ros-args -r __node:=reachability_graph_node --params-file /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/config/topo_gng.yaml --params-file /tmp/launch_params_ff3dh5i4'].

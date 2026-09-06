@@ -346,7 +346,10 @@ def main():
     # can still be selected explicitly with --action.
     parser.add_argument('--action', default='/arm_controller/follow_joint_trajectory')
     parser.add_argument('--joint-states', default='/joint_states')
-    parser.add_argument('--output', default='~/tf_identification/multisine.csv')
+    parser.add_argument(
+        '--output',
+        default='~/ros2_ws/src/om6dof/om6dof_controllers/papers/experiments/'
+                'multisine_identification/data/multisine.csv')
     args, ros_args = parser.parse_known_args()
     if args.duration <= 0.0 or args.period <= 0.0 or args.ready_speed <= 0.0:
         parser.error('--duration, --period and --ready-speed must be positive')

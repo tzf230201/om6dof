@@ -7,7 +7,8 @@
 #
 # ⚠ camera_xyz / camera_rpy MUST be measured for your actual camera mount:
 #   pose of the camera BODY frame (x out of the lens, y left, z up) relative
-#   to the arm base (`world`, the bottom of link1). Verify with:
+#   to the arm base (`world`, the ground/table plane; link1 begins 20 mm above
+#   it on the pedestal). Verify with:
 #       ros2 service call /tag_world std_srvs/srv/Trigger
 #   → put the tag at a known spot, compare the reported x/y/z with a ruler.
 

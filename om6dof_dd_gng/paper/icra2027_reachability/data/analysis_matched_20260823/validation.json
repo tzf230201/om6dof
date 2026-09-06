@@ -1,0 +1,39 @@
+{
+  "row_count": 100,
+  "method_counts": {
+    "gng": 50,
+    "halton_prm": 50
+  },
+  "seed_count": 50,
+  "seed_range": [
+    0,
+    49
+  ],
+  "all_expected_seeds_present": true,
+  "each_seed_has_both_methods": true,
+  "run_indices_complete": true,
+  "errors": 0,
+  "nodes_all_800": true,
+  "matched_target_xyz": true,
+  "matched_target_joints": true,
+  "matched_obstacle_xyz": true,
+  "target_xyz": [
+    0.1622375619994582,
+    0.0,
+    0.2540819536713998
+  ],
+  "target_joints": [
+    0.0,
+    -0.6806,
+    1.3613,
+    0.0,
+    0.8901,
+    0.0
+  ],
+  "obstacle_xyz": [
+    0.08711878099972911,
+    0.0,
+    0.3607909768356999
+  ],
+  "valid": true
+}

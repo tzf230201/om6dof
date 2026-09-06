@@ -5,14 +5,39 @@
   <!-- Import all Gazebo-customization elements, including Gazebo colors -->
   <!-- Import Rviz colors -->
   <xacro:include filename="$(find om6dof_description)/urdf/materials.xacro" />
+  <!-- Pedestal from the ground/table plane to the bottom of the base servo. -->
+  <xacro:property name="base_height" value="0.020"/>
+
   <!-- World -->
   <link name="world">
   </link>
 
-  <!-- World fixed joint-->
+  <!-- A 20 mm support keeps the bottom of the link1/base servo above ground. -->
+  <link name="base_link">
+    <visual>
+      <!-- link1 footprint is approximately 46.5 x 28.5 mm; leave a 1.75 mm rim. -->
+      <origin xyz="0 0 ${base_height / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.050 0.032 ${base_height}"/>
+      </geometry>
+      <material name="grey"/>
+    </visual>
+    <!-- Deliberately visual-only: the pedestal is fixed to the table plane,
+         so collision geometry here would permanently contact the table object
+         in MoveIt's planning scene. -->
+  </link>
+
+  <!-- World fixed joint: ground/table plane -> 20 mm pedestal. -->
   <joint name="world_fixed" type="fixed">
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <parent link="world"/>
+    <child link="base_link"/>
+  </joint>
+
+  <!-- Pedestal top -> bottom of the base servo (link1). -->
+  <joint name="base_to_link1" type="fixed">
+    <origin xyz="0 0 ${base_height}" rpy="0 0 0"/>
+    <parent link="base_link"/>
     <child link="link1"/>
   </joint>
 
@@ -475,21 +500,10 @@
 
   <!-- end effector link -->
   <link name="end_effector_link">
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <box size="0.01 0.01 0.01" />
-      </geometry>
-      <material name="red"/>
-     </visual>
-
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <box size="0.01 0.01 0.01"/>
-      </geometry>
-    </collision>
-
+    <!-- Coordinate/inertial frame only. The former 10 mm red cube was a
+         debug glyph, not measured hardware, and made MoveIt collide against
+         a phantom object at the TCP. The finger links contain the physical
+         gripper visual/collision meshes. -->
     <inertial>
       <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
       <mass value="0.001"/>

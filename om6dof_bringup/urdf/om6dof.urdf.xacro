@@ -11,6 +11,10 @@
   <!-- Passed through only when current_control is true.  5 retains the
        Dynamixel position loop; 0 makes Goal Current a signed torque command. -->
   <xacro:arg name="arm_operating_mode" default="5"/>
+  <!-- Internal fail-closed profile used only by torque_off_diagnostic.launch.py.
+       The driver treats this as an invariant: it forces torque off and rejects
+       every ROS path that could turn it back on. -->
+  <xacro:arg name="torque_off_diagnostic_mode" default="false"/>
 
   <!-- Runtime communication fail-safe settings are kept in one editable file. -->
   <xacro:property name="hardware_safety"
@@ -31,6 +35,9 @@
     port_name="$(arg port_name)"
     baudrate="$(arg baud_rate)"
     consecutive_failure_shutdown_threshold="${hardware_safety['consecutive_failure_shutdown_threshold']}"
+    read_packet_timeout_ms="${hardware_safety['read_packet_timeout_ms']}"
+    read_transport_mode="${hardware_safety['read_transport_mode']}"
     use_fake_hardware="$(arg use_fake_hardware)"
-    arm_operating_mode="$(arg arm_operating_mode)"/>
+    arm_operating_mode="$(arg arm_operating_mode)"
+    torque_off_diagnostic_mode="$(arg torque_off_diagnostic_mode)"/>
 </robot>

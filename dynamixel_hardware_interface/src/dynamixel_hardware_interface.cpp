@@ -16,6 +16,8 @@
 
 #include "dynamixel_hardware_interface/dynamixel_hardware_interface.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <csignal>
 #include <cmath>
@@ -34,6 +36,59 @@
 
 namespace dynamixel_hardware_interface
 {
+
+namespace
+{
+
+constexpr std::size_t kHealthSchemaVersion = 0;
+constexpr std::size_t kHealthDriverInstanceId = 1;
+constexpr std::size_t kHealthReadFailureCount = 2;
+constexpr std::size_t kHealthWriteFailureCount = 3;
+constexpr std::size_t kHealthConsecutiveReadFailures = 4;
+constexpr std::size_t kHealthConsecutiveWriteFailures = 5;
+constexpr std::size_t kHealthCurrentReadError = 6;
+constexpr std::size_t kHealthCurrentWriteError = 7;
+constexpr std::size_t kHealthLastCommError = 8;
+constexpr std::size_t kHealthLastFailureStampNs = 9;
+constexpr std::size_t kHealthFailSafeTriggered = 10;
+constexpr std::size_t kHealthTorqueAllEnabled = 11;
+constexpr std::size_t kHealthHardwareErrorMask = 12;
+constexpr std::size_t kHealthTorqueAllDisabled = 13;
+constexpr std::size_t kHealthTorqueEnableInhibited = 14;
+constexpr std::size_t kHealthHardwareErrorExpectedCount = 15;
+constexpr std::size_t kHealthHardwareErrorMonitoredCount = 16;
+constexpr std::size_t kHealthHardwareErrorMonitoringComplete = 17;
+constexpr std::size_t kHealthInputVoltageExpectedCount = 18;
+constexpr std::size_t kHealthInputVoltageMonitoredCount = 19;
+constexpr std::size_t kHealthInputVoltageMonitoringComplete = 20;
+constexpr std::size_t kHealthInputVoltageMinV = 21;
+constexpr std::size_t kHealthInputVoltageMinId = 22;
+constexpr std::size_t kHealthValueCount = 23;
+constexpr std::chrono::milliseconds kHealthPublishPeriod{50};
+
+bool ParseBooleanHardwareParameter(const std::string & text, bool & value)
+{
+  const auto first = text.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos) {
+    return false;
+  }
+  const auto last = text.find_last_not_of(" \t\r\n");
+  std::string normalized = text.substr(first, last - first + 1);
+  std::transform(
+    normalized.begin(), normalized.end(), normalized.begin(),
+    [](unsigned char character) {return static_cast<char>(std::tolower(character));});
+  if (normalized == "true" || normalized == "1") {
+    value = true;
+    return true;
+  }
+  if (normalized == "false" || normalized == "0") {
+    value = false;
+    return true;
+  }
+  return false;
+}
+
+}  // namespace
 
 DynamixelHardware::DynamixelHardware()
 : rclcpp::Node("dynamixel_hardware_interface"),
@@ -114,6 +169,39 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     RCLCPP_INFO(logger_, "error_timeout_ms parameter not found, using default value of 500ms");
   }
 
+  const auto read_timeout_parameter = info_.hardware_parameters.find("read_packet_timeout_ms");
+  if (read_timeout_parameter != info_.hardware_parameters.end()) {
+    if (!ParseReadPacketTimeoutMs(read_timeout_parameter->second, read_packet_timeout_ms_)) {
+      RCLCPP_ERROR(
+        logger_,
+        "Invalid read_packet_timeout_ms '%s': expected a finite value in [%.1f, %.1f] ms",
+        read_timeout_parameter->second.c_str(), kMinimumReadPacketTimeoutMs,
+        kMaximumReadPacketTimeoutMs);
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  } else {
+    RCLCPP_INFO(
+      logger_, "read_packet_timeout_ms parameter not found, using default value of %.1fms",
+      kDefaultReadPacketTimeoutMs);
+  }
+  RCLCPP_INFO(
+    logger_, "Dynamixel read-packet timeout: %.1fms", read_packet_timeout_ms_);
+
+  ReadTransportMode read_transport_mode = ReadTransportMode::MULTI_SYNC;
+  const auto read_transport_parameter = info_.hardware_parameters.find("read_transport_mode");
+  if (read_transport_parameter != info_.hardware_parameters.end()) {
+    if (!ParseReadTransportMode(read_transport_parameter->second, read_transport_mode)) {
+      RCLCPP_ERROR(
+        logger_,
+        "Invalid read_transport_mode '%s': expected 'multi_sync' or "
+        "'sequential_single_sync'; refusing hardware initialization",
+        read_transport_parameter->second.c_str());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  }
+  RCLCPP_INFO(
+    logger_, "Dynamixel read transport: %s", ReadTransportModeName(read_transport_mode));
+
   if (info_.hardware_parameters.find("consecutive_failure_shutdown_threshold") !=
     info_.hardware_parameters.end())
   {
@@ -145,9 +233,6 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     auto_enable_torque_on_start_ =
       info_.hardware_parameters.at("auto_enable_torque_on_start") == "true";
   }
-  RCLCPP_INFO(
-    logger_, "Automatic torque enable on hardware start: %s",
-    auto_enable_torque_on_start_ ? "true" : "false");
 
   if (info_.hardware_parameters.find("restrict_critical_write_service") !=
     info_.hardware_parameters.end())
@@ -155,6 +240,35 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     restrict_critical_write_service_ =
       info_.hardware_parameters.at("restrict_critical_write_service") == "true";
   }
+
+  if (info_.hardware_parameters.find("torque_off_diagnostic_mode") !=
+    info_.hardware_parameters.end())
+  {
+    const std::string & diagnostic_value =
+      info_.hardware_parameters.at("torque_off_diagnostic_mode");
+    if (!ParseBooleanHardwareParameter(diagnostic_value, torque_off_diagnostic_mode_)) {
+      RCLCPP_ERROR(
+        logger_,
+        "Invalid torque_off_diagnostic_mode '%s'; refusing hardware initialization",
+        diagnostic_value.c_str());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  }
+  if (torque_off_diagnostic_mode_) {
+    // These assignments intentionally override any contradictory profile
+    // values.  The diagnostic invariant is a driver property, not a launch
+    // convention that another ROS client can undo later.
+    auto_enable_torque_on_start_ = false;
+    restrict_critical_write_service_ = true;
+    RCLCPP_WARN(
+      logger_,
+      "TORQUE-OFF DIAGNOSTIC MODE: automatic torque enable and all register-write/reboot "
+      "services are inhibited");
+  }
+
+  RCLCPP_INFO(
+    logger_, "Automatic torque enable on hardware start: %s",
+    auto_enable_torque_on_start_ ? "true" : "false");
 
   // Add new parameter for torque initialization
   bool disable_torque_at_init = false;
@@ -170,6 +284,12 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
       logger_,
       "If there is a torque enabled Dynamixel, the program will be terminated. Set "
       "'disable_torque_at_init' parameter to 'true' to disable torque at initialization.");
+  }
+  if (torque_off_diagnostic_mode_) {
+    disable_torque_at_init = true;
+    RCLCPP_WARN(
+      logger_,
+      "Torque-off diagnostic invariant armed: initialization will force Torque Enable=0");
   }
 
   RCLCPP_INFO_STREAM(
@@ -187,6 +307,7 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     new Dynamixel(
       (ament_index_cpp::get_package_share_directory("dynamixel_hardware_interface") +
       dxl_model_folder).c_str()));
+  dxl_comm_->SetReadTransportMode(read_transport_mode);
 
   RCLCPP_INFO_STREAM(logger_, "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
   RCLCPP_INFO_STREAM(logger_, "$$$$$ Init Dxl Comm Port");
@@ -421,6 +542,60 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
   dxl_state_pub_uni_ptr_->msg_.torque_state.resize(num_of_pub_data);
   dxl_state_pub_uni_ptr_->unlock();
 
+  std::string bus_health_topic = "dynamixel_hardware_interface/health";
+  if (info_.hardware_parameters.find("dynamixel_health_topic") !=
+    info_.hardware_parameters.end())
+  {
+    bus_health_topic = info_.hardware_parameters["dynamixel_health_topic"];
+  }
+  if (info_.hardware_parameters.find("dynamixel_health_status_name") !=
+    info_.hardware_parameters.end())
+  {
+    bus_health_status_name_ = info_.hardware_parameters["dynamixel_health_status_name"];
+  }
+  bus_health_instance_id_ = std::to_string(this->now().nanoseconds());
+  const auto bus_health_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
+  bus_health_pub_ = this->create_publisher<BusHealthMsg>(bus_health_topic, bus_health_qos);
+  bus_health_pub_uni_ptr_ = std::make_unique<BusHealthPublisher>(bus_health_pub_);
+  bus_health_pub_uni_ptr_->lock();
+  bus_health_pub_uni_ptr_->msg_.status.resize(1);
+  auto & health_status = bus_health_pub_uni_ptr_->msg_.status.front();
+  health_status.name = bus_health_status_name_;
+  health_status.hardware_id = port_name_;
+  health_status.values.resize(kHealthValueCount);
+  health_status.values[kHealthSchemaVersion].key = "schema_version";
+  health_status.values[kHealthDriverInstanceId].key = "driver_instance_id";
+  health_status.values[kHealthReadFailureCount].key = "read_failure_count";
+  health_status.values[kHealthWriteFailureCount].key = "write_failure_count";
+  health_status.values[kHealthConsecutiveReadFailures].key =
+    "consecutive_read_failures";
+  health_status.values[kHealthConsecutiveWriteFailures].key =
+    "consecutive_write_failures";
+  health_status.values[kHealthCurrentReadError].key = "current_read_error";
+  health_status.values[kHealthCurrentWriteError].key = "current_write_error";
+  health_status.values[kHealthLastCommError].key = "last_comm_error";
+  health_status.values[kHealthLastFailureStampNs].key = "last_failure_stamp_ns";
+  health_status.values[kHealthFailSafeTriggered].key = "fail_safe_triggered";
+  health_status.values[kHealthTorqueAllEnabled].key = "torque_all_enabled";
+  health_status.values[kHealthHardwareErrorMask].key = "hardware_error_mask";
+  health_status.values[kHealthTorqueAllDisabled].key = "torque_all_disabled";
+  health_status.values[kHealthTorqueEnableInhibited].key = "torque_enable_inhibited";
+  health_status.values[kHealthHardwareErrorExpectedCount].key =
+    "hardware_error_expected_count";
+  health_status.values[kHealthHardwareErrorMonitoredCount].key =
+    "hardware_error_monitored_count";
+  health_status.values[kHealthHardwareErrorMonitoringComplete].key =
+    "hardware_error_monitoring_complete";
+  health_status.values[kHealthInputVoltageExpectedCount].key =
+    "input_voltage_expected_count";
+  health_status.values[kHealthInputVoltageMonitoredCount].key =
+    "input_voltage_monitored_count";
+  health_status.values[kHealthInputVoltageMonitoringComplete].key =
+    "input_voltage_monitoring_complete";
+  health_status.values[kHealthInputVoltageMinV].key = "input_voltage_min_v";
+  health_status.values[kHealthInputVoltageMinId].key = "input_voltage_min_id";
+  bus_health_pub_uni_ptr_->unlock();
+
   using namespace std::placeholders;
 
   // Get Dynamixel data service
@@ -610,10 +785,14 @@ hardware_interface::CallbackReturn DynamixelHardware::start()
   rclcpp::Time start_time = this->now();
   rclcpp::Duration error_duration(0, 0);
   while (true) {
-    dxl_comm_err_ = CheckError(dxl_comm_->ReadMultiDxlData(0.0));
+    dxl_comm_err_ = CheckError(dxl_comm_->ReadMultiDxlData(read_packet_timeout_ms_));
     if (dxl_comm_err_ == DxlError::OK) {
+      bus_health_.RecordReadSuccess();
       break;
     }
+    bus_health_.RecordReadFailure(
+      static_cast<std::int32_t>(dxl_comm_err_), this->now().nanoseconds());
+    PublishBusHealth(true, "Dynamixel startup read failure");
     error_duration = this->now() - start_time;
     if (error_duration.seconds() * 1000 >= err_timeout_ms_) {
       RCLCPP_ERROR_STREAM(
@@ -626,14 +805,24 @@ hardware_interface::CallbackReturn DynamixelHardware::start()
 
   CalcTransmissionToJoint();
 
+  torque_state_feedback_valid_ = RefreshTorqueStateFromFeedback();
+  if (!EnforceTorqueOffDiagnosticMode("hardware activation")) {
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+
   SyncJointCommandWithStates();
 
   CalcJointToTransmission();
 
-  if (dxl_comm_->WriteMultiDxlData() != DxlError::OK) {
+  const DxlError initial_write_result = dxl_comm_->WriteMultiDxlData();
+  if (initial_write_result != DxlError::OK) {
+    bus_health_.RecordWriteFailure(
+      static_cast<std::int32_t>(initial_write_result), this->now().nanoseconds());
+    PublishBusHealth(true, "Dynamixel startup write failure");
     RCLCPP_ERROR(logger_, "Failed to write initial Dynamixel command values");
     return hardware_interface::CallbackReturn::ERROR;
   }
+  bus_health_.RecordWriteSuccess();
 
   // Arm the actuator watchdog only after read/write handlers and the initial
   // command packet are valid. Enabling it during on_init can expire while the
@@ -646,10 +835,15 @@ hardware_interface::CallbackReturn DynamixelHardware::start()
   if (!auto_enable_torque_on_start_) {
     dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
     dxl_torque_status_ = TORQUE_DISABLED;
-    RCLCPP_WARN(
-      logger_,
-      "Leaving Dynamixel torque disabled on start; explicitly arm only after the effort "
-      "controller is active and commanding zero current");
+    if (torque_off_diagnostic_mode_) {
+      RCLCPP_WARN(
+        logger_, "Dynamixel torque is locked OFF for the lifetime of this diagnostic process");
+    } else {
+      RCLCPP_WARN(
+        logger_,
+        "Leaving Dynamixel torque disabled on start; explicitly arm only after the effort "
+        "controller is active and commanding zero current");
+    }
   } else if (torque_enabled_comm_id_id_.size() > 0) {
     RCLCPP_INFO_STREAM(logger_, "Enabling torque for Dynamixels");
     bool enabled = false;
@@ -673,6 +867,7 @@ hardware_interface::CallbackReturn DynamixelHardware::start()
   }
 
   RCLCPP_INFO_STREAM(logger_, "Dynamixel Hardware Start!");
+  PublishBusHealth(true, "Dynamixel hardware started");
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -685,6 +880,7 @@ hardware_interface::CallbackReturn DynamixelHardware::stop()
     const bool watchdog_result = SetConfiguredBusWatchdogs(false);
     dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
     dxl_torque_status_ = TORQUE_DISABLED;
+    PublishBusHealth(true, "Dynamixel hardware stopped");
     if (physical_result != DxlError::OK || virtual_result != DxlError::OK || !watchdog_result) {
       RCLCPP_ERROR_STREAM(
         logger_, "Failed to confirm torque disable/watchdog clear while stopping hardware");
@@ -703,24 +899,36 @@ hardware_interface::CallbackReturn DynamixelHardware::stop()
 hardware_interface::return_type DynamixelHardware::read(
   [[maybe_unused]] const rclcpp::Time & time, const rclcpp::Duration & period)
 {
-  double period_ms = period.seconds() * 1000;
-
   if (dxl_status_ == REBOOTING) {
     RCLCPP_ERROR_STREAM(logger_, "Dynamixel Read Fail : REBOOTING");
     return hardware_interface::return_type::ERROR;
   } else if (dxl_status_ == DXL_OK || dxl_status_ == COMM_ERROR || dxl_status_ == HW_ERROR) {
-    dxl_comm_err_ = CheckError(dxl_comm_->ReadMultiDxlData(period_ms));
+    // Packet response time is independent of scheduler delay. Keep this
+    // deadline fixed and bounded rather than deriving it from `period`, which
+    // could be arbitrarily large after a host stall. Fail-safe accounting
+    // below still uses the real control period.
+    dxl_comm_err_ = CheckError(dxl_comm_->ReadMultiDxlData(read_packet_timeout_ms_));
     if (dxl_comm_err_ == DxlError::DXL_HARDWARE_ERROR) {
+      bus_health_.RecordReadFailure(
+        static_cast<std::int32_t>(dxl_comm_err_), this->now().nanoseconds());
       (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
       dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
       dxl_torque_status_ = TORQUE_DISABLED;
       fail_safe_triggered_ = true;
+      bus_health_.fail_safe_triggered = true;
+      PublishBusHealth(true, "Dynamixel hardware fault detected");
       RCLCPP_FATAL(
         logger_, "Dynamixel hardware fault detected; torque-disable requested and control stopped");
       return hardware_interface::return_type::ERROR;
     }
     if (dxl_comm_err_ != DxlError::OK) {
       ++consecutive_read_failures_;
+      if (torque_off_diagnostic_mode_) {
+        // Never advertise a stale torque-off confirmation for a failed read.
+        torque_state_feedback_valid_ = false;
+      }
+      bus_health_.RecordReadFailure(
+        static_cast<std::int32_t>(dxl_comm_err_), this->now().nanoseconds());
       if (!is_read_in_error_) {
         is_read_in_error_ = true;
         read_error_duration_ = rclcpp::Duration(0, 0);
@@ -737,6 +945,8 @@ hardware_interface::return_type DynamixelHardware::read(
         consecutive_read_failures_ >= consecutive_failure_shutdown_threshold_)
       {
         fail_safe_triggered_ = true;
+        bus_health_.fail_safe_triggered = true;
+        PublishBusHealth(true, "Dynamixel read fail-safe threshold reached");
         RCLCPP_FATAL(
           logger_,
           "Dynamixel communication failed %d consecutive times. Stopping the OM6DOF stack; "
@@ -746,11 +956,13 @@ hardware_interface::return_type DynamixelHardware::read(
         return hardware_interface::return_type::ERROR;
       }
 
+      PublishBusHealth(true, "Dynamixel read failure");
       if (read_error_duration_.seconds() * 1000 >= err_timeout_ms_) {
         return hardware_interface::return_type::ERROR;
       }
       return hardware_interface::return_type::OK;
     }
+    const bool read_recovered = bus_health_.consecutive_read_failures > 0;
     if (consecutive_read_failures_ > 0) {
       RCLCPP_INFO_STREAM_THROTTLE(
         logger_, clock_, 5000,
@@ -758,25 +970,18 @@ hardware_interface::return_type DynamixelHardware::read(
           " consecutive failures");
     }
     consecutive_read_failures_ = 0;
+    bus_health_.RecordReadSuccess();
     is_read_in_error_ = false;
     read_error_duration_ = rclcpp::Duration(0, 0);
+    if (read_recovered) {
+      PublishBusHealth(true, "Dynamixel read communication recovered");
+    }
   }
 
   CalcTransmissionToJoint();
 
   // Refresh the public torque status from the state values read this cycle.
-  for (const auto & transmission : hdl_trans_states_) {
-    const auto it = std::find(
-      transmission.interface_name_vec.begin(), transmission.interface_name_vec.end(),
-      "Torque Enable");
-    if (it == transmission.interface_name_vec.end()) {
-      continue;
-    }
-    const size_t index = std::distance(transmission.interface_name_vec.begin(), it);
-    const double value = *transmission.value_ptr_vec.at(index);
-    dxl_torque_state_[{transmission.comm_id, transmission.id}] =
-      std::isfinite(value) && value > 0.5;
-  }
+  torque_state_feedback_valid_ = RefreshTorqueStateFromFeedback();
   if (dxl_torque_status_ != REQUESTED_TO_ENABLE &&
     dxl_torque_status_ != REQUESTED_TO_DISABLE)
   {
@@ -786,6 +991,12 @@ hardware_interface::return_type DynamixelHardware::read(
       all_enabled = all_enabled && state != dxl_torque_state_.end() && state->second;
     }
     dxl_torque_status_ = all_enabled ? TORQUE_ENABLED : TORQUE_DISABLED;
+  }
+  if (!EnforceTorqueOffDiagnosticMode("cyclic read")) {
+    // A separately opened bus client or future regression must not be able to
+    // leave this process alive after Torque Enable becomes ON or unreadable.
+    std::raise(SIGTERM);
+    return hardware_interface::return_type::ERROR;
   }
 
   for (auto sensor : hdl_gpio_sensor_states_) {
@@ -808,6 +1019,7 @@ hardware_interface::return_type DynamixelHardware::read(
     }
     dxl_state_pub_uni_ptr_->unlockAndPublish();
   }
+  PublishBusHealth(false, "OK");
 
   if (rclcpp::ok()) {
     rclcpp::spin_some(this->get_node_base_interface());
@@ -817,46 +1029,53 @@ hardware_interface::return_type DynamixelHardware::read(
 hardware_interface::return_type DynamixelHardware::write(
   [[maybe_unused]] const rclcpp::Time & time, const rclcpp::Duration & period)
 {
-  const auto record_write_failure = [this, &period]() {
-    ++consecutive_write_failures_;
-    is_write_in_error_ = true;
-    write_error_duration_ = write_error_duration_ + period;
-    RCLCPP_ERROR_STREAM_THROTTLE(
-      logger_, clock_, 1000,
-      "Dynamixel write failed (consecutive attempts: " << consecutive_write_failures_ << "/" <<
-        consecutive_failure_shutdown_threshold_ << ")");
+  const auto record_write_failure = [this, &period](DxlError error) {
+      ++consecutive_write_failures_;
+      bus_health_.RecordWriteFailure(
+        static_cast<std::int32_t>(error), this->now().nanoseconds());
+      is_write_in_error_ = true;
+      write_error_duration_ = write_error_duration_ + period;
+      RCLCPP_ERROR_STREAM_THROTTLE(
+        logger_, clock_, 1000,
+        "Dynamixel write failed (consecutive attempts: " << consecutive_write_failures_ << "/" <<
+          consecutive_failure_shutdown_threshold_ << ")");
 
-    if (consecutive_write_failures_ >= consecutive_failure_shutdown_threshold_) {
-      if (!torque_enabled_comm_id_id_.empty()) {
-        (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
+      if (consecutive_write_failures_ >= consecutive_failure_shutdown_threshold_) {
+        if (!torque_enabled_comm_id_id_.empty()) {
+          (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
+        }
+        dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+        dxl_torque_status_ = TORQUE_DISABLED;
+        fail_safe_triggered_ = true;
+        bus_health_.fail_safe_triggered = true;
+        PublishBusHealth(true, "Dynamixel write fail-safe threshold reached");
+        RCLCPP_FATAL(
+          logger_,
+          "Dynamixel writes failed %d consecutive times; torque-disable requested and the "
+          "hardware loop is stopping",
+          consecutive_write_failures_);
+        return hardware_interface::return_type::ERROR;
       }
-      dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
-      dxl_torque_status_ = TORQUE_DISABLED;
-      fail_safe_triggered_ = true;
-      RCLCPP_FATAL(
-        logger_,
-        "Dynamixel writes failed %d consecutive times; torque-disable requested and the "
-        "hardware loop is stopping",
-        consecutive_write_failures_);
-      return hardware_interface::return_type::ERROR;
-    }
-    return hardware_interface::return_type::OK;
-  };
+      PublishBusHealth(true, "Dynamixel write failure");
+      return hardware_interface::return_type::OK;
+    };
 
   if (dxl_status_ == HW_ERROR) {
     (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
     dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
     dxl_torque_status_ = TORQUE_DISABLED;
+    PublishBusHealth(true, "write refused while Dynamixel hardware is faulted");
     RCLCPP_FATAL(logger_, "Refusing to write current while Dynamixel hardware is faulted");
     return hardware_interface::return_type::ERROR;
   }
 
   if (dxl_status_ == DXL_OK) {
     // A disable request always wins and is executed before any other bus write.
-    if (dxl_torque_status_ == REQUESTED_TO_DISABLE &&
-      ChangeDxlTorqueState() != DxlError::OK)
-    {
-      return record_write_failure();
+    if (dxl_torque_status_ == REQUESTED_TO_DISABLE) {
+      const DxlError torque_result = ChangeDxlTorqueState();
+      if (torque_result != DxlError::OK) {
+        return record_write_failure(torque_result);
+      }
     }
 
     bool commands_are_finite = true;
@@ -874,13 +1093,16 @@ hardware_interface::return_type DynamixelHardware::write(
       (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
       dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
       dxl_torque_status_ = TORQUE_DISABLED;
+      PublishBusHealth(true, "non-finite joint command rejected");
       RCLCPP_FATAL(logger_, "Non-finite joint command rejected; torque-disable requested");
       return hardware_interface::return_type::ERROR;
     }
+
     if (dxl_torque_status_ == REQUESTED_TO_ENABLE && !effort_commands_are_zero) {
       (void)dxl_comm_->DynamixelDisable(torque_enabled_comm_id_id_);
       dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
       dxl_torque_status_ = TORQUE_DISABLED;
+      PublishBusHealth(true, "unsafe torque-enable request rejected");
       RCLCPP_FATAL(
         logger_, "Torque enable rejected because the effort/current command is not zero");
       return hardware_interface::return_type::ERROR;
@@ -892,18 +1114,25 @@ hardware_interface::return_type DynamixelHardware::write(
     const DxlError command_result = dxl_comm_->WriteMultiDxlData();
     if (item_result != DxlError::OK || command_result != DxlError::OK) {
       // Never honor a pending enable after the zero-current write failed.
-      return record_write_failure();
+      return record_write_failure(
+        item_result != DxlError::OK ? item_result : command_result);
     }
 
-    if (dxl_torque_status_ == REQUESTED_TO_ENABLE &&
-      ChangeDxlTorqueState() != DxlError::OK)
-    {
-      return record_write_failure();
+    if (dxl_torque_status_ == REQUESTED_TO_ENABLE) {
+      const DxlError torque_result = ChangeDxlTorqueState();
+      if (torque_result != DxlError::OK) {
+        return record_write_failure(torque_result);
+      }
     }
 
+    const bool write_recovered = bus_health_.consecutive_write_failures > 0;
     consecutive_write_failures_ = 0;
+    bus_health_.RecordWriteSuccess();
     is_write_in_error_ = false;
     write_error_duration_ = rclcpp::Duration(0, 0);
+    if (write_recovered) {
+      PublishBusHealth(true, "Dynamixel write communication recovered");
+    }
 
     return hardware_interface::return_type::OK;
   } else {
@@ -919,6 +1148,216 @@ hardware_interface::return_type DynamixelHardware::write(
     }
     return hardware_interface::return_type::OK;
   }
+}
+
+bool DynamixelHardware::RefreshTorqueStateFromFeedback()
+{
+  if (torque_enabled_comm_id_id_.empty()) {
+    return false;
+  }
+
+  std::map<std::pair<uint8_t, uint8_t>, bool> feedback_seen;
+  for (const auto & device : torque_enabled_comm_id_id_) {
+    feedback_seen[device] = false;
+  }
+
+  for (const auto & transmission : hdl_trans_states_) {
+    const auto item = std::find(
+      transmission.interface_name_vec.begin(), transmission.interface_name_vec.end(),
+      "Torque Enable");
+    if (item == transmission.interface_name_vec.end()) {
+      continue;
+    }
+    const auto device = std::make_pair(transmission.comm_id, transmission.id);
+    const auto expected = feedback_seen.find(device);
+    if (expected == feedback_seen.end()) {
+      continue;
+    }
+    const size_t index = std::distance(transmission.interface_name_vec.begin(), item);
+    const double value = *transmission.value_ptr_vec.at(index);
+    if (!std::isfinite(value)) {
+      dxl_torque_state_[device] = false;
+      continue;
+    }
+    dxl_torque_state_[device] = value > 0.5;
+    expected->second = true;
+  }
+
+  return std::all_of(
+    feedback_seen.begin(), feedback_seen.end(),
+    [](const auto & entry) {return entry.second;});
+}
+
+bool DynamixelHardware::AllActuatorTorqueEnabled() const
+{
+  bool all_enabled = !torque_enabled_comm_id_id_.empty();
+  for (const auto & device : torque_enabled_comm_id_id_) {
+    const auto state = dxl_torque_state_.find(device);
+    all_enabled = all_enabled && state != dxl_torque_state_.end() && state->second;
+  }
+  return all_enabled;
+}
+
+bool DynamixelHardware::AllActuatorTorqueDisabled() const
+{
+  if (!torque_state_feedback_valid_ || torque_enabled_comm_id_id_.empty()) {
+    return false;
+  }
+  for (const auto & device : torque_enabled_comm_id_id_) {
+    const auto state = dxl_torque_state_.find(device);
+    if (state == dxl_torque_state_.end() || state->second) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool DynamixelHardware::EnforceTorqueOffDiagnosticMode(const char * context)
+{
+  if (!torque_off_diagnostic_mode_ || AllActuatorTorqueDisabled()) {
+    return true;
+  }
+
+  const bool feedback_was_valid = torque_state_feedback_valid_;
+  // Torque feedback is either ON or unknown.  Request Torque Enable=0 for
+  // every physical actuator, latch the failure, and make the caller stop the
+  // hardware component.  This action can only remove actuator torque.
+  const DxlError disable_result = dxl_comm_->DynamixelDisable(dxl_comm_id_id_);
+  dxl_torque_state_ = dxl_comm_->GetDxlTorqueState();
+  torque_state_feedback_valid_ = disable_result == DxlError::OK;
+  dxl_torque_status_ = TORQUE_DISABLED;
+  fail_safe_triggered_ = true;
+  bus_health_.fail_safe_triggered = true;
+  PublishBusHealth(true, "torque-off diagnostic invariant violated");
+  RCLCPP_FATAL(
+    logger_,
+    "Torque-off diagnostic invariant violated during %s (feedback %s, disable request %s); "
+    "the hardware loop is stopping",
+    context,
+    feedback_was_valid ? "reported torque ON" : "was unknown",
+    disable_result == DxlError::OK ? "succeeded" : "failed");
+  return false;
+}
+
+std::uint32_t DynamixelHardware::AggregateHardwareError() const
+{
+  return AggregateHardwareErrorStatus(dxl_hw_err_);
+}
+
+void DynamixelHardware::PublishBusHealth(bool force, const std::string & event)
+{
+  if (!rclcpp::ok() || !bus_health_pub_uni_ptr_) {
+    return;
+  }
+
+  const auto steady_now = std::chrono::steady_clock::now();
+  if (!force && last_bus_health_publish_.time_since_epoch().count() != 0 &&
+    steady_now - last_bus_health_publish_ < kHealthPublishPeriod)
+  {
+    return;
+  }
+  if (!bus_health_pub_uni_ptr_->trylock()) {
+    return;
+  }
+
+  const bool torque_all_enabled = AllActuatorTorqueEnabled();
+  const bool torque_all_disabled = AllActuatorTorqueDisabled();
+  const bool torque_state_expected = torque_off_diagnostic_mode_ ?
+    torque_all_disabled : torque_all_enabled;
+  const std::size_t hardware_error_expected_count = dxl_comm_id_id_.size();
+  const std::size_t hardware_error_monitored_count =
+    HardwareErrorMonitoredCount(dxl_comm_id_id_, dxl_hw_err_);
+  const bool hardware_error_monitoring_complete =
+    HardwareErrorMonitoringComplete(dxl_comm_id_id_, dxl_hw_err_);
+  const std::uint32_t hardware_error_mask = AggregateHardwareError();
+
+  std::map<std::uint8_t, double> input_voltages;
+  for (const auto & transmission : hdl_trans_states_) {
+    const auto item = std::find(
+      transmission.interface_name_vec.begin(), transmission.interface_name_vec.end(),
+      "Present Input Voltage");
+    if (item == transmission.interface_name_vec.end()) {
+      continue;
+    }
+    const size_t index = std::distance(transmission.interface_name_vec.begin(), item);
+    input_voltages[transmission.id] = *transmission.value_ptr_vec.at(index);
+  }
+  const InputVoltageSummary input_voltage =
+    SummarizeInputVoltages(dxl_comm_id_id_, input_voltages);
+
+  const bool healthy = bus_health_.CommunicationHealthy() && torque_state_expected &&
+    hardware_error_monitoring_complete && hardware_error_mask == 0 &&
+    input_voltage.monitoring_complete;
+  auto & message = bus_health_pub_uni_ptr_->msg_;
+  message.header.stamp = this->now();
+  auto & status = message.status.front();
+  status.level = healthy ? diagnostic_msgs::msg::DiagnosticStatus::OK :
+    diagnostic_msgs::msg::DiagnosticStatus::ERROR;
+  if (healthy) {
+    status.message = torque_off_diagnostic_mode_ ?
+      "OK (torque-off diagnostic mode)" : "OK";
+  } else if (bus_health_.fail_safe_triggered) {
+    status.message = "Dynamixel fail-safe triggered";
+  } else if (!hardware_error_monitoring_complete) {
+    status.message = "Dynamixel hardware-error monitoring incomplete";
+  } else if (hardware_error_mask != 0) {
+    status.message = "Dynamixel hardware error";
+  } else if (!input_voltage.monitoring_complete) {
+    status.message = "Dynamixel input-voltage monitoring incomplete";
+  } else if (!bus_health_.CommunicationHealthy()) {
+    status.message = event.empty() ? "Dynamixel communication failure" : event;
+  } else if (torque_off_diagnostic_mode_) {
+    status.message = torque_state_feedback_valid_ ?
+      "torque unexpectedly enabled in diagnostic mode" :
+      "torque feedback incomplete in diagnostic mode";
+  } else {
+    status.message = "torque is not enabled on every actuator";
+  }
+
+  status.values[kHealthSchemaVersion].value = "1";
+  status.values[kHealthDriverInstanceId].value = bus_health_instance_id_;
+  status.values[kHealthReadFailureCount].value =
+    std::to_string(bus_health_.read_failure_count);
+  status.values[kHealthWriteFailureCount].value =
+    std::to_string(bus_health_.write_failure_count);
+  status.values[kHealthConsecutiveReadFailures].value =
+    std::to_string(bus_health_.consecutive_read_failures);
+  status.values[kHealthConsecutiveWriteFailures].value =
+    std::to_string(bus_health_.consecutive_write_failures);
+  status.values[kHealthCurrentReadError].value =
+    std::to_string(bus_health_.current_read_error);
+  status.values[kHealthCurrentWriteError].value =
+    std::to_string(bus_health_.current_write_error);
+  status.values[kHealthLastCommError].value =
+    std::to_string(bus_health_.last_comm_error);
+  status.values[kHealthLastFailureStampNs].value =
+    std::to_string(bus_health_.last_failure_stamp_ns);
+  status.values[kHealthFailSafeTriggered].value =
+    bus_health_.fail_safe_triggered ? "true" : "false";
+  status.values[kHealthTorqueAllEnabled].value = torque_all_enabled ? "true" : "false";
+  status.values[kHealthHardwareErrorMask].value = std::to_string(hardware_error_mask);
+  status.values[kHealthTorqueAllDisabled].value = torque_all_disabled ? "true" : "false";
+  status.values[kHealthTorqueEnableInhibited].value =
+    torque_off_diagnostic_mode_ ? "true" : "false";
+  status.values[kHealthHardwareErrorExpectedCount].value =
+    std::to_string(hardware_error_expected_count);
+  status.values[kHealthHardwareErrorMonitoredCount].value =
+    std::to_string(hardware_error_monitored_count);
+  status.values[kHealthHardwareErrorMonitoringComplete].value =
+    hardware_error_monitoring_complete ? "true" : "false";
+  status.values[kHealthInputVoltageExpectedCount].value =
+    std::to_string(input_voltage.expected_count);
+  status.values[kHealthInputVoltageMonitoredCount].value =
+    std::to_string(input_voltage.monitored_count);
+  status.values[kHealthInputVoltageMonitoringComplete].value =
+    input_voltage.monitoring_complete ? "true" : "false";
+  status.values[kHealthInputVoltageMinV].value =
+    std::to_string(input_voltage.minimum_voltage);
+  status.values[kHealthInputVoltageMinId].value =
+    std::to_string(input_voltage.minimum_voltage_id);
+
+  last_bus_health_publish_ = steady_now;
+  bus_health_pub_uni_ptr_->unlockAndPublish();
 }
 
 DxlError DynamixelHardware::CheckError(DxlError dxl_comm_err)
@@ -1210,8 +1649,7 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
         "[InitItem][comm_id:" << std::to_string(comm_id) << "][ID:" << std::to_string(id) <<
           "] item_name: " << param_name.c_str() << "\tdata: " <<
           param.second);
-      if (dxl_comm_->ReadItem(comm_id, id, param_name, current_value) != DxlError::OK)
-      {
+      if (dxl_comm_->ReadItem(comm_id, id, param_name, current_value) != DxlError::OK) {
         return false;
       }
       if (current_value != requested_value) {
@@ -1242,8 +1680,7 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
         "] item_name: " << param_name.c_str() << "\tdata: " <<
         param.second);
     const uint32_t requested_value = static_cast<uint32_t>(stoi(param.second));
-    if (dxl_comm_->WriteItem(comm_id, id, param_name, requested_value) != DxlError::OK)
-    {
+    if (dxl_comm_->WriteItem(comm_id, id, param_name, requested_value) != DxlError::OK) {
       return false;
     }
     if (param_name == "Goal Current") {
@@ -1767,6 +2204,12 @@ DxlError DynamixelHardware::ChangeDxlTorqueState()
 
   DxlError result = DxlError::OK;
   if (dxl_torque_status_ == REQUESTED_TO_ENABLE) {
+    if (torque_off_diagnostic_mode_) {
+      dxl_torque_status_ = TORQUE_DISABLED;
+      RCLCPP_ERROR(
+        logger_, "Internal torque-enable request blocked by torque-off diagnostic mode");
+      return DxlError::ITEM_WRITE_FAIL;
+    }
     RCLCPP_WARN_STREAM(logger_, "Requested to enable torque, Enabling torque for all Dynamixels");
     result = dxl_comm_->DynamixelEnable(torque_enabled_comm_id_id_);
   } else if (dxl_torque_status_ == REQUESTED_TO_DISABLE) {
@@ -1826,6 +2269,13 @@ void DynamixelHardware::set_dxl_data_srv_callback(
   const std::shared_ptr<dynamixel_interfaces::srv::SetDataToDxl::Request> request,
   std::shared_ptr<dynamixel_interfaces::srv::SetDataToDxl::Response> response)
 {
+  if (torque_off_diagnostic_mode_) {
+    RCLCPP_ERROR_STREAM(
+      logger_, "Rejected all register writes in torque-off diagnostic mode (requested item: " <<
+        request->item_name << ")");
+    response->result = false;
+    return;
+  }
   if (restrict_critical_write_service_ &&
     (request->item_name == "Torque Enable" || request->item_name == "Operating Mode" ||
     request->item_name == "Goal Current" || request->item_name == "Current Limit" ||
@@ -1849,6 +2299,11 @@ void DynamixelHardware::reboot_dxl_srv_callback(
   [[maybe_unused]] const std::shared_ptr<dynamixel_interfaces::srv::RebootDxl::Request> request,
   std::shared_ptr<dynamixel_interfaces::srv::RebootDxl::Response> response)
 {
+  if (torque_off_diagnostic_mode_) {
+    RCLCPP_ERROR(logger_, "Rejected Dynamixel reboot in torque-off diagnostic mode");
+    response->result = false;
+    return;
+  }
   if (CommReset()) {
     response->result = true;
     RCLCPP_INFO_STREAM(logger_, "[reboot_dxl_srv_callback] SUCCESS");
@@ -1863,6 +2318,12 @@ void DynamixelHardware::set_dxl_torque_srv_callback(
   std::shared_ptr<std_srvs::srv::SetBool::Response> response)
 {
   if (request->data) {
+    if (torque_off_diagnostic_mode_) {
+      response->success = false;
+      response->message = "Torque enable is inhibited by torque-off diagnostic mode.";
+      RCLCPP_ERROR(logger_, "Rejected torque-enable request in torque-off diagnostic mode");
+      return;
+    }
     if (dxl_torque_status_ == TORQUE_ENABLED) {
       response->success = true;
       response->message = "Already enabled.";

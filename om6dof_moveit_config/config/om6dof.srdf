@@ -40,7 +40,7 @@
         <joint name="gripper_left_joint" value="-0.010" />
     </group_state>
     <!--END EFFECTOR: Purpose: Represent information about an end effector.-->
-    <end_effector name="linear_gripper" parent_link="end_effector_link" parent_group="arm" group="gripper" />
+    <end_effector name="linear_gripper" parent_link="link7" parent_group="arm" group="gripper" />
     <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
     <disable_collisions link1="end_effector_link" link2="gripper_left_link" reason="Never" />
     <disable_collisions link1="end_effector_link" link2="gripper_right_link" reason="Never" />

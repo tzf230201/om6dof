@@ -1,0 +1,32 @@
+source_csv: /home/kublab/ros2_ws/src/om6dof/om6dof_controllers/papers/experiments/multisine_identification/data/multisine_teaching_fast.csv
+source_samples: 18140
+fit_samples_after_stride: 1814
+stride: 10
+units:
+  gravity_scale_raw_per_nm: raw Present Current per Nm
+  coulomb_raw: raw Present Current
+  viscous_raw_per_rad_s: raw Present Current per rad/s
+  bias_raw: raw Present Current
+deadzone_rad_s: 0.02
+velocity_min_rad_s: 0.005
+joints:
+  joint2:
+    gravity_scale_raw_per_nm: 177.87028621845536
+    coulomb_raw: 21.955337630028225
+    viscous_raw_per_rad_s: -52.501617557369464
+    bias_raw: -13.522792489565324
+    rmse_raw: 10.319935197152649
+    r_squared: 0.8836655344812704
+    samples: 1394
+    rank: 4
+    condition_number: 26.535244532853028
+  joint3:
+    gravity_scale_raw_per_nm: 169.29073682969695
+    coulomb_raw: 64.41343573690008
+    viscous_raw_per_rad_s: -213.3006649593263
+    bias_raw: -13.132602550582705
+    rmse_raw: 9.597860981334057
+    r_squared: 0.957345196280226
+    samples: 993
+    rank: 4
+    condition_number: 39.90870974670559

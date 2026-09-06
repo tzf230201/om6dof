@@ -1,0 +1,19 @@
+# Where each category goes, as arm joint values (joint1..joint6, radians).
+#
+# The classification step is restricted to these keys, so a category the arm
+# has no bin for cannot be returned. ORDER MATTERS: the LAST entry is the
+# fallback Gemini is told to use when nothing fits, and the one the node uses
+# when the API is unreachable. Keep "unknown" last.
+#
+# Measure a pose by jogging the arm over the bin and reading /joint_states:
+#   ros2 topic echo /joint_states --once
+#
+# ⚠ These are starting values copied from the direct_pick place pose, not
+#   measured bins. Replace them before running with place_enabled: true.
+
+places:
+  bottle:  [1.20, -0.50, 1.20, 0.0, 0.90, 0.0]
+  cup:     [1.00, -0.50, 1.20, 0.0, 0.90, 0.0]
+  box:     [0.80, -0.50, 1.20, 0.0, 0.90, 0.0]
+  tool:    [-1.00, -0.50, 1.20, 0.0, 0.90, 0.0]
+  unknown: [-1.20, -0.50, 1.20, 0.0, 0.90, 0.0]

@@ -20,11 +20,14 @@
   <depend>pluginlib</depend>
   <depend>realtime_tools</depend>
   <depend>dynamixel_sdk</depend>
+  <depend>diagnostic_msgs</depend>
   <depend>std_srvs</depend>
   <depend>dynamixel_interfaces</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

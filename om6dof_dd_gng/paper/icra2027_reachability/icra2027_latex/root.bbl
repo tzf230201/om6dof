@@ -1,0 +1,104 @@
+\begin{thebibliography}{10}
+\providecommand{\url}[1]{#1}
+\csname url@rmstyle\endcsname
+\providecommand{\newblock}{\relax}
+\providecommand{\bibinfo}[2]{#2}
+\providecommand\BIBentrySTDinterwordspacing{\spaceskip=0pt\relax}
+\providecommand\BIBentryALTinterwordstretchfactor{4}
+\providecommand\BIBentryALTinterwordspacing{\spaceskip=\fontdimen2\font plus
+\BIBentryALTinterwordstretchfactor\fontdimen3\font minus
+  \fontdimen4\font\relax}
+\providecommand\BIBforeignlanguage[2]{{%
+\expandafter\ifx\csname l@#1\endcsname\relax
+\typeout{** WARNING: IEEEtran.bst: No hyphenation pattern has been}%
+\typeout{** loaded for the language `#1'. Using the pattern for}%
+\typeout{** the default language instead.}%
+\else
+\language=\csname l@#1\endcsname
+\fi
+#2}}
+
+\bibitem{zacharias2007}
+F.~Zacharias, C.~Borst, and G.~Hirzinger, ``Capturing robot workspace
+  structure: Representing robot capabilities,'' in \emph{Proc. IEEE/RSJ
+  International Conference on Intelligent Robots and Systems}, 2007, pp.
+  3229--3236.
+
+\bibitem{porges2014}
+O.~Porges, T.~Stouraitis, C.~Borst, and M.~A. Roa, ``Reachability and
+  capability analysis for manipulation tasks,'' in \emph{ROBOT2013: First
+  Iberian Robotics Conference}, 2014, pp. 703--718.
+
+\bibitem{kavraki1996}
+L.~E. Kavraki, P.~Svestka, J.-C. Latombe, and M.~H. Overmars, ``Probabilistic
+  roadmaps for path planning in high-dimensional configuration spaces,''
+  \emph{IEEE Transactions on Robotics and Automation}, vol.~12, no.~4, pp.
+  566--580, 1996.
+
+\bibitem{fritzke1995}
+B.~Fritzke, ``A growing neural gas network learns topologies,'' in
+  \emph{Advances in Neural Information Processing Systems 7}, 1995, pp.
+  625--632.
+
+\bibitem{branicky2001}
+M.~S. Branicky, S.~M. LaValle, K.~Olson, and L.~Yang, ``Quasi-randomized path
+  planning,'' in \emph{Proc. IEEE International Conference on Robotics and
+  Automation}, 2001, pp. 1481--1487.
+
+\bibitem{dobson2014}
+A.~Dobson and K.~E. Bekris, ``Sparse roadmap spanners for asymptotically
+  near-optimal motion planning,'' \emph{International Journal of Robotics
+  Research}, vol.~33, no.~1, pp. 18--47, 2014.
+
+\bibitem{phillips2012}
+M.~Phillips, B.~Cohen, S.~Chitta, and M.~Likhachev, ``E-graphs: Bootstrapping
+  planning with experience graphs,'' in \emph{Robotics: Science and Systems
+  VIII}, 2012.
+
+\bibitem{coleman2015}
+D.~Coleman, I.~A. Sucan, M.~Moll, K.~Okada, and N.~Correll, ``Experience-based
+  planning with sparse roadmap spanners,'' in \emph{Proc. IEEE International
+  Conference on Robotics and Automation}, 2015, pp. 900--905.
+
+\bibitem{bohlin2000}
+R.~Bohlin and L.~E. Kavraki, ``Path planning using lazy prm,'' in \emph{Proc.
+  IEEE International Conference on Robotics and Automation}, 2000, pp.
+  521--528.
+
+\bibitem{kallmann2004}
+M.~Kallmann and M.~J. Mataric, ``Motion planning using dynamic roadmaps,'' in
+  \emph{Proc. IEEE International Conference on Robotics and Automation}, 2004,
+  pp. 4399--4404.
+
+\bibitem{jaillet2004}
+L.~Jaillet and T.~Simeon, ``A prm-based motion planner for dynamically changing
+  environments,'' in \emph{Proc. IEEE/RSJ International Conference on
+  Intelligent Robots and Systems}, 2004, pp. 1606--1611.
+
+\bibitem{ichter2018}
+B.~Ichter, J.~Harrison, and M.~Pavone, ``Learning sampling distributions for
+  robot motion planning,'' in \emph{Proc. IEEE International Conference on
+  Robotics and Automation}, 2018, pp. 7087--7094.
+
+\bibitem{qureshi2019}
+A.~H. Qureshi, A.~Simeonov, M.~J. Bency, and M.~C. Yip, ``Motion planning
+  networks,'' in \emph{Proc. IEEE International Conference on Robotics and
+  Automation}, 2019, pp. 2118--2124.
+
+\bibitem{chamzas2021}
+C.~Chamzas, Z.~Kingston, C.~Quintero-Pena, A.~Shrivastava, and L.~E. Kavraki,
+  ``Learning sampling distributions using local 3d workspace decompositions for
+  motion planning in high dimensions,'' in \emph{Proc. IEEE International
+  Conference on Robotics and Automation}, 2021, pp. 1283--1289.
+
+\bibitem{coleman2014}
+D.~Coleman, I.~A. Sucan, S.~Chitta, and N.~Correll, ``Reducing the barrier to
+  entry of complex robotic software: A moveit! case study,'' \emph{Journal of
+  Software Engineering for Robotics}, vol.~5, no.~1, pp. 3--16, 2014.
+
+\bibitem{pan2012}
+J.~Pan, S.~Chitta, and D.~Manocha, ``Fcl: A general purpose library for
+  collision and proximity queries,'' in \emph{Proc. IEEE International
+  Conference on Robotics and Automation}, 2012.
+
+\end{thebibliography}

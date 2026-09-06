@@ -1,0 +1,115 @@
+{
+  "manifest_schema": "om6dof-reachability-instrumentation-smoke-v1",
+  "snapshot_local_jst": "2026-08-24T07:10:23.150459808+09:00",
+  "snapshot_utc": "2026-08-23T22:10:23.152587232Z",
+  "purpose": "Development-only regression smoke for GNG node-budget and runtime provenance instrumentation.",
+  "confirmatory_data": false,
+  "host": {
+    "hostname": "agx",
+    "machine": "NVIDIA Jetson AGX Orin Developer Kit",
+    "architecture": "aarch64",
+    "os": "Ubuntu 22.04.5 LTS",
+    "kernel": "5.15.185-tegra #1 SMP PREEMPT",
+    "jetson_release": "R36.5.0",
+    "logical_cpu_cores": 12,
+    "cpu_model": "Cortex-A78AE"
+  },
+  "git": {
+    "head": "6dbd71a29228098d88ffba02837b28b753123895",
+    "branch": "main",
+    "describe": "6dbd71a-dirty",
+    "tracked_modified_count": 12,
+    "untracked_count": 12,
+    "remote_url_recorded": false,
+    "credential_warning": "The configured origin URL contained an embedded credential at audit time; its value is intentionally omitted and must be revoked/rotated."
+  },
+  "source_sha256": {
+    "curated_tree": "13c285b436f9c5b319083800175e5a866eb17107ac52bc919858e4761a412b68",
+    "CMakeLists.txt": "dac658b7ae26a875a5d036a636e9ca388dd86790efd89f9202e1148f2c36193e",
+    "package.xml": "8b8c03419b06f67d410b4980591f9f7450847a3d3410865b2a50a601d21a3ed3",
+    "config/topo_gng.yaml": "c5857a16ef6262f085f51e72dea70b1e2f274b35d991097013e821579fe1a3cd",
+    "include/om6dof_dd_gng/reachability_graph.hpp": "75813f1bbbbb77f690ffe326ea0950e6f2027d5f2aae13a8eea8000dc82ac3c2",
+    "launch/reachability_graph.launch.py": "fc892b5677bdfe9a3269901d9785502c77d60246093da5b0215cf74f9b3cd8f2",
+    "msg/ReachabilityGraph.msg": "b897261ca95d225fc2883e2aaf45385a8df75e627ba045a1376fbb0c3ddbccd6",
+    "msg/ReachabilityPlan.msg": "6d850ef2cc6b0bba5e4d6956d0e497f17a5d4714e699ee453c2cdcc85ddf0b1a",
+    "scripts/reachability_benchmark.py": "0320bc390e247213023f690ee84ef450e163b92176fddae6779f9cdcb51a8fe6",
+    "src/reachability_graph_node.cpp": "d282451f4c48671db2d8ecaa4dd6efd05f723509fd0074922b9f37dc6857d3a8",
+    "test/test_reachability_benchmark.py": "cac146eaff2c7875435e75c0422cd04877a8d7c1fb24577ec1b0249cc4d8a286",
+    "test/test_reachability_graph.cpp": "48acd75672d59c91d7f2e102d16b12ce67a3edb78ac48b2125a861f77181dcf5"
+  },
+  "preinstrument_archive": {
+    "path": "../reachability_preinstrument_20260823.tar.gz",
+    "sha256": "a1b9e62ec337c4da6993db61ab56aed89bfd45f6c77ea040157e99849043f05a"
+  },
+  "model_sha256": {
+    "active_xacro": "b8f8e7e442e010bb7ce64babf8dbcf94f6d3940be75064cc5bf934bea59cf41d",
+    "expanded_urdf": "485617d99a2483abd6327b03bb6d3a0a52f71be08adba6234343e1e4a1cd328a",
+    "srdf": "730e590951a205ec639ff20613ce3305e18290f0c9a599130d38ce7c86d3d424",
+    "mesh_tree": "be91241bd3a1398946743f503c1b22d676497548dde86b65319882f3955bc5d4"
+  },
+  "build": {
+    "type": "Release",
+    "flags": "-O3 -DNDEBUG",
+    "binary_sha256": "48c2eaf97a594429dcda2050b0530b130a4fd9c5436248d9c77beca4166991a1",
+    "binary_build_id_sha1": "bd797aedc97cd0d1a259c2b1e9ffd3157d4f65b7",
+    "cmake_cache_sha256": "6b838ca9cead6a287acda79596910be9b0c6413047849cbd77b7f4fef9dab53d",
+    "build_log_dir": "/home/kublab/ros2_ws/log/build_2026-08-24_07-05-05",
+    "build_completed_jst": "2026-08-24T07:06:20.724+09:00"
+  },
+  "software_versions": {
+    "ros_distro": "humble",
+    "moveit": "2.5.9",
+    "fcl": "0.7.0",
+    "eigen": "3.4.0",
+    "rmw_fastrtps_cpp": "6.2.10",
+    "fastdds": "2.6.11",
+    "rclcpp": "16.0.19",
+    "gcc_gxx": "11.4.0",
+    "cmake": "3.22.1",
+    "python": "3.10.12",
+    "colcon_core": "0.21.0"
+  },
+  "tests": {
+    "package_test_cases": 17,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0,
+    "gtest_cases": 12,
+    "pytest_cases": 5,
+    "results_tree_sha256": "b924317730cc4d0a38c3a2e563a0cbca23a992ad2bd8497fff44491629fc551e",
+    "runner_post_edit_direct_pytest": "5 passed",
+    "caveat": "The final domain-range guard was edited after the colcon XML timestamp; direct py_compile/pytest and the runtime smoke used the final runner."
+  },
+  "smoke": {
+    "csv": "reachability_instrumentation_smoke_20260824.csv",
+    "csv_sha256": "8e7b11f7afe43e40b14dd08d34a87b01f9a6fea359bed441d58b1d41474c7146",
+    "artifact_tree_sha256": "218fd055aaaf395a7910d01b2901aa745dbc371d7d0cc62edec41ed9198ec598",
+    "start_jst": "2026-08-24T07:08:11.176554+09:00",
+    "end_jst": "2026-08-24T07:08:25.492+09:00",
+    "offset_label": 9999,
+    "effective_halton_start_index": 79182098,
+    "method_order": ["gng", "guarded_gng", "halton_prm"],
+    "requested_nodes": 800,
+    "guarded_fraction": 0.75,
+    "ros_domains": [20, 21, 22],
+    "rmw_implementation": "rmw_fastrtps_cpp",
+    "ros_localhost_only": true,
+    "all_runner_errors_empty": true,
+    "all_valid_equal_exact_valid": true,
+    "process_cleanup_verified": true,
+    "results": {
+      "gng": {"anchors": 2, "prototype_budget": 798, "prototypes": 798, "guards": 0, "fill": 0, "training_samples": 4000, "candidate_attempts": 4135, "nodes": 800, "edges": 4551, "components": 1, "clear_valid": true, "dynamic_valid": true},
+      "guarded_gng": {"anchors": 2, "prototype_budget": 199, "prototypes": 199, "requested_guards": 599, "guards": 599, "fill": 0, "training_samples": 4000, "candidate_attempts": 4135, "nodes": 800, "edges": 3604, "components": 10, "clear_valid": true, "dynamic_valid": true},
+      "halton_prm": {"anchors": 2, "prototype_budget": 0, "prototypes": 0, "guards": 0, "fill": 798, "training_samples": 0, "candidate_attempts": 828, "nodes": 800, "edges": 3292, "components": 11, "clear_valid": true, "dynamic_valid": true}
+    }
+  },
+  "system_load": {
+    "nvpmodel": "MAXN",
+    "governor": "schedutil",
+    "load_average": [4.75, 5.51, 5.44],
+    "cpu_temperature_c": 56.343,
+    "concurrent_cpu_percent": {"topo_gng_node": 322.0, "persistent_reachability_graph_node": 52.5, "ros2_control_node": 24.5},
+    "interpretation": "These smoke timings are loaded-system integration latency and must not be used as paper performance estimates."
+  },
+  "terminology": "offset_label is a deterministic sample-stream label, not an independent stochastic seed."
+}

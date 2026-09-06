@@ -13,7 +13,7 @@ status, see [the leader-arm research record](../docs/leader_arm_gravity_compensa
 The arm chain used by the leader controller is:
 
 ```text
-world -> link1 -> joint1 -> link2 -> joint2 -> link3
+world -> base_link (20 mm pedestal) -> link1 -> joint1 -> link2 -> joint2 -> link3
       -> joint3 -> link4 -> joint4 -> link5 -> joint5
       -> link6 -> joint6 -> link7 -> end_effector_link
 ```

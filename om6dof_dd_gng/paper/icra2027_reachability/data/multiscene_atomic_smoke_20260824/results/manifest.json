@@ -1,0 +1,29 @@
+{
+  "catalog_id": "om6dof_atomic_query_integration_smoke_20260824",
+  "catalog_sha256": "e9a9f45953e25363b169543a338acd68507484577253d171d1f6045458598b76",
+  "controller_topics_published": [],
+  "domain_range": [
+    20,
+    20
+  ],
+  "finished_utc": "2026-08-23T22:30:13.430088+00:00",
+  "graph_builds": 1,
+  "graph_timeout_sec": 60.0,
+  "guarded_fraction": 0.75,
+  "halton_start_index": 17,
+  "methods": [
+    "gng"
+  ],
+  "phase_timeout_sec": 5.0,
+  "preview_only": true,
+  "query_rows": 2,
+  "rmw_implementation": "rmw_fastrtps_cpp",
+  "ros_localhost_only": true,
+  "sample_count": 800,
+  "scene_count": 1,
+  "schema": "om6dof-reachability-multiscene-run-v1",
+  "started_utc": "2026-08-23T22:30:09.241868+00:00",
+  "streams": [
+    9000
+  ]
+}

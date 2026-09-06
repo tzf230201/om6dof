@@ -1,0 +1,320 @@
+# Grasp-from-point-cloud pick-and-place with Gemini reasoning.
+#
+# ⚠ Camera ownership: with camera_source "realsense" this node OPENS the wrist
+#   D405 itself. A RealSense allows exactly one owner, so stop om6dof_perception,
+#   the apriltag detector, and om6dof-dd-gng (including their systemd units)
+#   first, or use camera_source "topic" and let a driver own the device.
+#
+# ⚠ The API key is NOT in this file on purpose — a params file ends up in the
+#   build tree, in `ros2 param dump`, and in logs. Put the key in
+#   ~/.config/om6dof/gemini_api_key (chmod 600) or export GEMINI_API_KEY.
+
+gemini_pick:
+  ros__parameters:
+
+    # --- what the run is for ---------------------------------------------
+    # classify : pick the best-scoring object, then ask Gemini what it is and
+    #            drop it in that category's bin.
+    # target   : ask Gemini to find the described object first, and only grasp
+    #            candidates that land on it.
+    mode: "classify"
+    target_description: "the object on the table"
+
+    # --- camera -----------------------------------------------------------
+    camera_source: "realsense"       # realsense | topic
+    camera_serial: "427622271962"    # ALOHA wrist cam, RealSense D405
+    camera_width: 640
+    camera_height: 480
+    camera_fps: 15
+    camera_warmup_frames: 10         # auto-exposure needs a few frames
+    # only used when camera_source is "topic"
+    color_topic: "/camera/color/image_raw"
+    depth_topic: "/camera/aligned_depth_to_color/image_raw"
+    camera_info_topic: "/camera/color/camera_info"
+    # Direct RealSense aligns colour into the DEPTH viewport, so deprojection
+    # and TF both remain in this existing optical frame.
+    realsense_aligned_frame: "d405_depth_optical_frame"
+    topic_depth_scale: 0.0             # 0 = infer from encoding/metadata
+    topic_sync_tolerance_s: 0.05
+    topic_sync_queue_size: 10
+
+    # --- camera extrinsic --------------------------------------------------
+    # The node looks up base_frame -> camera_optical_frame in live TF first —
+    # robot_state_publisher publishes this from om6dof_description's URDF,
+    # which encodes the D405 mount's true extrinsic (SVD-fitted off the fused
+    # bracket+camera mesh, cross-checked against the datasheet — see the
+    # comment above the d405_link_joint in om6dof.urdf.xacro). That is the
+    # right source: measured for THIS robot's mount, not borrowed from
+    # another one.
+    camera_optical_frame: "d405_depth_optical_frame"
+    # camera_xyz / camera_rpy below are the FALLBACK, used only if that frame
+    # is missing from the TF tree (e.g. robot_state_publisher not running —
+    # gemini_probe --realsense, for instance, has no TF at all). Values are
+    # the same URDF chain (link7 -> d405_payload_link -> d405_link ->
+    # d405_depth_optical_frame) resolved once by hand, end_effector_link's
+    # offset backed out — NOT the om6dof_pick_and_place/config/tag_pick.yaml
+    # numbers, which that package's own comment says are converted from
+    # google-deepmind/mujoco_menagerie's ALOHA model: a different mount on a
+    # different robot, ~64 mm off in Z from this one's real geometry. Verify
+    # against TF directly if the mount ever changes:
+    #   ros2 run tf2_ros tf2_echo end_effector_link d405_depth_optical_frame
+    camera_xyz: [-0.087, 0.00000, -0.074]
+    camera_rpy: [-0.436, 0.00000, -1.571]
+
+    # --- point cloud ------------------------------------------------------
+    cloud_stride: 2                  # every 2nd pixel: 640x480 -> ~76k points
+    cloud_z_min: 0.05                # D405 min range
+    cloud_z_max: 0.80
+    # RViz-only RGB-D preview. This captures/publishes point clouds but never
+    # calls Gemini, GraspNet, MoveIt, or a controller.
+    cloud_preview_enabled: true
+    cloud_preview_hz: 2.0
+    # Full candidate dump for deep filter tuning. Disabled by default because
+    # dozens of overlapping glyphs obscure the target and selected grasp. It
+    # is read-only diagnostic output and is never consumed by motion code.
+    debug_grasp_markers_enabled: false
+    # Compact diagnostic layer: publish only the best rejected candidate when
+    # no grasp survives. This never turns a rejected grasp into a motion target.
+    near_miss_markers_enabled: true
+    # Points within this radius of end_effector_link are the gripper's own
+    # fingers, not the scene, and are dropped before detection. Without this,
+    # the gripper is the highest-scoring "candidate" in every frame — jaw-width
+    # apart, closer and cleaner than any real object — and consistently fails
+    # IK, since the arm cannot approach its own current position from a new
+    # direction. Measured on hardware 2026-09-02: self-points sat 3.3-5.1 cm
+    # from end_effector_link; 9 cm leaves margin for an open gripper plus
+    # finger length. If real objects near the gripper start getting excluded
+    # too, lower this; if gripper fingers still leak through, raise it.
+    self_exclusion_radius_m: 0.09
+
+    # --- grasp backend ----------------------------------------------------
+    # analytic : numpy only, runs today. Table removal + voxel clustering +
+    #            a grasp across each cluster's narrow horizontal axis.
+    # graspnet : graspnet-baseline, what the ROBOTIS story runs. Needs torch
+    #            with CUDA, the repo's compiled ops and a checkpoint.
+    # anygrasp : licensed AnyGrasp SDK. In target mode the complete scene is
+    #            still used for geometry/collision, while Gemini's exact
+    #            segmented component is passed as AnyGrasp region steering.
+    grasp_backend: "graspnet"
+    voxel: 0.006                     # 6 mm cells for clustering
+    min_cluster_points: 40
+    table_z: 0.0                     # the calibrated world origin sits on the table
+    table_margin: 0.010              # ignore everything within 10 mm of it
+    grasp_depth: 0.020               # close the jaws 20 mm below the object top
+    finger_clearance: 0.008          # add to the measured width before checking fit
+    approach_tilts: [0.0, 0.35, 0.70, 0.87, 1.05, 1.22, 1.40]
+    # Straight down first, then progressively tilted. This arm cannot reach
+    # pitch pi at every radius (see the IK map in tag_pick.yaml), so the tilted
+    # variants are what usually survives the reachability filter. Measured on
+    # hardware 2026-09-02 at r=0.338 m (near workspace_max): 0-60 deg (0-1.05
+    # rad) ALL failed IK, 50-90 deg started succeeding — the old 1.05 rad
+    # ceiling sat right at the unreliable edge of that window. Denser coverage
+    # 60-80 deg (1.05-1.40) was added rather than just raising the ceiling,
+    # since the feasible band at a given radius is narrow, not a simple
+    # monotonic cutoff.
+    max_clusters: 8
+
+    graspnet_repo_path: "/mnt/agx_nvme/om6dof-graspnet-jp622/src/graspnet-baseline"
+    graspnet_checkpoint: "/mnt/agx_nvme/om6dof-graspnet-jp622/checkpoint-rs.tar"
+    graspnet_device: "cuda"
+    top_k: 50                         # shared learned-backend output cap
+    graspnet_collision_thresh: 0.01
+    graspnet_collision_voxel: 0.01
+    graspnet_empty_thresh: 0.01
+    graspnet_sampling_seed: 0         # deterministic scene point sampling
+    # Pool independent samples of the complete reachable-workspace scene.
+    # Gemini segmentation is used afterward, never as GraspNet input.
+    graspnet_sampling_attempts: 3
+
+    # AnyGrasp SDK runtime. The checkpoint, gsnet.so and licensed files are
+    # local machine assets and must never be committed or redistributed.
+    anygrasp_runtime_dir: "/home/kublab/ros2_ws/src/anygrasp_sdk/grasp_detection"
+    anygrasp_checkpoint: "/home/kublab/ros2_ws/src/anygrasp_sdk/grasp_detection/checkpoint_detection.tar"
+    anygrasp_license_dir: "/home/kublab/ros2_ws/src/anygrasp_sdk/grasp_detection/license"
+    # AnyGrasp constructs its detector with these physical gripper limits.
+    # Keep max width at or below the OM6DOF candidate safety cap below.
+    anygrasp_max_width: 0.065
+    anygrasp_gripper_height: 0.058
+    anygrasp_dense_grasp: false
+    anygrasp_collision_detection: true
+
+    # --- filtering / safety ----------------------------------------------
+    min_width: 0.010                 # jaw travel is -0.011 .. 0.020 (URDF)
+    # Candidate-width safety cap confirmed for this OM6DOF gripper. GraspNet's
+    # 100 mm training-gripper predictions are clipped to this value before
+    # collision checking. This is not a substitute for measuring the aperture
+    # at the two commanded joint endpoints below.
+    max_width: 0.065
+    min_clearance: 0.005             # grasp point must clear table_z by this
+    max_tilt: 1.50                   # rad from straight down (~86 deg).
+                                      # Must stay >= the largest value in
+                                      # approach_tilts above, or a wide
+                                      # tilt gets rejected here before IK
+                                      # is even checked (hit this bug
+                                      # 2026-09-02 raising approach_tilts
+                                      # without also raising this).
+    workspace_min: [0.08, -0.35, -0.05]
+    workspace_max: [0.50, 0.35, 0.45]
+    min_score: 0.0
+    check_reachability: true         # local KDL IK pre-check before planning
+    max_grasp_attempts: 1            # plan-only retries; physical motion is one-shot
+    # Before any candidate-specific physical move, plan the complete chain
+    # from the live observe state. At most this many ranked candidates are
+    # inspected; implementation also rejects values outside 1..20.
+    max_prevalidation_candidates: 5
+
+    # --- motion -----------------------------------------------------------
+    pregrasp_standoff: 0.10          # back off along the approach axis
+    lift_height: 0.08
+    place_approach_height: 0.10
+    observe_pose: [0.0, -0.6806, 1.3613, 0.0, 0.8901, 0.0]
+    home_pose: [0.0, -0.6806, 1.3613, 0.0, 0.8901, 0.0]
+    default_place_pose: [1.2, -0.5, 1.2, 0.0, 0.9, 0.0]  # legacy; never auto-used
+    place_poses_file: ""             # "" = config/places.yaml from this package
+    # place_categories is intentionally NOT set here. An empty list in a ROS 2
+    # params YAML file has no inferrable type (string vs int vs double array),
+    # which leaves the parameter uninitialized instead of falling back to the
+    # code default — a real crash we hit on the "" -> node dies with
+    # ParameterUninitializedException. Leaving the key out entirely lets the
+    # declare_parameter() default in gemini_pick_node.py win: [] = the bins in
+    # places.yaml, in file order. Only add this key back with actual entries,
+    # e.g. place_categories: ["bottle", "cup"].
+    place_enabled: false              # enable only after measuring every bin
+    place_poses_validated: false      # explicit safety acknowledgement
+
+    gripper_open_pos: 0.019
+    gripper_close_pos: -0.010
+    # Clear distance between the inner finger faces, measured with the joint
+    # held at the corresponding position above. These are intentionally unset:
+    # max_width=65 mm is a perception/collision cap, not proof of either
+    # endpoint calibration. Plan-only keeps the legacy mapping, but real
+    # execution fails closed until both values are measured and acknowledged.
+    gripper_width_at_open_pos: -1.0   # metres; replace with measurement
+    gripper_width_at_close_pos: -1.0  # metres; replace with measurement
+    gripper_calibration_validated: false
+    gripper_close_bias: 0.6          # 0 = stop at the measured width, 1 = full close
+    gripper_max_effort: 5.0
+    gripper_settle_s: 1.2
+    gripper_joint_names: ["gripper_left_joint", "gripper_right_joint"]
+
+    vel_scale: 0.2
+    acc_scale: 0.2
+    planning_time: 4.0
+    planning_attempts: 20
+    position_tolerance: 0.02
+    orientation_tolerance: 0.35
+    # Candidate gate: validate the returned IK solution with FK.  These are
+    # deliberately tighter than the general OMPL goal tolerances so a pose
+    # cannot pass here and then fail the final LIN approach by centimetres.
+    ik_position_tolerance: 0.003      # 3 mm
+    ik_orientation_tolerance: 0.05    # rad (~2.9 deg)
+    grasp_position_tolerance: 0.008
+    linear_orientation_tolerance: 0.10
+
+    # Desired TCP point relative to end_effector_link, expressed in EE axes.
+    # The URDF nominally puts end_effector_link between the fingertips, hence
+    # zero; measure and update this if the physical pinch point differs.
+    tcp_offset_xyz: [0.0, 0.0, 0.0]
+    calibration_validated: false      # required before execute_motion=true
+    moveit_server_timeout_s: 10.0
+
+    # Planning-scene table: top surface is table_z. The X range begins ahead
+    # of the base so the robot mounting body is not embedded in this box.
+    table_collision_enabled: true
+    table_collision_size: [0.60, 0.80, 0.05]
+    table_collision_center_xy: [0.35, 0.0]
+
+    # Optional elevated pedestal/local support under a target. This is separate
+    # from table_z: target segmentation and clearance use target_support_z,
+    # while the main table collision box remains at table_z. All five box
+    # dimensions/coordinates must be measured in world before enabling it;
+    # zero defaults intentionally make preflight fail if enabled blindly.
+    # The box is axis-aligned and target_support_z is its TOP surface.
+    target_support_enabled: false
+    target_support_z: 0.0
+    target_support_collision_size_x: 0.0
+    target_support_collision_size_y: 0.0
+    target_support_collision_size_z: 0.0
+    target_support_collision_center_x: 0.0
+    target_support_collision_center_y: 0.0
+
+    # --- Gemini -----------------------------------------------------------
+    gemini_api_key: ""               # leave EMPTY; use the env var or key file
+    # gemini-2.5-flash is gone for new keys (HTTP 404 telling you to move on).
+    # Verified working on this key 2026-09-02. Free-tier rate limits (RPM/RPD)
+    # from the AI Studio dashboard, checked the same day:
+    #   gemini-3.5-flash-lite         15 RPM / 500 RPD — the default, picked
+    #                                for headroom during iteration
+    #   gemini-3.6-flash               5 RPM /  20 RPD — a bit sharper, tight
+    #                                quota
+    #   gemini-robotics-er-2-preview   5 RPM /  20 RPD — embodied reasoning,
+    #                                pointed at the probe target pixel-exactly;
+    #                                worth trying for mode "target" specifically
+    #   gemini-3.7-flash             read timeout at 20 s on this key — raise
+    #                                gemini_timeout_sec before trying it again
+    # List what a key can actually use, and its live quota:
+    #   curl -s -H "x-goog-api-key: $GEMINI_API_KEY" \
+    #     https://generativelanguage.googleapis.com/v1beta/models | grep '"name"'
+    #   (rate limits: https://aistudio.google.com -> your API key -> Rate limits)
+    gemini_model: "gemini-3.5-flash-lite"
+    gemini_key_env: "GEMINI_API_KEY"
+    gemini_key_file: "~/.config/om6dof/gemini_api_key"
+    gemini_timeout_sec: 20.0
+    gemini_max_retries: 2
+    gemini_crop_half_px: 90          # crop sent to classify() when no bbox is known
+    # Mode "target" uses exactly the connected RGB-D component shown by
+    # target_grasp_viewer. The full scene is retained separately for GraspNet's
+    # collision/empty-grasp check, so a clean object mask does not erase nearby
+    # obstacles. Keep these defaults in sync with that viewer.
+    target_crop_pad_px: 4.0
+    target_seed_radius_px: 14.0
+    target_depth_tolerance_m: 0.05
+    target_component_voxel_m: 0.008
+    target_component_min_points: 30
+    # Retained for the analytic fallback's secondary near-surface gate.
+    target_foreground_band_m: 0.03
+    target_table_margin_m: 0.006
+    target_bounds_margin_m: 0.020
+    # With capture-time EE orientation available, ALL safety-filter survivors
+    # are ranked by minimum full 3-D rotation first; score is only a tie-break.
+    # This band is used only by the no-EE-TF near-vertical fallback.
+    selection_score_slack: 0.15
+    selection_tilt_slack_rad: 0.1745329252  # fallback if EE orientation is absent
+    # Final point-cloud collision gate for the actual OM6DOF jaw envelope.
+    # In target mode exact segmented rows are the only points allowed in the
+    # final inner-jaw closure band. Environment points there, and every point
+    # in the open-finger approach sweep, palm/rear, or outside the open gap,
+    # remain collisions. Physical execution uses the measured open aperture;
+    # plan-only preview labels a max_width assumption when it is unmeasured.
+    gripper_scene_collision_enabled: true
+    gripper_scene_collision_min_points: 3
+    gripper_collision_finger_back_m: 0.070
+    gripper_collision_finger_front_m: 0.021
+    gripper_collision_finger_thickness_m: 0.040
+    gripper_collision_height_m: 0.058
+    gripper_collision_margin_m: 0.002
+    target_match_radius_px: 90.0     # fallback only: used if locate() returns
+                                      # a point but no box (see _detect_in_target)
+
+    # --- frames / plumbing ------------------------------------------------
+    base_frame: "world"
+    ik_base_link: "world"
+    ik_tip_link: "end_effector_link"
+    ik_urdf_pkg: "om6dof_description"
+    joint_state_topic: "/joint_states"
+    # Persistent counters from the hardware interface. Physical execution
+    # requires a fresh OK sample and no read/write counter increment for the
+    # whole clean window. A driver restart or counter reset starts it over.
+    dynamixel_health_topic: "/dynamixel_hardware_interface/health"
+    dynamixel_health_status_name: "dynamixel_hardware_interface/BusHealth"
+    dynamixel_health_timeout_s: 0.30
+    dynamixel_health_clean_window_s: 60.0
+    arm_joint_names: ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
+    joint_state_timeout_s: 5.0
+    # Capture-time TF/FK may only use a joint sample this close to the RGB-D
+    # timestamp. This matters because the D405 rides on the wrist.
+    joint_capture_tolerance_s: 0.15
+
+    execute_motion: false            # false = actual MoveIt plan-only, no motion
+    auto_run: false
+    auto_run_delay: 8.0

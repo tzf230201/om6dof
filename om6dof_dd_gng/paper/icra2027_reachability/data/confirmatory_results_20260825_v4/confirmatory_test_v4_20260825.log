@@ -1,0 +1,169 @@
+Starting >>> om6dof_dd_gng
+UpdateCTestConfiguration  from :/home/kublab/ros2_ws/build/om6dof_dd_gng/CTestConfiguration.ini
+Parse Config file:/home/kublab/ros2_ws/build/om6dof_dd_gng/CTestConfiguration.ini
+   Site: agx
+   Build name: (empty)
+ Add coverage exclude regular expressions.
+Create new tag: 20260825-1101 - Experimental
+UpdateCTestConfiguration  from :/home/kublab/ros2_ws/build/om6dof_dd_gng/CTestConfiguration.ini
+Parse Config file:/home/kublab/ros2_ws/build/om6dof_dd_gng/CTestConfiguration.ini
+Test project /home/kublab/ros2_ws/build/om6dof_dd_gng
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 1
+    Start 1: test_reachability_graph
+
+1: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_gtest/test_reachability_graph.txt" "--command" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_reachability_graph" "--gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml"
+1: Test timeout computed to be: 60
+1: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+1:  - /home/kublab/ros2_ws/build/om6dof_dd_gng/test_reachability_graph --gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml
+1: Running main() from /opt/ros/humble/src/gtest_vendor/src/gtest_main.cc
+1: [==========] Running 13 tests from 4 test suites.
+1: [----------] Global test environment set-up.
+1: [----------] 2 tests from ReachabilityGeometry
+1: [ RUN      ] ReachabilityGeometry.PointAndSegmentDistancesAreFinite
+1: [       OK ] ReachabilityGeometry.PointAndSegmentDistancesAreFinite (0 ms)
+1: [ RUN      ] ReachabilityGeometry.CapsuleChecksPointsAndObstacleEdges
+1: [       OK ] ReachabilityGeometry.CapsuleChecksPointsAndObstacleEdges (0 ms)
+1: [----------] 2 tests from ReachabilityGeometry (0 ms total)
+1: 
+1: [----------] 5 tests from ReachabilityGng
+1: [ RUN      ] ReachabilityGng.IsDeterministicFiniteAndHonorsNodeBudget
+1: [       OK ] ReachabilityGng.IsDeterministicFiniteAndHonorsNodeBudget (0 ms)
+1: [ RUN      ] ReachabilityGng.RejectsInconsistentTrainingSamples
+1: [       OK ] ReachabilityGng.RejectsInconsistentTrainingSamples (0 ms)
+1: [ RUN      ] ReachabilityGng.GuardIndicesAreDeterministicStratifiedAndUnique
+1: [       OK ] ReachabilityGng.GuardIndicesAreDeterministicStratifiedAndUnique (0 ms)
+1: [ RUN      ] ReachabilityGng.GuardIndicesClampToAvailableSamples
+1: [       OK ] ReachabilityGng.GuardIndicesClampToAvailableSamples (0 ms)
+1: [ RUN      ] ReachabilityGng.NodeBudgetExcludesFixedAnchors
+1: [       OK ] ReachabilityGng.NodeBudgetExcludesFixedAnchors (0 ms)
+1: [----------] 5 tests from ReachabilityGng (0 ms total)
+1: 
+1: [----------] 1 test from ReachabilitySampling
+1: [ RUN      ] ReachabilitySampling.DigitScrambledHaltonIsDeterministicAndBijective
+1: [       OK ] ReachabilitySampling.DigitScrambledHaltonIsDeterministicAndBijective (0 ms)
+1: [----------] 1 test from ReachabilitySampling (0 ms total)
+1: 
+1: [----------] 5 tests from ReachabilityGraph
+1: [ RUN      ] ReachabilityGraph.JointRankingUsesNormalizedJointSpace
+1: [       OK ] ReachabilityGraph.JointRankingUsesNormalizedJointSpace (0 ms)
+1: [ RUN      ] ReachabilityGraph.ObstacleBlocksNodeAndCrossingEdge
+1: [       OK ] ReachabilityGraph.ObstacleBlocksNodeAndCrossingEdge (0 ms)
+1: [ RUN      ] ReachabilityGraph.DijkstraChoosesClosestReachableIntersection
+1: [       OK ] ReachabilityGraph.DijkstraChoosesClosestReachableIntersection (0 ms)
+1: [ RUN      ] ReachabilityGraph.BlockedRouteAndOutOfRangeTargetFailCleanly
+1: [       OK ] ReachabilityGraph.BlockedRouteAndOutOfRangeTargetFailCleanly (0 ms)
+1: [ RUN      ] ReachabilityGraph.IntersectionRadiusIncludesBoundary
+1: [       OK ] ReachabilityGraph.IntersectionRadiusIncludesBoundary (0 ms)
+1: [----------] 5 tests from ReachabilityGraph (0 ms total)
+1: 
+1: [----------] Global test environment tear-down
+1: [==========] 13 tests from 4 test suites ran. (0 ms total)
+1: [  PASSED  ] 13 tests.
+1: -- run_test.py: return code 0
+1: -- run_test.py: inject classname prefix into gtest result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml'
+1: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml'
+1/5 Test #1: test_reachability_graph ....................   Passed    0.13 sec
+test 2
+    Start 2: test_reachability_benchmark
+
+2: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_benchmark.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_reachability_benchmark.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_benchmark/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+2: Test timeout computed to be: 30
+2: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+2:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_reachability_benchmark.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_benchmark/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml --junit-prefix=om6dof_dd_gng
+2: ============================= test session starts ==============================
+2: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+2: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_benchmark/.cache
+2: rootdir: /home/kublab/ros2_ws
+2: plugins: ament-pep257-0.12.15, launch-testing-ros-0.19.13, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.0
+2: collected 5 items
+2: 
+2: ../../src/om6dof/om6dof_dd_gng/test/test_reachability_benchmark.py ..... [100%]
+2: 
+2: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml -
+2: ============================== 5 passed in 0.03s ===============================
+2: -- run_test.py: return code 0
+2: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml'
+2/5 Test #2: test_reachability_benchmark ................   Passed    0.84 sec
+test 3
+    Start 3: test_reachability_multiscene_benchmark
+
+3: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_multiscene_benchmark.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_reachability_multiscene_benchmark.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_multiscene_benchmark/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+3: Test timeout computed to be: 30
+3: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+3:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_reachability_multiscene_benchmark.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_multiscene_benchmark/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml --junit-prefix=om6dof_dd_gng
+3: ============================= test session starts ==============================
+3: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+3: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_multiscene_benchmark/.cache
+3: rootdir: /home/kublab/ros2_ws
+3: plugins: ament-pep257-0.12.15, launch-testing-ros-0.19.13, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.0
+3: collected 15 items
+3: 
+3: ../../src/om6dof/om6dof_dd_gng/test/test_reachability_multiscene_benchmark.py . [  6%]
+3: ..............                                                           [100%]
+3: 
+3: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml -
+3: ============================== 15 passed in 0.15s ==============================
+3: -- run_test.py: return code 0
+3: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml'
+3/5 Test #3: test_reachability_multiscene_benchmark .....   Passed    0.89 sec
+test 4
+    Start 4: test_generate_reachability_scene_catalog
+
+4: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_generate_reachability_scene_catalog.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_generate_reachability_scene_catalog.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_generate_reachability_scene_catalog/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+4: Test timeout computed to be: 30
+4: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+4:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_generate_reachability_scene_catalog.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_generate_reachability_scene_catalog/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml --junit-prefix=om6dof_dd_gng
+4: ============================= test session starts ==============================
+4: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+4: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_generate_reachability_scene_catalog/.cache
+4: rootdir: /home/kublab/ros2_ws
+4: plugins: ament-pep257-0.12.15, launch-testing-ros-0.19.13, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.0
+4: collected 6 items
+4: 
+4: ../../src/om6dof/om6dof_dd_gng/test/test_generate_reachability_scene_catalog.py . [ 16%]
+4: .....                                                                    [100%]
+4: 
+4: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml -
+4: ============================== 6 passed in 0.03s ===============================
+4: -- run_test.py: return code 0
+4: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml'
+4/5 Test #4: test_generate_reachability_scene_catalog ...   Passed    0.74 sec
+test 5
+    Start 5: test_analyze_reachability_multiscene
+
+5: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_analyze_reachability_multiscene.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_analyze_reachability_multiscene.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_analyze_reachability_multiscene/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+5: Test timeout computed to be: 60
+5: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+5:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_analyze_reachability_multiscene.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_analyze_reachability_multiscene/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml --junit-prefix=om6dof_dd_gng
+5: ============================= test session starts ==============================
+5: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+5: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_analyze_reachability_multiscene/.cache
+5: rootdir: /home/kublab/ros2_ws
+5: plugins: ament-pep257-0.12.15, launch-testing-ros-0.19.13, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.0
+5: collected 19 items
+5: 
+5: ../../src/om6dof/om6dof_dd_gng/test/test_analyze_reachability_multiscene.py . [  5%]
+5: ..................                                                       [100%]
+5: 
+5: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml -
+5: ============================= 19 passed in 11.09s ==============================
+5: -- run_test.py: return code 0
+5: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml'
+5/5 Test #5: test_analyze_reachability_multiscene .......   Passed   11.80 sec
+
+100% tests passed, 0 tests failed out of 5
+
+Label Time Summary:
+gtest     =   0.13 sec*proc (1 test)
+pytest    =  14.27 sec*proc (4 tests)
+
+Total Test time (real) =  14.41 sec
+Finished <<< om6dof_dd_gng [14.5s]
+
+Summary: 1 package finished [17.2s]

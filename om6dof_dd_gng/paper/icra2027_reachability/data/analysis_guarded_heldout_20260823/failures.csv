@@ -1,0 +1,7 @@
+seed,method,dynamic_reason,dynamic_blocked_nodes,dynamic_blocked_edges,dynamic_exact_checks,dynamic_exact_replans
+70,gng,target_intersection_blocked_or_disconnected,66,764,2,0
+76,gng,target_intersection_blocked_or_disconnected,52,715,2,0
+93,gng,target_intersection_blocked_or_disconnected,61,714,2,0
+95,gng,target_intersection_blocked_or_disconnected,63,739,2,0
+69,guarded_gng,target_intersection_blocked_or_disconnected,48,725,2,0
+96,halton_prm,target_intersection_blocked_or_disconnected,55,751,2,0

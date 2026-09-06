@@ -261,7 +261,9 @@ class IKSolver:
         d1 = p2 - p1
         d2 = p4 - p3
         r = p1 - p3
-        a = float(d1 @ d1); e = float(d2 @ d2); f = float(d2 @ r)
+        a = float(d1 @ d1)
+        e = float(d2 @ d2)
+        f = float(d2 @ r)
         EPS = 1e-9
         if a <= EPS and e <= EPS:
             return float(np.linalg.norm(p1 - p3))
@@ -279,9 +281,11 @@ class IKSolver:
                 s = min(max((b * f - c * e) / denom, 0.0), 1.0) if denom > EPS else 0.0
                 t = (b * s + f) / e
                 if t < 0.0:
-                    t = 0.0; s = min(max(-c / a, 0.0), 1.0)
+                    t = 0.0
+                    s = min(max(-c / a, 0.0), 1.0)
                 elif t > 1.0:
-                    t = 1.0; s = min(max((b - c) / a, 0.0), 1.0)
+                    t = 1.0
+                    s = min(max((b - c) / a, 0.0), 1.0)
         cp1 = p1 + d1 * s
         cp2 = p3 + d2 * t
         return float(np.linalg.norm(cp1 - cp2))
@@ -377,13 +381,107 @@ class IKSolver:
     # ---------------- full 6D pose IK (ROBOTIS-style) ----------------
     @staticmethod
     def orientation_difference(R_target: np.ndarray, R_present: np.ndarray) -> np.ndarray:
-        """ROBOTIS `orientationDifference`: 0.5·Σ (col_present × col_target).
-        A first-order rotation-error vector used by the SR-Jacobian solver."""
-        return 0.5 * (
-            np.cross(R_present[:, 0], R_target[:, 0])
-            + np.cross(R_present[:, 1], R_target[:, 1])
-            + np.cross(R_present[:, 2], R_target[:, 2])
-        )
+        """Return the principal rotation vector from ``present`` to ``target``.
+
+        The original ROBOTIS first-order expression,
+        ``0.5 * sum(col_present x col_target)``, is ``sin(theta) * axis``.
+        That is useful for small errors but collapses to zero at exactly 180
+        degrees, making :meth:`solve_pose_ik` report a false convergence at
+        the worst possible orientation error.
+
+        Compute the SO(3) logarithm of ``R_target @ R_present.T`` instead.  A
+        normalized quaternion and ``atan2`` keep the angle well-conditioned
+        near both zero and pi, while choosing ``w >= 0`` gives the shortest
+        (principal) rotation.  The relative rotation is left-multiplied, so
+        the returned vector remains expressed in ``base_link`` coordinates,
+        matching the angular rows of the geometric Jacobian.
+        """
+        target = np.asarray(R_target, dtype=float)
+        present = np.asarray(R_present, dtype=float)
+        if target.shape != (3, 3) or present.shape != (3, 3):
+            raise ValueError("orientation matrices must both have shape (3, 3)")
+
+        relative = target @ present.T
+
+        # FK rotations should already be orthonormal.  Projecting the relative
+        # matrix back onto SO(3) prevents small accumulated numeric drift from
+        # making the quaternion extraction ill-conditioned around pi.
+        u, _, vh = np.linalg.svd(relative)
+        relative = u @ vh
+        if np.linalg.det(relative) < 0.0:
+            u[:, -1] *= -1.0
+            relative = u @ vh
+
+        # Stable matrix -> quaternion conversion, (x, y, z, w).  Selecting the
+        # largest diagonal branch avoids division by a tiny value when the
+        # scalar quaternion component approaches zero at a half turn.
+        trace = float(np.trace(relative))
+        if trace > 0.0:
+            scale = 2.0 * math.sqrt(max(0.0, trace + 1.0))
+            quat = np.array([
+                (relative[2, 1] - relative[1, 2]) / scale,
+                (relative[0, 2] - relative[2, 0]) / scale,
+                (relative[1, 0] - relative[0, 1]) / scale,
+                0.25 * scale,
+            ])
+        else:
+            index = int(np.argmax(np.diag(relative)))
+            if index == 0:
+                scale = 2.0 * math.sqrt(max(
+                    0.0, 1.0 + relative[0, 0] - relative[1, 1] - relative[2, 2]
+                ))
+                quat = np.array([
+                    0.25 * scale,
+                    (relative[0, 1] + relative[1, 0]) / scale,
+                    (relative[0, 2] + relative[2, 0]) / scale,
+                    (relative[2, 1] - relative[1, 2]) / scale,
+                ])
+            elif index == 1:
+                scale = 2.0 * math.sqrt(max(
+                    0.0, 1.0 + relative[1, 1] - relative[0, 0] - relative[2, 2]
+                ))
+                quat = np.array([
+                    (relative[0, 1] + relative[1, 0]) / scale,
+                    0.25 * scale,
+                    (relative[1, 2] + relative[2, 1]) / scale,
+                    (relative[0, 2] - relative[2, 0]) / scale,
+                ])
+            else:
+                scale = 2.0 * math.sqrt(max(
+                    0.0, 1.0 + relative[2, 2] - relative[0, 0] - relative[1, 1]
+                ))
+                quat = np.array([
+                    (relative[0, 2] + relative[2, 0]) / scale,
+                    (relative[1, 2] + relative[2, 1]) / scale,
+                    0.25 * scale,
+                    (relative[1, 0] - relative[0, 1]) / scale,
+                ])
+
+        quat_norm = float(np.linalg.norm(quat))
+        if quat_norm < 1e-15 or not np.isfinite(quat_norm):
+            raise ValueError("orientation matrices do not define a finite rotation")
+        quat /= quat_norm
+
+        # q and -q encode the same rotation.  Canonicalize the sign so atan2
+        # returns an angle in [0, pi].  At exactly pi, make the dominant vector
+        # component positive for deterministic output (the axis sign is
+        # otherwise mathematically ambiguous).
+        if quat[3] < 0.0:
+            quat = -quat
+        elif abs(float(quat[3])) < 1e-15:
+            dominant = int(np.argmax(np.abs(quat[:3])))
+            if quat[dominant] < 0.0:
+                quat = -quat
+
+        vector = quat[:3]
+        vector_norm = float(np.linalg.norm(vector))
+        if vector_norm < 1e-12:
+            # sin(theta / 2) ~= theta / 2.  This also preserves sub-nanoradian
+            # errors instead of quantizing them to zero through acos.
+            return 2.0 * vector
+
+        angle = 2.0 * math.atan2(vector_norm, max(0.0, float(quat[3])))
+        return vector * (angle / vector_norm)
 
     def solve_pose_ik(
         self,

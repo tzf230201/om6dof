@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>om6dof_pick_and_place_gemini</name>
+  <version>0.1.0</version>
+  <description>
+    Grasp-from-point-cloud pick-and-place for the 6-DOF OM6DOF, with Google
+    Gemini as the reasoning step. An RGB-D frame from the wrist D405 becomes a
+    point cloud, GraspNet-baseline by default (with an analytic fallback)
+    proposes 6-DoF grasps, the candidates are filtered for
+    gripper width, table clearance, approach angle and IK reachability, and the
+    winner is executed as pregrasp/grasp/lift/place waypoints through MoveGroup.
+    Gemini either names the object that was picked (so it lands in the right
+    bin) or locates a target described in plain text.
+    Port of the ROBOTIS OMY "GraspNet pick and place" technical story onto this
+    arm's MoveIt stack; the OMY original drives a MoveL controller over Zenoh,
+    which this arm does not have.
+  </description>
+  <maintainer email="biancanobelia@gmail.com">unitree</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-requests</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <!-- MoveGroup/GripperCommand wrapper and the KDL FK/IK helper are reused,
+       not duplicated. -->
+  <exec_depend>om6dof_pick_and_place</exec_depend>
+  <exec_depend>om6dof_controller</exec_depend>
+  <exec_depend>om6dof_description</exec_depend>
+  <exec_depend>om6dof_moveit_config</exec_depend>
+  <exec_depend>om6dof_bringup</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

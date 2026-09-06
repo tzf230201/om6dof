@@ -1,0 +1,2597 @@
+{
+  "audit": {
+    "counts": {
+      "base_trajectories": null,
+      "graphs": 18,
+      "methods": 3,
+      "queries": 216,
+      "scenes": 6,
+      "streams": 6
+    },
+    "difficulty_strata_present": true,
+    "fail_fast": true,
+    "invariants": [
+      "complete stream-method graph Cartesian product",
+      "complete stream-method-scene-phase query Cartesian product",
+      "unique correlated query IDs and graph revisions",
+      "no timeout or infrastructure-error row",
+      "valid equals exact_valid",
+      "start/target echoes and successful path-cost decomposition",
+      "preview-only, localhost-only, and no controller publications",
+      "legacy artifact without explicit phase-order telemetry",
+      "legacy artifact without base-trajectory pairing telemetry"
+    ],
+    "method_order": {
+      "all_permutations_present": true,
+      "count_range": [
+        1,
+        1
+      ],
+      "permutation_counts": [
+        {
+          "count": 1,
+          "order": [
+            "gng",
+            "guarded_gng",
+            "halton_prm"
+          ]
+        },
+        {
+          "count": 1,
+          "order": [
+            "gng",
+            "halton_prm",
+            "guarded_gng"
+          ]
+        },
+        {
+          "count": 1,
+          "order": [
+            "guarded_gng",
+            "gng",
+            "halton_prm"
+          ]
+        },
+        {
+          "count": 1,
+          "order": [
+            "guarded_gng",
+            "halton_prm",
+            "gng"
+          ]
+        },
+        {
+          "count": 1,
+          "order": [
+            "halton_prm",
+            "gng",
+            "guarded_gng"
+          ]
+        },
+        {
+          "count": 1,
+          "order": [
+            "halton_prm",
+            "guarded_gng",
+            "gng"
+          ]
+        }
+      ]
+    },
+    "passed": true,
+    "phase_order": {
+      "balanced": null,
+      "first_position_counts": null,
+      "present": false,
+      "scheme": null
+    },
+    "phase_order_position_present": false,
+    "raw_inputs_unchanged": true,
+    "run_manifest_schema": "om6dof-reachability-multiscene-run-v1",
+    "scene_order": {
+      "expected_catalog_rotation": true,
+      "formula": "position=(catalog_index-stream_ordinal)%scene_count",
+      "identical_across_methods": true
+    },
+    "trajectory_pairing": {
+      "base_trajectory_count": null,
+      "exact_point_segment_pairs": null,
+      "present": false
+    },
+    "v2_provenance_verified": null,
+    "v2_run_config_verified": null,
+    "v2_runtime_telemetry": {
+      "complete": false,
+      "graph_fields_present": false,
+      "query_fields_present": false
+    }
+  },
+  "generated_utc": "2026-08-24T08:19:00.631246+00:00",
+  "inputs": {
+    "graphs": {
+      "path": "C:\\Users\\teuku\\OneDrive\\Documents\\agx\\reachability_paper_draft\\data\\multiscene_smoke_v1_20260824\\results\\graphs.csv",
+      "sha256": "6e52c4eca123ee32ea69b0252516f6bcb2ae544f88d0a52183fe2547ebbb7faf"
+    },
+    "manifest": {
+      "path": "C:\\Users\\teuku\\OneDrive\\Documents\\agx\\reachability_paper_draft\\data\\multiscene_smoke_v1_20260824\\results\\manifest.json",
+      "sha256": "268ca9608e4425e9102fdf0f74576d245ca6b0fc6b9df3b84b58dff4396cee52"
+    },
+    "queries": {
+      "path": "C:\\Users\\teuku\\OneDrive\\Documents\\agx\\reachability_paper_draft\\data\\multiscene_smoke_v1_20260824\\results\\queries.csv",
+      "sha256": "1e3f3cde5536d08d74f6e0181f5536eae71e053581b79147d2afa92e5565f449"
+    }
+  },
+  "methods": {
+    "gng": {
+      "build_time_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 1695.5602826666666,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 1730.8540906666667,
+          "valid_replicates": 50000
+        },
+        "definition": "Roadmap build time",
+        "distribution": {
+          "max": 1748.822272,
+          "mean": 1713.4319413333333,
+          "median": 1711.725248,
+          "min": 1675.20736,
+          "n": 6,
+          "q1": 1708.5758480000002,
+          "q3": 1722.1204160000002,
+          "sd": 24.024088120242073
+        },
+        "eligible_or_count": 6,
+        "estimate": 1713.4319413333333,
+        "numerator_or_sum": 10280.591648,
+        "unit": "ms"
+      },
+      "clear_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.3888888888888889,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.6111111111111112,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.5,
+          "median": 0.5,
+          "min": 0.0,
+          "n": 36,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.50709255283711
+        },
+        "eligible_or_count": 36,
+        "estimate": 0.5,
+        "numerator_or_sum": 18.0,
+        "unit": "proportion"
+      },
+      "conditional_retention": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.85,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 1.0,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic success conditional on clear success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.9444444444444444,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 18,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.23570226039551584
+        },
+        "eligible_or_count": 18,
+        "estimate": 0.9444444444444444,
+        "numerator_or_sum": 17.0,
+        "unit": "proportion"
+      },
+      "dynamic_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.3611111111111111,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.5833333333333334,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.4722222222222222,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 36,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.506309397848002
+        },
+        "eligible_or_count": 36,
+        "estimate": 0.4722222222222222,
+        "numerator_or_sum": 17.0,
+        "unit": "proportion"
+      },
+      "path_change_joint_success": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.3333333333333333,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.9375,
+          "valid_replicates": 50000
+        },
+        "definition": "Path changed among clear+dynamic joint successes",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.6470588235294118,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 17,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.492592183071889
+        },
+        "eligible_or_count": 17,
+        "estimate": 0.6470588235294118,
+        "numerator_or_sum": 11.0,
+        "unit": "proportion"
+      },
+      "path_cost_clear": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 9.99202429037436,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 12.36284368320433,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear total joint-path cost (successes only)",
+        "distribution": {
+          "max": 14.607599373130135,
+          "mean": 11.3091461752799,
+          "median": 10.973504153193547,
+          "min": 8.137057826693148,
+          "n": 18,
+          "q1": 10.413679659276509,
+          "q3": 12.368020405192057,
+          "sd": 2.169963004004944
+        },
+        "eligible_or_count": 18,
+        "estimate": 11.3091461752799,
+        "numerator_or_sum": 203.5646311550382,
+        "unit": "joint-space cost"
+      },
+      "path_cost_dynamic": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 10.46871120764761,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 13.795225514129276,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic total joint-path cost (successes only)",
+        "distribution": {
+          "max": 15.359376211725564,
+          "mean": 12.325088196173999,
+          "median": 12.368020405192057,
+          "min": 8.137057826693148,
+          "n": 17,
+          "q1": 11.251565944934041,
+          "q3": 14.743570042272419,
+          "sd": 2.57033421099842
+        },
+        "eligible_or_count": 17,
+        "estimate": 12.325088196174,
+        "numerator_or_sum": 209.526499334958,
+        "unit": "joint-space cost"
+      },
+      "planning_time_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 4.82094,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 5.833652,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear internal planning time (exact-success only)",
+        "distribution": {
+          "max": 6.372672,
+          "mean": 5.359756444444445,
+          "median": 5.669152,
+          "min": 3.849312,
+          "n": 18,
+          "q1": 5.228832000000001,
+          "q3": 5.83416,
+          "sd": 0.8439246797290566
+        },
+        "eligible_or_count": 18,
+        "estimate": 5.359756444444445,
+        "numerator_or_sum": 96.475616,
+        "unit": "ms"
+      },
+      "planning_time_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 14.229971555555558,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 16.89832457142857,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic internal planning time (exact-success only)",
+        "distribution": {
+          "max": 27.312448,
+          "mean": 15.344395294117646,
+          "median": 11.348992,
+          "min": 7.87248,
+          "n": 17,
+          "q1": 9.079552,
+          "q3": 21.808064,
+          "sd": 6.994181879906217
+        },
+        "eligible_or_count": 17,
+        "estimate": 15.344395294117646,
+        "numerator_or_sum": 260.85472,
+        "unit": "ms"
+      },
+      "query_latency_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 5.446897777397276,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 7.288564444226925,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 19.202464001864428,
+          "mean": 6.336109332955352,
+          "median": 6.022559999109944,
+          "min": 2.68800000048941,
+          "n": 36,
+          "q1": 3.607063999879756,
+          "q3": 8.422287999565015,
+          "sd": 3.223576949971445
+        },
+        "eligible_or_count": 36,
+        "estimate": 6.336109332955352,
+        "numerator_or_sum": 228.09993598639267,
+        "unit": "ms"
+      },
+      "query_latency_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 15.116670222293275,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 15.839971555477758,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 30.31196800293401,
+          "mean": 15.484840888853391,
+          "median": 15.261856000506668,
+          "min": 5.255776002741186,
+          "n": 36,
+          "q1": 10.268432000884786,
+          "q3": 19.23017599983723,
+          "sd": 6.759414736867202
+        },
+        "eligible_or_count": 36,
+        "estimate": 15.484840888853391,
+        "numerator_or_sum": 557.4542719987221,
+        "unit": "ms"
+      }
+    },
+    "guarded_gng": {
+      "build_time_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 1571.5395573333335,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 1670.5022506666667,
+          "valid_replicates": 50000
+        },
+        "definition": "Roadmap build time",
+        "distribution": {
+          "max": 1761.731456,
+          "mean": 1607.3215413333335,
+          "median": 1574.0496640000001,
+          "min": 1568.477632,
+          "n": 6,
+          "q1": 1572.095864,
+          "q3": 1589.1445919999999,
+          "sd": 76.16577213004072
+        },
+        "eligible_or_count": 6,
+        "estimate": 1607.3215413333335,
+        "numerator_or_sum": 9643.929248,
+        "unit": "ms"
+      },
+      "clear_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.5555555555555556,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.8888888888888888,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.7222222222222222,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 36,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.45425676257949793
+        },
+        "eligible_or_count": 36,
+        "estimate": 0.7222222222222222,
+        "numerator_or_sum": 26.0,
+        "unit": "proportion"
+      },
+      "conditional_retention": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 1.0,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 1.0,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic success conditional on clear success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 1.0,
+          "median": 1.0,
+          "min": 1.0,
+          "n": 26,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.0
+        },
+        "eligible_or_count": 26,
+        "estimate": 1.0,
+        "numerator_or_sum": 26.0,
+        "unit": "proportion"
+      },
+      "dynamic_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.5555555555555556,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.8888888888888888,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.7222222222222222,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 36,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.45425676257949793
+        },
+        "eligible_or_count": 36,
+        "estimate": 0.7222222222222222,
+        "numerator_or_sum": 26.0,
+        "unit": "proportion"
+      },
+      "path_change_joint_success": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.2222222222222222,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.4375,
+          "valid_replicates": 50000
+        },
+        "definition": "Path changed among clear+dynamic joint successes",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.34615384615384615,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 26,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.485164524037584
+        },
+        "eligible_or_count": 26,
+        "estimate": 0.34615384615384615,
+        "numerator_or_sum": 9.0,
+        "unit": "proportion"
+      },
+      "path_cost_clear": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 15.347276368206138,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 17.61257273310616,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear total joint-path cost (successes only)",
+        "distribution": {
+          "max": 26.161483606350377,
+          "mean": 16.63538040444521,
+          "median": 16.696728275408276,
+          "min": 11.417361947036973,
+          "n": 26,
+          "q1": 14.078874532723281,
+          "q3": 18.378929251361978,
+          "sd": 3.971993579449452
+        },
+        "eligible_or_count": 26,
+        "estimate": 16.63538040444521,
+        "numerator_or_sum": 432.5198905155755,
+        "unit": "joint-space cost"
+      },
+      "path_cost_dynamic": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 15.59411588532878,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 18.03064267389282,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic total joint-path cost (successes only)",
+        "distribution": {
+          "max": 27.761477981678436,
+          "mean": 16.979478871627173,
+          "median": 16.719317408651076,
+          "min": 11.417361947036973,
+          "n": 26,
+          "q1": 14.078874532723281,
+          "q3": 18.378929251361978,
+          "sd": 4.137975667550946
+        },
+        "eligible_or_count": 26,
+        "estimate": 16.979478871627173,
+        "numerator_or_sum": 441.46645066230644,
+        "unit": "joint-space cost"
+      },
+      "planning_time_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 7.266760727272728,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 9.500734666666668,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear internal planning time (exact-success only)",
+        "distribution": {
+          "max": 16.556768,
+          "mean": 8.33724676923077,
+          "median": 8.001312,
+          "min": 4.848288,
+          "n": 26,
+          "q1": 6.05,
+          "q3": 9.718648000000002,
+          "sd": 2.9840950988399593
+        },
+        "eligible_or_count": 26,
+        "estimate": 8.33724676923077,
+        "numerator_or_sum": 216.768416,
+        "unit": "ms"
+      },
+      "planning_time_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 13.953029333333333,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 16.265543384615384,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic internal planning time (exact-success only)",
+        "distribution": {
+          "max": 26.548224,
+          "mean": 15.167885538461539,
+          "median": 15.858208,
+          "min": 7.41888,
+          "n": 26,
+          "q1": 10.33972,
+          "q3": 18.719904,
+          "sd": 5.539527122530119
+        },
+        "eligible_or_count": 26,
+        "estimate": 15.167885538461539,
+        "numerator_or_sum": 394.365024,
+        "unit": "ms"
+      },
+      "query_latency_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 7.66937333385916,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 11.279726222710451,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 19.095072002528468,
+          "mean": 9.510154667219062,
+          "median": 9.56236800084298,
+          "min": 2.572127999883378,
+          "n": 36,
+          "q1": 6.04925600146089,
+          "q3": 12.28373600224586,
+          "sd": 4.397979857907306
+        },
+        "eligible_or_count": 36,
+        "estimate": 9.510154667219062,
+        "numerator_or_sum": 342.36556801988627,
+        "unit": "ms"
+      },
+      "query_latency_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 14.649479111742242,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 17.91815466690928,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 30.116800000541843,
+          "mean": 16.34465688908272,
+          "median": 16.928687999097747,
+          "min": 3.8194560002011713,
+          "n": 36,
+          "q1": 11.33825600027194,
+          "q3": 21.0918960010531,
+          "sd": 6.37128525302538
+        },
+        "eligible_or_count": 36,
+        "estimate": 16.34465688908272,
+        "numerator_or_sum": 588.407648006978,
+        "unit": "ms"
+      }
+    },
+    "halton_prm": {
+      "build_time_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 1368.79024,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 1470.1680853333335,
+          "valid_replicates": 50000
+        },
+        "definition": "Roadmap build time",
+        "distribution": {
+          "max": 1559.023392,
+          "mean": 1407.2768586666668,
+          "median": 1382.796464,
+          "min": 1359.371424,
+          "n": 6,
+          "q1": 1368.047688,
+          "q3": 1393.1055999999999,
+          "sd": 75.56000992621145
+        },
+        "eligible_or_count": 6,
+        "estimate": 1407.2768586666668,
+        "numerator_or_sum": 8443.661152,
+        "unit": "ms"
+      },
+      "clear_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.6666666666666666,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.8888888888888888,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.7777777777777778,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 36,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.4216370213557839
+        },
+        "eligible_or_count": 36,
+        "estimate": 0.7777777777777778,
+        "numerator_or_sum": 28.0,
+        "unit": "proportion"
+      },
+      "conditional_retention": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 1.0,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 1.0,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic success conditional on clear success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 1.0,
+          "median": 1.0,
+          "min": 1.0,
+          "n": 28,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.0
+        },
+        "eligible_or_count": 28,
+        "estimate": 1.0,
+        "numerator_or_sum": 28.0,
+        "unit": "proportion"
+      },
+      "dynamic_success": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.6666666666666666,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.8888888888888888,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic exact-valid success",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.7777777777777778,
+          "median": 1.0,
+          "min": 0.0,
+          "n": 36,
+          "q1": 1.0,
+          "q3": 1.0,
+          "sd": 0.4216370213557839
+        },
+        "eligible_or_count": 36,
+        "estimate": 0.7777777777777778,
+        "numerator_or_sum": 28.0,
+        "unit": "proportion"
+      },
+      "path_change_joint_success": {
+        "analysis_role": "method_specific_descriptive",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 0.14285714285714285,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 0.42857142857142855,
+          "valid_replicates": 50000
+        },
+        "definition": "Path changed among clear+dynamic joint successes",
+        "distribution": {
+          "max": 1.0,
+          "mean": 0.2857142857142857,
+          "median": 0.0,
+          "min": 0.0,
+          "n": 28,
+          "q1": 0.0,
+          "q3": 1.0,
+          "sd": 0.46004370622823615
+        },
+        "eligible_or_count": 28,
+        "estimate": 0.2857142857142857,
+        "numerator_or_sum": 8.0,
+        "unit": "proportion"
+      },
+      "path_cost_clear": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 14.58968805342357,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 17.68735221288013,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear total joint-path cost (successes only)",
+        "distribution": {
+          "max": 24.385990385498783,
+          "mean": 16.062935258414694,
+          "median": 15.14484014828293,
+          "min": 11.598853906092671,
+          "n": 28,
+          "q1": 14.171720712597821,
+          "q3": 17.53014666432182,
+          "sd": 3.5014191707126736
+        },
+        "eligible_or_count": 28,
+        "estimate": 16.062935258414694,
+        "numerator_or_sum": 449.7621872356114,
+        "unit": "joint-space cost"
+      },
+      "path_cost_dynamic": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 14.782694169754633,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 18.445237657727805,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic total joint-path cost (successes only)",
+        "distribution": {
+          "max": 25.581390583465087,
+          "mean": 16.616007818488534,
+          "median": 16.243383619552695,
+          "min": 11.598853906092671,
+          "n": 28,
+          "q1": 14.283125563786598,
+          "q3": 18.103969391018882,
+          "sd": 3.7136369076099167
+        },
+        "eligible_or_count": 28,
+        "estimate": 16.616007818488534,
+        "numerator_or_sum": 465.2482189176789,
+        "unit": "joint-space cost"
+      },
+      "planning_time_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 6.299401333333333,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 7.206976941176471,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear internal planning time (exact-success only)",
+        "distribution": {
+          "max": 11.205536,
+          "mean": 6.797998857142857,
+          "median": 6.366464000000001,
+          "min": 4.978208,
+          "n": 28,
+          "q1": 6.0889120000000005,
+          "q3": 7.041096,
+          "sd": 1.4729820873678328
+        },
+        "eligible_or_count": 28,
+        "estimate": 6.797998857142858,
+        "numerator_or_sum": 190.34396800000002,
+        "unit": "ms"
+      },
+      "planning_time_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 13.22187428571429,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 14.683321142857142,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic internal planning time (exact-success only)",
+        "distribution": {
+          "max": 24.115776,
+          "mean": 13.952597714285714,
+          "median": 13.011936,
+          "min": 6.892032,
+          "n": 28,
+          "q1": 9.556784,
+          "q3": 18.535792,
+          "sd": 5.398334332290607
+        },
+        "eligible_or_count": 28,
+        "estimate": 13.952597714285714,
+        "numerator_or_sum": 390.672736,
+        "unit": "ms"
+      },
+      "query_latency_clear_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 7.0146266676197735,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 9.293272889105234,
+          "valid_replicates": 50000
+        },
+        "definition": "Clear publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 14.836607999313856,
+          "mean": 8.121188445026442,
+          "median": 8.76740800049447,
+          "min": 2.312608001375338,
+          "n": 36,
+          "q1": 7.289143999514636,
+          "q3": 9.635495999646082,
+          "sd": 3.0329598999747143
+        },
+        "eligible_or_count": 36,
+        "estimate": 8.121188445026442,
+        "numerator_or_sum": 292.36278402095195,
+        "unit": "ms"
+      },
+      "query_latency_dynamic_ms": {
+        "analysis_role": "descriptive_method_summary",
+        "cluster_bootstrap_ci": {
+          "level": 0.95,
+          "lower": 13.476662221869951,
+          "requested_replicates": 50000,
+          "resampling_unit": "roadmap_stream_cluster",
+          "upper": 16.19786844437638,
+          "valid_replicates": 50000
+        },
+        "definition": "Dynamic publish-to-plan latency (all outcomes)",
+        "distribution": {
+          "max": 26.932223998301197,
+          "mean": 14.793675555261466,
+          "median": 12.949887999639031,
+          "min": 4.0629440009070095,
+          "n": 36,
+          "q1": 10.293119999005285,
+          "q3": 19.05732799696125,
+          "sd": 6.319871586622897
+        },
+        "eligible_or_count": 36,
+        "estimate": 14.793675555261466,
+        "numerator_or_sum": 532.5723199894128,
+        "unit": "ms"
+      }
+    }
+  },
+  "metric_definitions": {
+    "build_time_ms": {
+      "family": "continuous",
+      "label": "Roadmap build time",
+      "unit": "ms"
+    },
+    "clear_success": {
+      "family": "rate",
+      "label": "Clear exact-valid success",
+      "unit": "proportion"
+    },
+    "conditional_retention": {
+      "family": "rate",
+      "label": "Dynamic success conditional on clear success",
+      "unit": "proportion"
+    },
+    "dynamic_success": {
+      "family": "rate",
+      "label": "Dynamic exact-valid success",
+      "unit": "proportion"
+    },
+    "path_change_joint_success": {
+      "family": "rate",
+      "label": "Path changed among clear+dynamic joint successes",
+      "unit": "proportion"
+    },
+    "path_cost_clear": {
+      "family": "continuous",
+      "label": "Clear total joint-path cost (successes only)",
+      "unit": "joint-space cost"
+    },
+    "path_cost_dynamic": {
+      "family": "continuous",
+      "label": "Dynamic total joint-path cost (successes only)",
+      "unit": "joint-space cost"
+    },
+    "planning_time_clear_ms": {
+      "family": "continuous",
+      "label": "Clear internal planning time (exact-success only)",
+      "unit": "ms"
+    },
+    "planning_time_dynamic_ms": {
+      "family": "continuous",
+      "label": "Dynamic internal planning time (exact-success only)",
+      "unit": "ms"
+    },
+    "query_latency_clear_ms": {
+      "family": "continuous",
+      "label": "Clear publish-to-plan latency (all outcomes)",
+      "unit": "ms"
+    },
+    "query_latency_dynamic_ms": {
+      "family": "continuous",
+      "label": "Dynamic publish-to-plan latency (all outcomes)",
+      "unit": "ms"
+    }
+  },
+  "pairwise_comparisons": [
+    {
+      "binary_pair_description": {
+        "both_success": 18,
+        "discordant_odds_ratio": null,
+        "discordant_odds_ratio_note": "positive_infinity",
+        "left_only_success": 8,
+        "matched_pairs": 36,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 10,
+        "right_only_success": 0
+      },
+      "definition": "Clear exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.7222222222222222,
+      "left_method": "guarded_gng",
+      "metric": "clear_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.0,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.4444444444444444,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.2222222222222222,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.5,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 0.6454972243679028,
+        "paired_streams": 6,
+        "positive": 2,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 4,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.5,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 17,
+        "discordant_odds_ratio": null,
+        "discordant_odds_ratio_note": "positive_infinity",
+        "left_only_success": 9,
+        "matched_pairs": 36,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 10,
+        "right_only_success": 0
+      },
+      "definition": "Dynamic exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": "mean_over_roadmap_streams_of_within_stream_dynamic_exact_valid_risk_difference_over_the_frozen_scene_catalog",
+      "hypothesis_role": "prespecified_primary_endpoint_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.7222222222222222,
+      "left_method": "guarded_gng",
+      "metric": "dynamic_success",
+      "paired_cluster_bootstrap_ci": {
+        "catalog_treatment": "fixed_scene_catalog_not_resampled",
+        "level": 0.95,
+        "lower": 0.027777777777777776,
+        "requested_replicates": 50000,
+        "resampling_seed": 8617206132795804324,
+        "resampling_unit": "paired_whole_roadmap_stream",
+        "upper": 0.47222222222222215,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.25,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.25,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 0.75955452531275,
+        "paired_streams": 6,
+        "positive": 3,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 3,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": {
+        "degenerate_case": null,
+        "exchangeability_assumption": "method_labels_exchangeable_within_stream",
+        "extreme_permutations": 25001,
+        "observed_statistic": 1.860521018838127,
+        "observed_statistic_is_infinite": false,
+        "plus_one_correction": true,
+        "requested_permutations": 100000,
+        "statistic": "studentized_mean_stream_risk_difference",
+        "test": "monte_carlo_paired_label_swap",
+        "two_sided_p": 0.25001749982500177,
+        "valid_permutations": 100000
+      },
+      "right_estimate": 0.4722222222222222,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": {
+        "analysis_role": "legacy_fallback_not_scene_generalization",
+        "base_trajectory_pairing_available": false,
+        "catalog_treatment": "fixed_scene_catalog_not_resampled",
+        "difficulty_stratified": false,
+        "level": 0.95,
+        "lower": 0.027777777777777776,
+        "requested_replicates": 50000,
+        "resampling_seed": 16711919386957139165,
+        "resampling_unit": "paired_whole_roadmap_stream",
+        "upper": 0.47222222222222215,
+        "valid_replicates": 50000
+      },
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Dynamic success conditional on clear success",
+      "effect_definition": "difference of method-specific conditional rates",
+      "eligible_common_cells": null,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 1.0,
+      "left_method": "guarded_gng",
+      "metric": "conditional_retention",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": null,
+        "not_computed_reason": "method-specific conditioning sets differ; descriptive only",
+        "requested_replicates": 50000,
+        "resampling_unit": null,
+        "upper": null,
+        "valid_replicates": 0
+      },
+      "paired_effect": 0.05555555555555558,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": null,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": null,
+        "paired_streams": 0,
+        "positive": 0,
+        "sign_dominance": null,
+        "test_unit": null,
+        "ties": 0,
+        "zero_difference_handling": null
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.9444444444444444,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "method_specific_clear_success_denominators",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Path changed among clear+dynamic joint successes",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 17,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.17647058823529413,
+      "left_method": "guarded_gng",
+      "metric": "path_change_joint_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.8571428571428571,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.1,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.47058823529411764,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.21875,
+        "negative": 5,
+        "paired_standardized_mean_difference_dz": -1.0292095512914188,
+        "paired_streams": 6,
+        "positive": 1,
+        "sign_dominance": -0.6666666666666666,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.6470588235294118,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_four_way_clear_dynamic_joint_success_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Roadmap build time",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 6,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 1607.3215413333335,
+      "left_method": "guarded_gng",
+      "metric": "build_time_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -151.87646399999997,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -42.2030986666667,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -106.11040000000003,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.21875,
+        "negative": 5,
+        "paired_standardized_mean_difference_dz": -1.3866757432628756,
+        "paired_streams": 6,
+        "positive": 1,
+        "sign_dominance": -0.6666666666666666,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 1713.4319413333333,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_paired_roadmap_streams",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 18,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 8.184517333333334,
+      "left_method": "guarded_gng",
+      "metric": "planning_time_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 1.242262,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 4.606798400000001,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 2.824760888888889,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 1.187548188313104,
+        "paired_streams": 6,
+        "positive": 6,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 5.359756444444445,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 17,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 14.31491388235294,
+      "left_method": "guarded_gng",
+      "metric": "planning_time_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -3.9622468571428575,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 1.4070249411764704,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -1.029481411764706,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.6875,
+        "negative": 4,
+        "paired_standardized_mean_difference_dz": -0.4403879008493166,
+        "paired_streams": 6,
+        "positive": 2,
+        "sign_dominance": -0.3333333333333333,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 15.344395294117646,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 9.510154667219062,
+      "left_method": "guarded_gng",
+      "metric": "query_latency_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 1.3982115562814417,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 4.9524257784570285,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 3.1740453342637114,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 1.2845510010832015,
+        "paired_streams": 6,
+        "positive": 6,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 6.336109332955352,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_clear_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 16.34465688908272,
+      "left_method": "guarded_gng",
+      "metric": "query_latency_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.968746666836119,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 2.652062222700301,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.8598160002293298,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.0,
+        "negative": 3,
+        "paired_standardized_mean_difference_dz": 0.3383349677177763,
+        "paired_streams": 6,
+        "positive": 3,
+        "sign_dominance": 0.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 15.484840888853391,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_dynamic_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 18,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 15.796216367496887,
+      "left_method": "guarded_gng",
+      "metric": "path_cost_clear",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 2.708218300501861,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 6.605500996684085,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 4.487070192216988,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 2.0756774591731664,
+        "paired_streams": 6,
+        "positive": 6,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 11.3091461752799,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "definition": "Dynamic total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 17,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 15.999002447471288,
+      "left_method": "guarded_gng",
+      "metric": "path_cost_dynamic",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 1.8551344636113918,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 6.2721710908485715,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 3.673914251297289,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 1.4891824159062919,
+        "paired_streams": 6,
+        "positive": 6,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 12.325088196174,
+      "right_method": "gng",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 16,
+        "discordant_odds_ratio": 0.16666666666666666,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 2,
+        "matched_pairs": 36,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 6,
+        "right_only_success": 12
+      },
+      "definition": "Clear exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.5,
+      "left_method": "gng",
+      "metric": "clear_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.4444444444444444,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.1111111111111111,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.2777777777777778,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.125,
+        "negative": 4,
+        "paired_standardized_mean_difference_dz": -1.107018606925119,
+        "paired_streams": 6,
+        "positive": 0,
+        "sign_dominance": -1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 2,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.7777777777777778,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 16,
+        "discordant_odds_ratio": 0.08333333333333333,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 1,
+        "matched_pairs": 36,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 7,
+        "right_only_success": 12
+      },
+      "definition": "Dynamic exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.4722222222222222,
+      "left_method": "gng",
+      "metric": "dynamic_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.4722222222222222,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.1388888888888889,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.3055555555555556,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.0625,
+        "negative": 5,
+        "paired_standardized_mean_difference_dz": -1.3793171220826774,
+        "paired_streams": 6,
+        "positive": 0,
+        "sign_dominance": -1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 1,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.7777777777777778,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Dynamic success conditional on clear success",
+      "effect_definition": "difference of method-specific conditional rates",
+      "eligible_common_cells": null,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.9444444444444444,
+      "left_method": "gng",
+      "metric": "conditional_retention",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": null,
+        "not_computed_reason": "method-specific conditioning sets differ; descriptive only",
+        "requested_replicates": 50000,
+        "resampling_unit": null,
+        "upper": null,
+        "valid_replicates": 0
+      },
+      "paired_effect": -0.05555555555555558,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": null,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": null,
+        "paired_streams": 0,
+        "positive": 0,
+        "sign_dominance": null,
+        "test_unit": null,
+        "ties": 0,
+        "zero_difference_handling": null
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 1.0,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "method_specific_clear_success_denominators",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Path changed among clear+dynamic joint successes",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 16,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.6875,
+      "left_method": "gng",
+      "metric": "path_change_joint_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.14285714285714285,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.8333333333333334,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.5,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.125,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 0.9991745768300444,
+        "paired_streams": 6,
+        "positive": 4,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 2,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.1875,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_four_way_clear_dynamic_joint_success_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Roadmap build time",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 6,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 1713.4319413333333,
+      "left_method": "gng",
+      "metric": "build_time_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 240.6871893333333,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 353.81704000000013,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 306.1550826666667,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 3.843611071683292,
+        "paired_streams": 6,
+        "positive": 6,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 1407.2768586666668,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_paired_roadmap_streams",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 16,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 5.314058,
+      "left_method": "gng",
+      "metric": "planning_time_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -1.8750648888888888,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.483442,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -1.17953,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 6,
+        "paired_standardized_mean_difference_dz": -1.25855466665611,
+        "paired_streams": 6,
+        "positive": 0,
+        "sign_dominance": -1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 6.493588,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 16,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 15.795204,
+      "left_method": "gng",
+      "metric": "planning_time_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 2.5969152,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 5.415625142857143,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 3.803134,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 2.1635092622483,
+        "paired_streams": 6,
+        "positive": 6,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 11.99207,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 6.336109332955352,
+      "left_method": "gng",
+      "metric": "query_latency_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -3.2355075564838547,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -0.313374223070342,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -1.7850791120710912,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.21875,
+        "negative": 5,
+        "paired_standardized_mean_difference_dz": -0.8883771634801754,
+        "paired_streams": 6,
+        "positive": 1,
+        "sign_dominance": -0.6666666666666666,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 8.121188445026442,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_clear_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 15.484840888853391,
+      "left_method": "gng",
+      "metric": "query_latency_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.5744595558401974,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 1.9413973338184103,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 0.6911653335919254,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.21875,
+        "negative": 1,
+        "paired_standardized_mean_difference_dz": 0.39561346436901484,
+        "paired_streams": 6,
+        "positive": 5,
+        "sign_dominance": 0.6666666666666666,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 14.793675555261466,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_dynamic_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 16,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 11.17678689654088,
+      "left_method": "gng",
+      "metric": "path_cost_clear",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -6.4744565575781365,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -2.8972003357789977,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -4.515198353018072,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 6,
+        "paired_standardized_mean_difference_dz": -2.230191046300994,
+        "paired_streams": 6,
+        "positive": 0,
+        "sign_dominance": -1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 15.691985249558954,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "definition": "Dynamic total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 16,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 12.322404933110372,
+      "left_method": "gng",
+      "metric": "path_cost_dynamic",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -6.5762787655499535,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": -2.464679134664218,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -4.084188178112008,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 6,
+        "paired_standardized_mean_difference_dz": -1.6330279828146652,
+        "paired_streams": 6,
+        "positive": 0,
+        "sign_dominance": -1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 16.40659311122238,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 20,
+        "discordant_odds_ratio": 0.75,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 6,
+        "matched_pairs": 36,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 2,
+        "right_only_success": 8
+      },
+      "definition": "Clear exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.7222222222222222,
+      "left_method": "guarded_gng",
+      "metric": "clear_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.3333333333333333,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.2222222222222222,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.05555555555555555,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.0,
+        "negative": 2,
+        "paired_standardized_mean_difference_dz": -0.14256648712805026,
+        "paired_streams": 6,
+        "positive": 2,
+        "sign_dominance": 0.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 2,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.7777777777777778,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "binary_pair_description": {
+        "both_success": 20,
+        "discordant_odds_ratio": 0.75,
+        "discordant_odds_ratio_note": null,
+        "left_only_success": 6,
+        "matched_pairs": 36,
+        "mcnemar_reason": "scene-level pairs repeat within roadmap streams; the independent-pair assumption is not justified. Primary inference uses a paired whole-stream method-label permutation test.",
+        "mcnemar_test_reported": false,
+        "neither_success": 2,
+        "right_only_success": 8
+      },
+      "definition": "Dynamic exact-valid success",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": "mean_over_roadmap_streams_of_within_stream_dynamic_exact_valid_risk_difference_over_the_frozen_scene_catalog",
+      "hypothesis_role": "prespecified_primary_endpoint_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.7222222222222222,
+      "left_method": "guarded_gng",
+      "metric": "dynamic_success",
+      "paired_cluster_bootstrap_ci": {
+        "catalog_treatment": "fixed_scene_catalog_not_resampled",
+        "level": 0.95,
+        "lower": -0.3333333333333333,
+        "requested_replicates": 50000,
+        "resampling_seed": 8617206132795804324,
+        "resampling_unit": "paired_whole_roadmap_stream",
+        "upper": 0.2222222222222222,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.05555555555555555,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.0,
+        "negative": 2,
+        "paired_standardized_mean_difference_dz": -0.14256648712805026,
+        "paired_streams": 6,
+        "positive": 2,
+        "sign_dominance": 0.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 2,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": {
+        "degenerate_case": null,
+        "exchangeability_assumption": "method_labels_exchangeable_within_stream",
+        "extreme_permutations": 100000,
+        "observed_statistic": -0.349215147884789,
+        "observed_statistic_is_infinite": false,
+        "plus_one_correction": true,
+        "requested_permutations": 100000,
+        "statistic": "studentized_mean_stream_risk_difference",
+        "test": "monte_carlo_paired_label_swap",
+        "two_sided_p": 1.0,
+        "valid_permutations": 100000
+      },
+      "right_estimate": 0.7777777777777778,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": {
+        "analysis_role": "legacy_fallback_not_scene_generalization",
+        "base_trajectory_pairing_available": false,
+        "catalog_treatment": "fixed_scene_catalog_not_resampled",
+        "difficulty_stratified": false,
+        "level": 0.95,
+        "lower": -0.3333333333333333,
+        "requested_replicates": 50000,
+        "resampling_seed": 17604912568290168126,
+        "resampling_unit": "paired_whole_roadmap_stream",
+        "upper": 0.2222222222222222,
+        "valid_replicates": 50000
+      },
+      "support_definition": "all_fixed_catalog_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Dynamic success conditional on clear success",
+      "effect_definition": "difference of method-specific conditional rates",
+      "eligible_common_cells": null,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 1.0,
+      "left_method": "guarded_gng",
+      "metric": "conditional_retention",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": null,
+        "not_computed_reason": "method-specific conditioning sets differ; descriptive only",
+        "requested_replicates": 50000,
+        "resampling_unit": null,
+        "upper": null,
+        "valid_replicates": 0
+      },
+      "paired_effect": 0.0,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": null,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": null,
+        "paired_streams": 0,
+        "positive": 0,
+        "sign_dominance": null,
+        "test_unit": null,
+        "ties": 0,
+        "zero_difference_handling": null
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 1.0,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "method_specific_clear_success_denominators",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Path changed among clear+dynamic joint successes",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 20,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 0.15,
+      "left_method": "guarded_gng",
+      "metric": "path_change_joint_success",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -0.45,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 0.16666666666666666,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.1,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.0,
+        "negative": 2,
+        "paired_standardized_mean_difference_dz": -0.3390317518104052,
+        "paired_streams": 6,
+        "positive": 2,
+        "sign_dominance": 0.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 2,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 0.25,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_four_way_clear_dynamic_joint_success_cells",
+      "unit": "proportion"
+    },
+    {
+      "definition": "Roadmap build time",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 6,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 1607.3215413333335,
+      "left_method": "guarded_gng",
+      "metric": "build_time_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 108.61642666666667,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 291.3066079999999,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 200.04468266666666,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.03125,
+        "negative": 0,
+        "paired_standardized_mean_difference_dz": 1.6713237089373327,
+        "paired_streams": 6,
+        "positive": 6,
+        "sign_dominance": 1.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 1407.2768586666668,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_paired_roadmap_streams",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 20,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 8.2048544,
+      "left_method": "guarded_gng",
+      "metric": "planning_time_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.05141818181818205,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 4.314032,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 1.5640752,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.21875,
+        "negative": 1,
+        "paired_standardized_mean_difference_dz": 0.5258878670919767,
+        "paired_streams": 6,
+        "positive": 5,
+        "sign_dominance": 0.6666666666666666,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 6.6407792,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic internal planning time (exact-success only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 20,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 15.4209296,
+      "left_method": "guarded_gng",
+      "metric": "planning_time_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": 0.4335679999999998,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 5.152774,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 2.3912431999999995,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.21875,
+        "negative": 1,
+        "paired_standardized_mean_difference_dz": 0.596463778569243,
+        "paired_streams": 6,
+        "positive": 5,
+        "sign_dominance": 0.6666666666666666,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 13.0296864,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 9.510154667219062,
+      "left_method": "guarded_gng",
+      "metric": "query_latency_clear_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -1.3743226667833772,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 3.9394880000650625,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 1.38896622219262,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 1.0,
+        "negative": 3,
+        "paired_standardized_mean_difference_dz": 0.38556278572559566,
+        "paired_streams": 6,
+        "positive": 3,
+        "sign_dominance": 0.0,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 8.121188445026442,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_clear_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Dynamic publish-to-plan latency (all outcomes)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 36,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 16.34465688908272,
+      "left_method": "guarded_gng",
+      "metric": "query_latency_dynamic_ms",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -1.3024204442141734,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 3.885218666962626,
+        "valid_replicates": 50000
+      },
+      "paired_effect": 1.5509813338212552,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.21875,
+        "negative": 1,
+        "paired_standardized_mean_difference_dz": 0.4329555358592221,
+        "paired_streams": 6,
+        "positive": 5,
+        "sign_dominance": 0.6666666666666666,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 14.793675555261466,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "all_dynamic_query_outcomes",
+      "unit": "ms"
+    },
+    {
+      "definition": "Clear total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 20,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 15.396711257076655,
+      "left_method": "guarded_gng",
+      "metric": "path_cost_clear",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -2.4656821082453906,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 1.7639221284277278,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -0.8528390948345175,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.6875,
+        "negative": 4,
+        "paired_standardized_mean_difference_dz": -0.01212753214813038,
+        "paired_streams": 6,
+        "positive": 2,
+        "sign_dominance": -0.3333333333333333,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 16.24955035191117,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_clear_exact_success_cells",
+      "unit": "joint-space cost"
+    },
+    {
+      "definition": "Dynamic total joint-path cost (successes only)",
+      "effect_definition": "paired within-cell left minus right",
+      "eligible_common_cells": 20,
+      "fixed_catalog_estimand": null,
+      "hypothesis_role": "secondary_exploratory_descriptive",
+      "inferential_use": false,
+      "left_estimate": 15.532354065829457,
+      "left_method": "guarded_gng",
+      "metric": "path_cost_dynamic",
+      "paired_cluster_bootstrap_ci": {
+        "level": 0.95,
+        "lower": -3.0365821557792594,
+        "requested_replicates": 50000,
+        "resampling_unit": "paired_roadmap_stream_cluster",
+        "upper": 1.019601130250348,
+        "valid_replicates": 50000
+      },
+      "paired_effect": -1.3860377576996723,
+      "paired_stream_sign_summary": {
+        "exact_sign_test_two_sided_p": 0.21875,
+        "negative": 5,
+        "paired_standardized_mean_difference_dz": -0.2473616190331802,
+        "paired_streams": 6,
+        "positive": 1,
+        "sign_dominance": -0.6666666666666666,
+        "test_unit": "roadmap_stream_summary",
+        "ties": 0,
+        "zero_difference_handling": "discarded"
+      },
+      "primary_permutation_test": null,
+      "right_estimate": 16.91839182352913,
+      "right_method": "halton_prm",
+      "scene_generalization_sensitivity": null,
+      "support_definition": "common_dynamic_exact_success_cells",
+      "unit": "joint-space cost"
+    }
+  ],
+  "schema": "om6dof-reachability-multiscene-analysis-v2",
+  "source_provenance": null,
+  "stratified_dynamic_results": [
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "obstacle_kind",
+      "level": "point",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.5,
+        "guarded_gng": 0.7222222222222222,
+        "halton_prm": 0.7777777777777778
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.2222222222222222,
+        "guarded_gng_minus_halton_prm": -0.05555555555555558
+      },
+      "scene_count": 3,
+      "stream_scene_cells_per_method": 18
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "obstacle_kind",
+      "level": "segment",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.4444444444444444,
+        "guarded_gng": 0.7222222222222222,
+        "halton_prm": 0.7777777777777778
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.2777777777777778,
+        "guarded_gng_minus_halton_prm": -0.05555555555555558
+      },
+      "scene_count": 3,
+      "stream_scene_cells_per_method": 18
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty",
+      "level": "low",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 1.0,
+        "guarded_gng": 1.0,
+        "halton_prm": 1.0
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.0,
+        "guarded_gng_minus_halton_prm": 0.0
+      },
+      "scene_count": 2,
+      "stream_scene_cells_per_method": 12
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty",
+      "level": "medium",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.25,
+        "guarded_gng": 0.6666666666666666,
+        "halton_prm": 0.3333333333333333
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.41666666666666663,
+        "guarded_gng_minus_halton_prm": 0.3333333333333333
+      },
+      "scene_count": 2,
+      "stream_scene_cells_per_method": 12
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty",
+      "level": "high",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.16666666666666666,
+        "guarded_gng": 0.5,
+        "halton_prm": 1.0
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.33333333333333337,
+        "guarded_gng_minus_halton_prm": -0.5
+      },
+      "scene_count": 2,
+      "stream_scene_cells_per_method": 12
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "low:point",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 1.0,
+        "guarded_gng": 1.0,
+        "halton_prm": 1.0
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.0,
+        "guarded_gng_minus_halton_prm": 0.0
+      },
+      "scene_count": 1,
+      "stream_scene_cells_per_method": 6
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "low:segment",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 1.0,
+        "guarded_gng": 1.0,
+        "halton_prm": 1.0
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.0,
+        "guarded_gng_minus_halton_prm": 0.0
+      },
+      "scene_count": 1,
+      "stream_scene_cells_per_method": 6
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "medium:point",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.3333333333333333,
+        "guarded_gng": 0.6666666666666666,
+        "halton_prm": 0.3333333333333333
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.3333333333333333,
+        "guarded_gng_minus_halton_prm": 0.3333333333333333
+      },
+      "scene_count": 1,
+      "stream_scene_cells_per_method": 6
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "medium:segment",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.16666666666666666,
+        "guarded_gng": 0.6666666666666666,
+        "halton_prm": 0.3333333333333333
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.5,
+        "guarded_gng_minus_halton_prm": 0.3333333333333333
+      },
+      "scene_count": 1,
+      "stream_scene_cells_per_method": 6
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "high:point",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.16666666666666666,
+        "guarded_gng": 0.5,
+        "halton_prm": 1.0
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.33333333333333337,
+        "guarded_gng_minus_halton_prm": -0.5
+      },
+      "scene_count": 1,
+      "stream_scene_cells_per_method": 6
+    },
+    {
+      "analysis_role": "descriptive_stratum_report_not_multiplicity_tested",
+      "dimension": "difficulty_x_obstacle_kind",
+      "level": "high:segment",
+      "method_dynamic_exact_valid_rates": {
+        "gng": 0.16666666666666666,
+        "guarded_gng": 0.5,
+        "halton_prm": 1.0
+      },
+      "prespecified_risk_differences": {
+        "guarded_gng_minus_gng": 0.33333333333333337,
+        "guarded_gng_minus_halton_prm": -0.5
+      },
+      "scene_count": 1,
+      "stream_scene_cells_per_method": 6
+    }
+  ],
+  "study": {
+    "bootstrap_repetitions": 50000,
+    "bootstrap_seed": 20260824,
+    "confidence_level": 0.95,
+    "confirmatory_thresholds": {
+      "minimum_base_trajectories": 30,
+      "minimum_bootstrap_repetitions": 50000,
+      "minimum_permutation_repetitions": 100000,
+      "minimum_streams": 50
+    },
+    "fixed_scene_catalog": true,
+    "inference_scope": "roadmap_stream_population_conditional_on_frozen_fixed_scene_catalog",
+    "kind": "smoke_descriptive",
+    "multiplicity_control": "Holm across exactly two primary contrasts",
+    "permutation_repetitions": 100000,
+    "primary_contrasts": [
+      "guarded_gng_minus_gng",
+      "guarded_gng_minus_halton_prm"
+    ],
+    "primary_effect": "guarded_gng_minus_baseline_risk_difference",
+    "primary_endpoint": "dynamic_exact_valid_success",
+    "primary_estimand": "mean roadmap-stream risk difference over every scene in the frozen catalog",
+    "requested_kind": "smoke",
+    "smoke_results_are_descriptive_only": true,
+    "timing_context": "loaded-system-integration-smoke"
+  }
+}

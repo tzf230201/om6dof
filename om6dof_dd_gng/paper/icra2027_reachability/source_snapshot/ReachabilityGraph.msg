@@ -1,0 +1,9 @@
+std_msgs/Header header
+string graph_method
+string group_name
+string end_effector_link
+string[] joint_names
+uint32 connected_components
+float64 build_time_ms
+om6dof_dd_gng/ReachabilityNode[] nodes
+om6dof_dd_gng/TopologyEdge[] edges

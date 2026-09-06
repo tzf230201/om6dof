@@ -1,0 +1,12 @@
+dimension,level,scene_count,stream_scene_cells_per_method,gng_dynamic_exact_valid_rate,guarded_gng_dynamic_exact_valid_rate,halton_prm_dynamic_exact_valid_rate,guarded_minus_gng_risk_difference,guarded_minus_halton_risk_difference,analysis_role
+obstacle_kind,point,3,18,0.5,0.7222222222222222,0.7777777777777778,0.2222222222222222,-0.05555555555555558,descriptive_stratum_report_not_multiplicity_tested
+obstacle_kind,segment,3,18,0.4444444444444444,0.7222222222222222,0.7777777777777778,0.2777777777777778,-0.05555555555555558,descriptive_stratum_report_not_multiplicity_tested
+difficulty,low,2,12,1.0,1.0,1.0,0.0,0.0,descriptive_stratum_report_not_multiplicity_tested
+difficulty,medium,2,12,0.25,0.6666666666666666,0.3333333333333333,0.41666666666666663,0.3333333333333333,descriptive_stratum_report_not_multiplicity_tested
+difficulty,high,2,12,0.16666666666666666,0.5,1.0,0.33333333333333337,-0.5,descriptive_stratum_report_not_multiplicity_tested
+difficulty_x_obstacle_kind,low:point,1,6,1.0,1.0,1.0,0.0,0.0,descriptive_stratum_report_not_multiplicity_tested
+difficulty_x_obstacle_kind,low:segment,1,6,1.0,1.0,1.0,0.0,0.0,descriptive_stratum_report_not_multiplicity_tested
+difficulty_x_obstacle_kind,medium:point,1,6,0.3333333333333333,0.6666666666666666,0.3333333333333333,0.3333333333333333,0.3333333333333333,descriptive_stratum_report_not_multiplicity_tested
+difficulty_x_obstacle_kind,medium:segment,1,6,0.16666666666666666,0.6666666666666666,0.3333333333333333,0.5,0.3333333333333333,descriptive_stratum_report_not_multiplicity_tested
+difficulty_x_obstacle_kind,high:point,1,6,0.16666666666666666,0.5,1.0,0.33333333333333337,-0.5,descriptive_stratum_report_not_multiplicity_tested
+difficulty_x_obstacle_kind,high:segment,1,6,0.16666666666666666,0.5,1.0,0.33333333333333337,-0.5,descriptive_stratum_report_not_multiplicity_tested

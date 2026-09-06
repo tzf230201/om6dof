@@ -16,6 +16,7 @@ setup(
         ('share/' + package_name + '/systemd', glob('systemd/*.service')),
     ],
     install_requires=['setuptools'],
+    tests_require=['pytest'],
     zip_safe=True,
     maintainer='unitree',
     maintainer_email='biancanobelia@gmail.com',

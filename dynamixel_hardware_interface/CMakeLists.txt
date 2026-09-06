@@ -23,6 +23,7 @@ find_package(pluginlib REQUIRED)
 find_package(realtime_tools REQUIRED)
 
 find_package(dynamixel_sdk REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(dynamixel_interfaces REQUIRED)
 
@@ -54,6 +55,7 @@ target_link_libraries(${PROJECT_NAME}
   pluginlib::pluginlib
   rclcpp::rclcpp
   rclcpp_lifecycle::rclcpp_lifecycle
+  ${diagnostic_msgs_TARGETS}
   ${dynamixel_sdk_LIBRARIES}
   ${std_srvs_TARGETS}
   ${dynamixel_interfaces_TARGETS}
@@ -78,6 +80,7 @@ install(DIRECTORY include/
 
 install(PROGRAMS
   scripts/create_udev_rules
+  scripts/dxl_read_diagnostic
   DESTINATION lib/${PROJECT_NAME}/
 )
 
@@ -93,6 +96,39 @@ install(
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_bus_health test/test_bus_health.cpp)
+  target_include_directories(test_bus_health PUBLIC include)
+  ament_add_gtest(test_read_packet_timeout test/test_read_packet_timeout.cpp)
+  target_include_directories(test_read_packet_timeout PUBLIC include)
+  ament_add_gtest(test_read_transport_mode test/test_read_transport_mode.cpp)
+  target_include_directories(test_read_transport_mode PUBLIC include)
+  ament_add_gtest(
+    test_sequential_read_transaction
+    test/test_sequential_read_transaction.cpp
+  )
+  target_include_directories(test_sequential_read_transaction PUBLIC include)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(
+    test_read_packet_timeout_contract
+    test/test_read_packet_timeout_contract.py
+  )
+  ament_add_pytest_test(
+    test_read_failure_instrumentation
+    test/test_read_failure_instrumentation.py
+  )
+  ament_add_pytest_test(
+    test_dxl_read_diagnostic
+    test/test_dxl_read_diagnostic.py
+  )
+  ament_add_pytest_test(
+    test_om6dof_health_interfaces
+    test/test_om6dof_health_interfaces.py
+  )
+  ament_add_pytest_test(
+    test_sequential_single_sync_contract
+    test/test_sequential_single_sync_contract.py
+  )
 endif()
 
 ################################################################################
@@ -107,6 +143,7 @@ ament_export_dependencies(
   hardware_interface
   pluginlib
   dynamixel_sdk
+  diagnostic_msgs
   dynamixel_interfaces
 )
 

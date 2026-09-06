@@ -1,0 +1,8 @@
+seed,method,clear_exact_replans,dynamic_exact_replans,clear_valid,dynamic_valid,dynamic_reason
+9,halton_prm,0,1,True,True,path_ready_exact_validated_preview_only
+12,halton_prm,0,1,True,True,path_ready_exact_validated_preview_only
+27,halton_prm,0,2,True,True,path_ready_exact_validated_preview_only
+29,halton_prm,0,1,True,True,path_ready_exact_validated_preview_only
+30,halton_prm,0,1,True,True,path_ready_exact_validated_preview_only
+33,gng,0,1,True,True,path_ready_exact_validated_preview_only
+37,gng,0,1,True,False,target_intersection_exact_blocked_or_disconnected

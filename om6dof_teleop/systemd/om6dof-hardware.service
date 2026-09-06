@@ -8,6 +8,12 @@ Type=simple
 User=kublab
 Group=dialout
 Environment=HOME=/home/kublab
+Environment=RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+# controller_manager promotes only its control-loop thread to FIFO priority 50.
+# Grant that thread enough RT/memory-lock headroom without making this whole
+# launch service real-time (do not set CPUSchedulingPolicy here).
+LimitRTPRIO=60
+LimitMEMLOCK=infinity
 # The AGX owns U2D2, ros2_control, and om6dof_controller. The Go2W adapter is
 # disabled because the Go2W stack remains on the Jetson NX.
 # JOINT/CARTESIAN/CYLINDRICAL all resolve in om6dof_controller; no second

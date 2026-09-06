@@ -57,7 +57,7 @@ reachability_graph_node:
     # budget for evenly spaced raw samples to retain rare IK branches.
     # All backends share the same validated k-NN roadmap connection stage.
     graph_method: "gng"       # "gng", "guarded_gng", or "halton_prm"
-    sample_count: 800
+    sample_count: 500
     max_sampling_attempts: 20000
     halton_start_index: 17
     sample_stream_seed: 0       # 0=legacy; >0=digit-permuted Halton stream
@@ -70,6 +70,7 @@ reachability_graph_node:
     gng_error_reduction: 0.5
     gng_error_decay: 0.995
     gng_guard_fraction: 0.25   # used only by guarded_gng; ablate before fixing
+    gng_debug_publish_training_samples: true  # true = publish the raw pre-GNG Halton stream
     neighbors: 10
     max_normalized_joint_distance: 0.75
     max_cartesian_edge_length: 0.14

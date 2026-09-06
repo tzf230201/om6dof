@@ -10,15 +10,75 @@ want it to appear in (e.g. a NoMachine session, DISPLAY=:1002 here), or pass
 launch_rviz:=false for headless use (the RViz-on-another-machine workflow
 described in TopoVLA/CONNECTING_TO_MSI_AND_AGX.md).
 """
+import hashlib
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
-from launch_ros.substitutions import FindPackageShare
-import os
+
+
+def _sha256(payload):
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _launch_setup(context, *, moveit_share, description_share):
+    """Resolve the reachability node's model/parameter inputs and hash them.
+
+    reachability_graph_node refuses to start unless expanded_urdf_sha256,
+    srdf_sha256, and reachability_parameters_sha256 are valid SHA-256 digests
+    of the exact bytes it was handed -- mirrors reachability_graph.launch.py.
+    """
+    params_path = Path(
+        LaunchConfiguration('params_file').perform(context)
+    ).expanduser().resolve(strict=True)
+    srdf_path = Path(moveit_share) / 'config' / 'om6dof.srdf'
+    xacro_path = Path(description_share) / 'urdf' / 'om6dof.urdf.xacro'
+    xacro_executable = shutil.which('xacro')
+    if not xacro_executable:
+        raise RuntimeError('could not resolve the xacro executable')
+
+    expanded = subprocess.run(
+        [xacro_executable, os.fspath(xacro_path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if expanded.returncode != 0:
+        detail = expanded.stderr.decode('utf-8', errors='replace').strip()
+        raise RuntimeError(f'xacro expansion failed: {detail}')
+
+    urdf_bytes = expanded.stdout
+    srdf_bytes = srdf_path.read_bytes()
+    params_bytes = params_path.read_bytes()
+    robot_description = urdf_bytes.decode('utf-8')
+    robot_description_semantic = srdf_bytes.decode('utf-8')
+
+    return [
+        Node(
+            package='om6dof_dd_gng',
+            executable='reachability_graph_node',
+            name='reachability_graph_node',
+            output='screen',
+            parameters=[
+                os.fspath(params_path),
+                {
+                    'robot_description': robot_description,
+                    'robot_description_semantic': robot_description_semantic,
+                    'expanded_urdf_sha256': _sha256(urdf_bytes),
+                    'srdf_sha256': _sha256(srdf_bytes),
+                    'reachability_parameters_sha256': _sha256(params_bytes),
+                },
+            ],
+            condition=IfCondition(LaunchConfiguration('launch_reachability')),
+        ),
+    ]
 
 
 def generate_launch_description():
@@ -28,26 +88,15 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file')
     rviz_config = LaunchConfiguration('rviz_config')
     launch_rviz = LaunchConfiguration('launch_rviz')
-    launch_reachability = LaunchConfiguration('launch_reachability')
 
     moveit_share = get_package_share_directory('om6dof_moveit_config')
-    xacro_file = PathJoinSubstitution([
-        FindPackageShare('om6dof_description'), 'urdf', 'om6dof.urdf.xacro'
-    ])
-    robot_description = {
-        'robot_description': ParameterValue(
-            Command([FindExecutable(name='xacro'), ' ', xacro_file]),
-            value_type=str,
-        )
-    }
-    with open(os.path.join(moveit_share, 'config', 'om6dof.srdf'), encoding='utf-8') as stream:
-        robot_description_semantic = {'robot_description_semantic': stream.read()}
+    description_share = get_package_share_directory('om6dof_description')
 
     return LaunchDescription([
         DeclareLaunchArgument(
             'params_file',
             default_value=default_params,
-            description='YAML parameters for topo_gng_node',
+            description='YAML parameters for topo_gng_node and reachability_graph_node',
         ),
         DeclareLaunchArgument(
             'launch_rviz',
@@ -71,13 +120,12 @@ def generate_launch_description():
             output='screen',
             parameters=[params_file],
         ),
-        Node(
-            package='om6dof_dd_gng',
-            executable='reachability_graph_node',
-            name='reachability_graph_node',
-            output='screen',
-            parameters=[params_file, robot_description, robot_description_semantic],
-            condition=IfCondition(launch_reachability),
+        OpaqueFunction(
+            function=_launch_setup,
+            kwargs={
+                'moveit_share': moveit_share,
+                'description_share': description_share,
+            },
         ),
         Node(
             package='rviz2',
