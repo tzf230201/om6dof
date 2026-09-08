@@ -31,6 +31,38 @@ its JPEG overlay to
 after perception stops. The Go2W built-in camera remains available separately
 on `/application_web_monitor/image/compressed`.
 
+## Sharing the camera with DD-GNG
+
+Perception and DD-GNG both own the same RealSense, so only one may run.
+
+```bash
+# perception
+systemctl --user stop om6dof-dd-gng.service
+systemctl --user start om6dof-perception.service om6dof-perception-pick.service
+
+# DD-GNG
+systemctl --user stop om6dof-perception.service om6dof-perception-pick.service
+systemctl --user start om6dof-dd-gng.service
+```
+
+Each mode publishes its own JPEG topic, so the dashboard shows whichever is up:
+
+| Mode | Topic |
+|---|---|
+| Perception | `/application_web_monitor/perception/image/compressed` |
+| DD-GNG | `/application_web_monitor/ddgng/image/compressed` |
+
+No camera in the dashboard? Check the service first, then the topic:
+
+```bash
+systemctl --user status om6dof-perception.service --no-pager
+journalctl _SYSTEMD_USER_UNIT=om6dof-perception.service -n 100 --no-pager
+ros2 topic info -v /application_web_monitor/perception/image/compressed
+lsusb | grep -i realsense
+```
+
+Publisher count must be at least one.
+
 ## Control from the Kublab GUI
 
 Install the perception user service locally on the AGX. This does not require

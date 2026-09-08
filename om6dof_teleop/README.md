@@ -68,3 +68,37 @@ ros2 launch om6dof_teleop full_stack.launch.py input_source:=go2w
 
 Never run this position-control stack while `om6dof_leader_controller` owns
 the U2D2 bus.
+
+### Run it at boot
+
+This package ships the unit file. Install it once:
+
+```bash
+sudo install -o root -g root -m 0644 \
+  ~/ros2_ws/install/om6dof_teleop/share/om6dof_teleop/systemd/om6dof-hardware.service \
+  /etc/systemd/system/om6dof-hardware.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now om6dof-hardware.service
+```
+
+Check it:
+
+```bash
+systemctl status om6dof-hardware.service --no-pager
+ros2 control list_controllers
+```
+
+Expected after startup:
+
+| Controller | State |
+|---|---|
+| `joint_state_broadcaster` | active |
+| `arm_controller` | active |
+| `forward_position_controller` | inactive |
+| `gripper_controller` | active |
+
+`list_controllers` timing out is a hardware problem, not a camera one:
+
+```bash
+journalctl -u om6dof-hardware.service -n 100 --no-pager
+```

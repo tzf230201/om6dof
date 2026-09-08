@@ -1,0 +1,8 @@
+[submodule "DynamixelSDK"]
+	path = DynamixelSDK
+	url = https://github.com/ROBOTIS-GIT/DynamixelSDK.git
+	branch = humble
+[submodule "dynamixel_interfaces"]
+	path = dynamixel_interfaces
+	url = https://github.com/ROBOTIS-GIT/dynamixel_interfaces.git
+	branch = humble
