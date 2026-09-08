@@ -74,7 +74,7 @@ class OM6DOFBridge(Node):
         self.declare_parameter(
             "remote_enabled_state_topic", "/om6dof/remote_enabled/state"
         )
-        self.declare_parameter("gripper_cmd_topic", "/om6dof_teleop/gripper_cmd")
+        self.declare_parameter("gripper_cmd_topic", "/om6dof/gripper_cmd")
 
         self._lock = threading.Lock()
         self._positions: Dict[str, float] = {}

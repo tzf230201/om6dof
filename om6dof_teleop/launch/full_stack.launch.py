@@ -64,6 +64,7 @@ def generate_launch_description():
         ])),
         launch_arguments={
             "joint_velocity": LaunchConfiguration("joint_velocity"),
+            "input_source": LaunchConfiguration("input_source"),
         }.items(),
         condition=IfCondition(LaunchConfiguration("start_go2w_teleop")),
     )
@@ -81,9 +82,14 @@ def generate_launch_description():
                               default_value=current_control_default()),
         DeclareLaunchArgument("joint_velocity", default_value="0.5"),
         DeclareLaunchArgument(
+            "input_source", default_value="go2w",
+            choices=["go2w", "keyboard", "gamepad", "airbus"],
+            description="Human input source for om6dof_teleop.",
+        ),
+        DeclareLaunchArgument(
             "start_go2w_teleop",
             default_value="true",
-            description="Start the Go2W wireless-controller adapter.",
+            description="Start the selected human-input adapter.",
         ),
         DeclareLaunchArgument("remote_enabled_on_start", default_value="false"),
         hardware,

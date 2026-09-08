@@ -21,7 +21,9 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 import rclpy
+from control_msgs.action import GripperCommand
 from controller_manager_msgs.srv import ListControllers, SwitchController
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
@@ -109,6 +111,11 @@ class OM6DOFController(Node):
             "operation_mode_topic", "/om6dof/operation_mode"
         )
         self.declare_parameter("control_cmd_topic", "/om6dof/control_cmd")
+        self.declare_parameter("gripper_command_topic", "/om6dof/gripper_cmd")
+        self.declare_parameter("gripper_state_topic", "/om6dof/gripper_state")
+        self.declare_parameter("gripper_action", "/gripper_controller/gripper_cmd")
+        self.declare_parameter("gripper_open_target", 0.019)
+        self.declare_parameter("gripper_close_target", -0.010)
         self.declare_parameter(
             "operation_mode_state_topic", "/om6dof/operation_mode/state"
         )
@@ -393,6 +400,11 @@ class OM6DOFController(Node):
             str(self.get_parameter("remote_enabled_state_topic").value),
             state_qos,
         )
+        self.gripper_state_pub = self.create_publisher(
+            String,
+            str(self.get_parameter("gripper_state_topic").value),
+            state_qos,
+        )
         self.create_subscription(
             JointState,
             str(self.get_parameter("joint_state_topic").value),
@@ -410,6 +422,17 @@ class OM6DOFController(Node):
             str(self.get_parameter("control_cmd_topic").value),
             self._on_control_cmd,
             command_qos,
+        )
+        self.create_subscription(
+            String,
+            str(self.get_parameter("gripper_command_topic").value),
+            self._on_gripper_command,
+            10,
+        )
+        self.gripper_client = ActionClient(
+            self,
+            GripperCommand,
+            str(self.get_parameter("gripper_action").value),
         )
         self.switch_client = self.create_client(
             SwitchController,
@@ -799,6 +822,24 @@ class OM6DOFController(Node):
                 self._schedule_pose_locked(
                     MODE_STARTUP, self.startup_pose, MODE_JOINT
                 )
+
+    def _on_gripper_command(self, msg: String) -> None:
+        command = msg.data.strip().lower()
+        if command == "open":
+            target = float(self.get_parameter("gripper_open_target").value)
+        elif command == "close":
+            target = float(self.get_parameter("gripper_close_target").value)
+        else:
+            self.get_logger().warn(f"gripper command '{command}' rejected")
+            return
+        if not self.gripper_client.server_is_ready():
+            self.get_logger().warn("gripper action server is not ready")
+            return
+        goal = GripperCommand.Goal()
+        goal.command.position = target
+        goal.command.max_effort = 0.0
+        self.gripper_client.send_goal_async(goal)
+        self.gripper_state_pub.publish(String(data=f"{command.upper()} requested"))
 
     def _on_control_cmd(self, msg: Float64MultiArray) -> None:
         try:

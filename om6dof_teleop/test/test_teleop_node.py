@@ -4,9 +4,10 @@ import struct
 import threading
 
 import pytest
+from rclpy.parameter import Parameter
 from std_msgs.msg import Bool, String
 
-import om6dof_teleop.joint_teleop as joint_teleop
+import om6dof_teleop.teleop_node as teleop_node
 from om6dof_controller.control_math import (
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
@@ -15,7 +16,7 @@ from om6dof_controller.control_math import (
     MODE_READY,
     MODE_STARTUP,
 )
-from om6dof_teleop.joint_teleop import (
+from om6dof_teleop.teleop_node import (
     BTN_B,
     BTN_F1,
     BTN_F3,
@@ -27,7 +28,7 @@ from om6dof_teleop.joint_teleop import (
     BTN_UP,
     BTN_X,
     BTN_Y,
-    JointTeleop,
+    TeleopNode,
     _decode_lowstate_remote,
 )
 
@@ -65,7 +66,7 @@ def _remote_payload(keys, lx=0.0, ly=0.0, rx=0.0, ry=0.0):
 
 def _adapter(remote_enabled=False):
     """Build the pure adapter state without starting a ROS graph."""
-    node = object.__new__(JointTeleop)
+    node = object.__new__(TeleopNode)
     node.lock = threading.RLock()
     node.remote_enabled = remote_enabled
     node.control_mode = MODE_JOINT
@@ -81,8 +82,22 @@ def _adapter(remote_enabled=False):
     node.last_lowstate_remote = 0.0
     node.last_event_remote = 0.0
     node.last_remote_action = {}
+    node.keyboard_command = [0.0] * 6
+    node.keyboard_command_until = 0.0
+    node.keyboard_running = True
+    node.stick_buttons = set()
+    node.stick_primed = False
+    node.stick_speed_direction = 0
+    node.stick_speed_next_at = 0.0
 
     node.remote_timeout = 0.5
+    node.input_source = "go2w"
+    node.keyboard_pulse_seconds = 0.15
+    node.speed_scale = 1.0
+    node.speed_scale_min = 0.15
+    node.speed_scale_max = 2.0
+    node.speed_scale_step = 0.10
+    node.speed_repeat_seconds = 0.20
     node.lowstate_preference_timeout = 0.1
     node.action_debounce = 0.0
     node.mode_request_timeout = 2.0
@@ -106,8 +121,7 @@ def _adapter(remote_enabled=False):
     node.control_pub = _Publisher()
     node._logger = _Logger()
     node.get_logger = lambda: node._logger
-    node.gripper_commands = []
-    node._command_gripper = node.gripper_commands.append
+    node.gripper_pub = _Publisher()
     return node
 
 
@@ -166,7 +180,7 @@ def test_cartesian_and_cylindrical_modes_have_distinct_second_coordinate():
 
 
 def test_f3_requests_joint_then_waits_for_confirmed_remote_state(monkeypatch):
-    monkeypatch.setattr(joint_teleop.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
     node = _adapter(remote_enabled=False)
 
     _sample(node, BTN_F3)
@@ -183,7 +197,7 @@ def test_f3_requests_joint_then_waits_for_confirmed_remote_state(monkeypatch):
 
 
 def test_duplicate_f3_from_both_unitree_sources_is_one_request(monkeypatch):
-    monkeypatch.setattr(joint_teleop.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
     node = _adapter(remote_enabled=False)
 
     _sample(node, BTN_F3, "lowstate")
@@ -193,7 +207,7 @@ def test_duplicate_f3_from_both_unitree_sources_is_one_request(monkeypatch):
 
 
 def test_f3_has_priority_over_mode_buttons_pressed_in_same_sample(monkeypatch):
-    monkeypatch.setattr(joint_teleop.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
     node = _adapter(remote_enabled=True)
 
     _sample(node, BTN_F3 | BTN_SELECT | BTN_F1)
@@ -206,7 +220,7 @@ def test_f3_has_priority_over_mode_buttons_pressed_in_same_sample(monkeypatch):
 
 def test_select_cycles_only_the_three_motion_modes(monkeypatch):
     now = [100.0]
-    monkeypatch.setattr(joint_teleop.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: now[0])
     node = _adapter(remote_enabled=True)
 
     expected = [MODE_CARTESIAN, MODE_CYLINDRICAL, MODE_JOINT]
@@ -225,7 +239,7 @@ def test_f1_alternates_from_ready_to_startup_and_back_after_confirmation(
     monkeypatch,
 ):
     now = [100.0]
-    monkeypatch.setattr(joint_teleop.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: now[0])
     node = _adapter(remote_enabled=True)
 
     _sample(node, BTN_F1)
@@ -252,7 +266,7 @@ def test_confirmed_autonomous_state_disables_remote_output():
 
 def test_tick_publishes_zero_while_neutral_latched_or_input_stale(monkeypatch):
     now = [100.0]
-    monkeypatch.setattr(joint_teleop.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: now[0])
     node = _adapter(remote_enabled=True)
     node.lowstate_keys = BTN_RIGHT
     node.last_lowstate_remote = 100.0
@@ -269,7 +283,7 @@ def test_tick_publishes_zero_while_neutral_latched_or_input_stale(monkeypatch):
 def test_tick_publishes_current_mode_velocity_only_when_fresh_and_armed(
     monkeypatch,
 ):
-    monkeypatch.setattr(joint_teleop.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
     node = _adapter(remote_enabled=True)
     node.remote_waiting_for_neutral = False
     node.lowstate_keys = BTN_RIGHT
@@ -285,25 +299,82 @@ def test_tick_publishes_current_mode_velocity_only_when_fresh_and_armed(
 
 def test_gripper_buttons_remain_separate_from_arm_control_topics(monkeypatch):
     now = [100.0]
-    monkeypatch.setattr(joint_teleop.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: now[0])
     node = _adapter(remote_enabled=True)
 
-    _sample(node, joint_teleop.BTN_L1)
+    _sample(node, teleop_node.BTN_L1)
     now[0] += 0.01
     _sample(node, 0)
     now[0] += 0.01
-    _sample(node, joint_teleop.BTN_L2)
+    _sample(node, teleop_node.BTN_L2)
 
-    assert node.gripper_commands == ["open", "close"]
+    assert [message.data for message in node.gripper_pub.messages] == [
+        "open", "close"
+    ]
     assert node.operation_pub.messages == []
 
 
+def test_keyboard_uses_canonical_mode_and_velocity_commands(monkeypatch):
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
+    node = _adapter(remote_enabled=False)
+    node.input_source = "keyboard"
+
+    node._handle_keyboard_key("g")
+    assert node.operation_pub.messages[-1].data == MODE_JOINT
+
+    node._on_remote_state(Bool(data=True))
+    node._handle_keyboard_key("1")
+    assert node.keyboard_command == pytest.approx([0.5, 0, 0, 0, 0, 0])
+    assert node.keyboard_command_until == pytest.approx(100.15)
+
+    node._handle_keyboard_key("m")
+    assert node.operation_pub.messages[-1].data == MODE_CARTESIAN
+
+
+def test_keyboard_speed_adjustment_scales_published_velocity(monkeypatch):
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
+    node = _adapter(remote_enabled=True)
+    node.input_source = "keyboard"
+    node.remote_waiting_for_neutral = False
+    node.keyboard_command = [0.5, 0, 0, 0, 0, 0]
+    node.keyboard_command_until = 101.0
+
+    node._handle_keyboard_key("+")
+    node._tick()
+
+    assert node.speed_scale == pytest.approx(1.1)
+    assert node.control_pub.messages[-1].data == pytest.approx(
+        [0.55, 0, 0, 0, 0, 0]
+    )
+
+
+def test_hot_switch_discards_old_input_and_requires_neutral(monkeypatch):
+    node = _adapter(remote_enabled=True)
+    node.input_source = "go2w"
+    node.lowstate_keys = BTN_RIGHT
+    node.last_lowstate_remote = 123.0
+    started = []
+    monkeypatch.setattr(node, "_start_keyboard_reader", lambda: started.append(True))
+
+    result = node._on_set_parameters([
+        Parameter("input_source", value="keyboard"),
+    ])
+
+    assert result.successful
+    assert node.input_source == "keyboard"
+    assert node.lowstate_keys == 0
+    assert node.last_lowstate_remote == 0.0
+    assert node.keyboard_command == [0.0] * 6
+    assert node.remote_waiting_for_neutral is True
+    assert started == [True]
+
+
 def test_adapter_has_no_kinematics_controller_manager_or_final_publisher():
-    source = inspect.getsource(JointTeleop)
+    source = inspect.getsource(TeleopNode)
     assert "/om6dof/operation_mode" in source
     assert "/om6dof/control_cmd" in source
     assert "controller_manager" not in source
     assert "SwitchController" not in source
     assert "/forward_position_controller/commands" not in source
-    assert not hasattr(JointTeleop, "_coordinate_step_locked")
-    assert not hasattr(JointTeleop, "_request_controller_mode")
+    assert not hasattr(TeleopNode, "_coordinate_step_locked")
+    assert not hasattr(TeleopNode, "_request_controller_mode")
