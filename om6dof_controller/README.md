@@ -31,6 +31,8 @@ The two canonical arm-command topics are:
 - `AUTONOMOUS`: restore `arm_controller` for MoveIt.
 - `READY` or `STARTUP`: transient joint-space pose request; effective mode
   returns to JOINT after reaching the pose.
+- `REST`: move to the captured startup/rest pose, then restore
+  `arm_controller` ownership for MoveIt (`AUTONOMOUS`).
 
 The command stream expires after 0.3 seconds. On timeout the target is reseeded
 from measured joint feedback, so an old velocity never continues moving.

@@ -43,6 +43,7 @@ from .control_math import (
     MODE_FLOAT,
     MODE_JOINT,
     MODE_READY,
+    MODE_REST,
     MODE_SEMI_CYLINDRICAL,
     MODE_STARTUP,
     MOTION_MODES,
@@ -357,6 +358,7 @@ class OM6DOFController(Node):
         self.pose_operation: Optional[str] = None
         self.pose_target_until = 0.0
         self.post_pose_mode = MODE_JOINT
+        self.return_autonomous_after_pose = False
         self.ready_pending_on_enable = False
         self.ready_pending_mode = MODE_JOINT
 
@@ -660,6 +662,7 @@ class OM6DOFController(Node):
         self.pose_operation = operation
         self.pose_target_until = now + self.pose_target_timeout
         self.post_pose_mode = post_mode
+        self.return_autonomous_after_pose = False
         self._publish_state()
         self.get_logger().info(
             f"{operation} profile: current -> zero -> {self.pose_target}; "
@@ -822,6 +825,17 @@ class OM6DOFController(Node):
                 self._schedule_pose_locked(
                     MODE_STARTUP, self.startup_pose, MODE_JOINT
                 )
+                return
+            if mode == MODE_REST:
+                if self.startup_pose is None:
+                    self.get_logger().warn(
+                        "REST rejected: startup pose has not been captured"
+                    )
+                    return
+                if self._schedule_pose_locked(
+                    MODE_REST, self.startup_pose, MODE_JOINT
+                ):
+                    self.return_autonomous_after_pose = True
 
     def _on_gripper_command(self, msg: String) -> None:
         command = msg.data.strip().lower()
@@ -1337,6 +1351,7 @@ class OM6DOFController(Node):
         command = None
         reached_operation = None
         timeout_operation = None
+        return_to_autonomous = False
         with self.lock:
             if (
                 not self.remote_enabled
@@ -1375,6 +1390,7 @@ class OM6DOFController(Node):
                     self.pose_phase_targets = []
                     self.pose_phase_start = None
                     self.motion_mode = MODE_JOINT
+                    self.return_autonomous_after_pose = False
                     self.command_positions = clamp_positions(
                         feedback, self.joint_lower, self.joint_upper
                     )
@@ -1410,6 +1426,10 @@ class OM6DOFController(Node):
                             self.pose_phase_targets = []
                             self.pose_phase_start = None
                             self.motion_mode = next_mode
+                            return_to_autonomous = (
+                                self.return_autonomous_after_pose
+                            )
+                            self.return_autonomous_after_pose = False
                             self._clear_stream_command_locked()
                             if next_mode != MODE_JOINT:
                                 self._seed_ik_anchor_locked(feedback)
@@ -1498,6 +1518,9 @@ class OM6DOFController(Node):
             self.get_logger().warn(f"{timeout_operation} target timed out")
         if reached_operation:
             self.get_logger().info(f"{reached_operation} target reached")
+        if return_to_autonomous:
+            with self.lock:
+                self._request_controller_mode_locked(False, "REST complete")
 
     def destroy_node(self):
         try:

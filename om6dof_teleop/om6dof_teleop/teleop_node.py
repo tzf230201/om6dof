@@ -39,6 +39,7 @@ from om6dof_controller.control_math import (
     MODE_CYLINDRICAL,
     MODE_JOINT,
     MODE_READY,
+    MODE_REST,
     MODE_STARTUP,
 )
 
@@ -210,7 +211,7 @@ class TeleopNode(Node):
         self.declare_parameter("keyboard_pulse_seconds", 0.15)
         self.declare_parameter("speed_scale", 1.0)
         self.declare_parameter("speed_scale_min", 0.15)
-        self.declare_parameter("speed_scale_max", 2.0)
+        self.declare_parameter("speed_scale_max", 5.0)
         self.declare_parameter("speed_scale_step", 0.10)
         self.declare_parameter("speed_repeat_seconds", 0.20)
         self.declare_parameter("remote_command_timeout_seconds", 0.5)
@@ -920,7 +921,13 @@ class TeleopNode(Node):
         gripper = None
         toggle_button = 7
         cycle_button = 8
-        if toggle_button in new:
+        back_button = 6
+        if back_button in new and self.remote_enabled:
+            # Safe one-way exit: controller performs REST fully before
+            # releasing ownership to MoveIt/autonomous control.
+            self.remote_waiting_for_neutral = True
+            operation = MODE_REST
+        elif toggle_button in new:
             operation = self._request_ownership_locked()
         elif cycle_button in new and self.remote_enabled:
             self.control_mode = _next_teleop_mode(self.control_mode)

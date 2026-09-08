@@ -14,6 +14,7 @@ from om6dof_controller.control_math import (
     MODE_CYLINDRICAL,
     MODE_JOINT,
     MODE_READY,
+    MODE_REST,
     MODE_STARTUP,
 )
 from om6dof_teleop.teleop_node import (
@@ -95,7 +96,7 @@ def _adapter(remote_enabled=False):
     node.keyboard_pulse_seconds = 0.15
     node.speed_scale = 1.0
     node.speed_scale_min = 0.15
-    node.speed_scale_max = 2.0
+    node.speed_scale_max = 5.0
     node.speed_scale_step = 0.10
     node.speed_repeat_seconds = 0.20
     node.lowstate_preference_timeout = 0.1
@@ -312,6 +313,27 @@ def test_gripper_buttons_remain_separate_from_arm_control_topics(monkeypatch):
         "open", "close"
     ]
     assert node.operation_pub.messages == []
+
+
+def test_gamepad_back_requests_rest_without_releasing_ownership_early():
+    class _Stick:
+        def __init__(self):
+            self.buttons = set()
+
+        def snapshot(self):
+            return True, [0.0] * 8, self.buttons
+
+    node = _adapter(remote_enabled=True)
+    node.input_source = "gamepad"
+    node.gamepad = _Stick()
+
+    node._stick_velocity_locked()  # Prime baseline input state.
+    node.gamepad.buttons = {6}  # F710 Back in XInput mode.
+    _, operation, _ = node._stick_velocity_locked()
+
+    assert operation == MODE_REST
+    assert node.remote_enabled is True
+    assert node.remote_waiting_for_neutral is True
 
 
 def test_keyboard_uses_canonical_mode_and_velocity_commands(monkeypatch):

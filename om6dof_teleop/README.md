@@ -29,11 +29,16 @@ ros2 param set /om6dof_teleop input_source gamepad
 The node clears prior input, sends zero velocity, and waits for neutral input
 from the replacement device before permitting motion.
 
+On the F710, `Start` takes/releases manual ownership, `Logo` cycles motion
+mode, and `Back` performs `REST`: return to the captured startup/rest pose,
+then hand ownership back to autonomous control.
+
 ## Keyboard
 
 `g` toggles manual ownership, `m` cycles JOINT/CARTESIAN/CYLINDRICAL, `r`
 requests READY/STARTUP, `[` and `]` operate the gripper, and `Esc` exits.
-Use `+`/`-` to increase/decrease arm speed by 10%; the default is 100%.
+Use `+`/`-` to increase/decrease arm speed by 10%; the default is 100% and
+the maximum is 500%.
 On the F710, holding D-pad up/down repeats the adjustment every 0.2 seconds.
 
 - JOINT: `1/q` through `6/y`
@@ -43,7 +48,7 @@ On the F710, holding D-pad up/down repeats the adjustment every 0.2 seconds.
 
 | Topic | Type | Description |
 |---|---|---|
-| `/om6dof/operation_mode` | `std_msgs/msg/String` | JOINT, CARTESIAN, CYLINDRICAL, AUTONOMOUS, READY, STARTUP |
+| `/om6dof/operation_mode` | `std_msgs/msg/String` | JOINT, CARTESIAN, CYLINDRICAL, AUTONOMOUS, READY, STARTUP, REST |
 | `/om6dof/control_cmd` | `std_msgs/msg/Float64MultiArray` | Six velocity values for the selected mode |
 
 `control_cmd` is a 50 Hz velocity stream, not an absolute pose. Only one

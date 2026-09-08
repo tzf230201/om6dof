@@ -22,6 +22,7 @@ from om6dof_controller.control_math import (
     MODE_CYLINDRICAL,
     MODE_JOINT,
     MODE_READY,
+    MODE_REST,
     MODE_STARTUP,
 )
 from om6dof_controller.controller_node import (
@@ -142,6 +143,7 @@ def _controller(remote_enabled=False):
     node.pose_operation = None
     node.pose_target_until = 0.0
     node.post_pose_mode = MODE_JOINT
+    node.return_autonomous_after_pose = False
     node.ready_pending_on_enable = False
     node.ready_pending_mode = MODE_JOINT
 
@@ -273,6 +275,27 @@ def test_ready_and_startup_are_transient_joint_pose_operations():
     node._on_operation_mode(String(data="READY"))
     assert node.pose_operation == MODE_READY
     assert node.motion_mode == MODE_JOINT
+
+
+def test_rest_returns_to_startup_then_requests_autonomous_ownership():
+    node = _controller(remote_enabled=True)
+    node.pose_profile_duration = 0.01
+
+    node._on_operation_mode(String(data="REST"))
+
+    assert node.pose_operation == MODE_REST
+    assert node.pose_target == pytest.approx(node.startup_pose)
+    assert node.return_autonomous_after_pose is True
+
+    # Finish the zero phase, then the startup/rest phase.
+    node.pose_phase_started_at = time.monotonic() - 1.0
+    node._tick()
+    node.pose_phase_started_at = time.monotonic() - 1.0
+    node._tick()
+
+    request = node.switch_client.requests[-1]
+    assert request.activate_controllers == ["arm_controller"]
+    assert request.deactivate_controllers == ["forward_position_controller"]
     node._on_operation_mode(String(data="STARTUP"))
     assert node.pose_target == pytest.approx(node.startup_pose)
     assert node.motion_mode == MODE_JOINT
