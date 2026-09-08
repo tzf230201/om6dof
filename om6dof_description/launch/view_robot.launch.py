@@ -15,6 +15,12 @@ def generate_launch_description():
         ]),
         value_type=str,
     )
+    # Bare rviz2 opens its default config: no RobotModel display, and a fixed
+    # frame of "map" that this URDF never publishes. Both have to come from a
+    # config file or the window comes up empty.
+    rviz_config = PathJoinSubstitution([
+        FindPackageShare("om6dof_description"), "rviz", "view_robot.rviz"
+    ])
     return LaunchDescription([
         Node(
             package="robot_state_publisher",
@@ -23,5 +29,10 @@ def generate_launch_description():
             output="screen",
         ),
         Node(package="joint_state_publisher_gui", executable="joint_state_publisher_gui"),
-        Node(package="rviz2", executable="rviz2", output="screen"),
+        Node(
+            package="rviz2",
+            executable="rviz2",
+            arguments=["-d", rviz_config],
+            output="screen",
+        ),
     ])

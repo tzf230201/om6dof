@@ -1,4 +1,5 @@
 import math
+import json
 import threading
 import time
 from types import SimpleNamespace
@@ -140,6 +141,7 @@ def _controller(remote_enabled=False):
     node.last_tick = time.monotonic() - 0.02
 
     node.pose_target = None
+    node.held_target_positions = None
     node.pose_operation = None
     node.pose_target_until = 0.0
     node.post_pose_mode = MODE_JOINT
@@ -184,9 +186,48 @@ def _controller(remote_enabled=False):
     node._logger = _Logger()
     node.get_logger = lambda: node._logger
     node.get_parameter = lambda name: SimpleNamespace(
-        value={"switch_timeout_seconds": 2.0}[name]
+        value={"switch_timeout_seconds": 2.0, "float_follow_velocity": 0.35}[name]
     )
     return node
+
+
+@pytest.mark.parametrize('old_rpy', [
+    (0.0, math.pi / 2, 0.0),
+    tuple(np.radians([-18.435, 89.722, -18.523])),
+    (0.3, -0.4, 1.1),
+])
+def test_cartesian_current_pose_target_preserves_physical_tip_rotation(old_rpy):
+    node = _controller(remote_enabled=True)
+    physical_rotation = rotation_from_zyx(*old_rpy)
+    position = np.array([0.162846, -0.000231, 0.271815])
+    calls = []
+
+    def solve(q, xyz, rotation, **kwargs):
+        calls.append((xyz.copy(), rotation.copy()))
+        return q.copy(), True
+
+    node.ik = SimpleNamespace(
+        fk_pose=lambda q: (position.copy(), physical_rotation.copy()),
+        solve_pose_ik=solve,
+    )
+    node.target_active = False
+    node.target_reach_duration = 5.0
+    node.target_status_pub = _Publisher()
+    current = node._target_current_locked()
+    # Cylindrical keeps its existing URDF-tip orientation convention.
+    assert current['cylindrical'][3:] == pytest.approx(
+        rotation_to_zyx(physical_rotation)
+    )
+    if old_rpy == (0.0, math.pi / 2, 0.0):
+        assert current['cartesian'][3:] == pytest.approx([0, 0, 0], abs=1e-12)
+    node._on_target_command(String(data=json.dumps({
+        'action': 'move', 'mode': 'CARTESIAN',
+        'values': current['cartesian'], 'reach_duration': 5.0,
+    })))
+    assert node.target_active
+    assert len(calls) == 1
+    assert calls[0][0] == pytest.approx(position)
+    assert calls[0][1] == pytest.approx(physical_rotation, abs=1e-12)
 
 
 def test_joint_mode_switches_only_after_success_and_schedules_ready():
@@ -231,6 +272,151 @@ def test_mode_change_clears_old_command():
     assert node.motion_mode == MODE_CARTESIAN
     assert node.last_control_cmd == 0.0
     assert node.control_velocity == pytest.approx(np.zeros(6))
+
+
+def _completed_target(post_mode=MODE_JOINT):
+    """Finish the time profile while a deliberately lagging servo stays put."""
+    node = _controller(remote_enabled=True)
+    node.target_status_pub = _Publisher()
+    node.target_mode = post_mode
+    node.target_goal = list(node.startup_pose)
+    node.target_goal[0] += 0.2
+    node.target_command_joints = list(node.target_goal)
+    node.target_request_id = 'lagging-servo'
+    node.target_approximate = False
+    node.target_active = True
+    node.target_reach_duration = 5.0
+    node._schedule_pose_locked(
+        'TARGET', node.target_goal, post_mode=post_mode,
+        via_zero=False, profile_duration=5.0,
+    )
+    node.pose_phase_started_at = time.monotonic() - 5.01
+    node._tick()
+    assert node.pose_target is None
+    assert not node.target_active
+    return node
+
+
+@pytest.mark.parametrize('mode', [MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL])
+def test_completed_target_keeps_goal_despite_servo_lag_and_neutral_packets(mode):
+    node = _completed_target(mode)
+    goal = list(node.target_goal)
+    for neutral_packet in (False, True, True, False):
+        if neutral_packet:
+            node._on_control_cmd(Float64MultiArray(data=[0.0] * 6))
+        node._tick()
+        assert node.command_pub.messages[-1].data == pytest.approx(goal)
+        assert node.held_target_positions == pytest.approx(goal)
+    assert node.joint_positions['joint1'] != pytest.approx(goal[0])
+
+
+def test_stop_after_profile_completion_cancels_final_goal():
+    node = _completed_target()
+    node._on_target_command(String(data='{"action":"stop","request_id":"stop"}'))
+    node._tick()
+    assert node.held_target_positions is None
+    assert node.command_pub.messages[-1].data == pytest.approx(node.startup_pose)
+    assert json.loads(node.target_status_pub.messages[-1].data)['state'] == 'stopped'
+
+
+def test_finished_time_profile_is_holding_until_feedback_reaches_goal():
+    node = _completed_target()
+    payload = json.loads(node.target_status_pub.messages[-1].data)
+    assert payload['state'] == 'holding'
+    assert payload['errors']['joint_max_deg'] == pytest.approx(math.degrees(.2))
+    node.joint_positions = dict(zip(node.joint_names, node.target_command_joints))
+    node._publish_target_status_locked('holding', '')
+    assert json.loads(node.target_status_pub.messages[-1].data)['state'] == 'reached'
+    assert node.held_target_positions is not None
+
+
+def test_approximate_status_does_not_claim_requested_pose_reached():
+    node = _completed_target(MODE_CARTESIAN)
+    node.target_approximate = True
+    node.target_goal = [10, 0, 0, 0, 0, 0]
+    node.joint_positions = dict(zip(node.joint_names, node.target_command_joints))
+    node._publish_target_status_locked('holding', '')
+    payload = json.loads(node.target_status_pub.messages[-1].data)
+    assert payload['state'] == 'approximate'
+    assert payload['errors']['position_mm'] > 1000
+
+
+def test_mode_change_during_target_clears_busy_state():
+    node = _completed_target()
+    node._on_target_command(String(data=json.dumps({
+        'action': 'move', 'mode': 'JOINT', 'values': node.target_goal, 'reach_duration': 5,
+    })))
+    assert node.target_active
+    node._on_operation_mode(String(data='CARTESIAN'))
+    assert not node.target_active
+    assert node.pose_target is None
+    assert json.loads(node.target_status_pub.messages[-1].data)['state'] == 'stopped'
+
+
+def test_too_short_duration_is_rejected_instead_of_exceeding_velocity_limit():
+    node = _completed_target()
+    node._on_target_command(String(data=json.dumps({
+        'action': 'move', 'mode': 'JOINT',
+        'values': [1.5, 0, 0, 0, 0, 0], 'reach_duration': .5,
+    })))
+    assert not node.target_active
+    payload = json.loads(node.target_status_pub.messages[-1].data)
+    assert payload['state'] == 'rejected'
+    assert 'at least' in payload['message']
+
+
+@pytest.mark.parametrize('mode', [MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL])
+def test_jog_after_completed_target_starts_from_feedback(mode):
+    node = _completed_target(mode)
+    node._on_control_cmd(Float64MultiArray(data=[0.01, 0, 0, 0, 0, 0]))
+    assert node.held_target_positions is None
+    assert node.command_positions == pytest.approx(node.startup_pose)
+    node.last_tick = time.monotonic() - 0.02
+    node._tick()
+    assert abs(node.command_pub.messages[-1].data[0] - node.startup_pose[0]) < 0.01
+
+
+@pytest.mark.parametrize('mode', [MODE_JOINT, MODE_CARTESIAN, MODE_FLOAT])
+def test_explicit_mode_selection_releases_completed_goal(mode):
+    node = _completed_target()
+    node._on_operation_mode(String(data=mode))
+    assert node.held_target_positions is None
+    node._tick()
+    assert node.command_pub.messages[-1].data == pytest.approx(node.startup_pose)
+
+
+def test_autonomous_handover_clears_completed_goal():
+    node = _completed_target()
+    node._on_operation_mode(String(data='AUTONOMOUS'))
+    node.switch_client.futures[-1].finish(SimpleNamespace(ok=True))
+    assert node.held_target_positions is None
+    before = len(node.command_pub.messages)
+    node._tick()
+    assert len(node.command_pub.messages) == before
+
+
+def test_new_target_replaces_completed_goal_from_measured_start():
+    node = _completed_target()
+    goal = list(node.startup_pose)
+    goal[0] -= 0.1
+    node._on_target_command(String(data=json.dumps({
+        'action': 'move', 'mode': 'JOINT', 'values': goal, 'reach_duration': 5,
+    })))
+    assert node.held_target_positions is None
+    assert node.pose_target == pytest.approx(goal)
+    assert node.pose_phase_start == pytest.approx(node.startup_pose)
+
+
+def test_stale_feedback_does_not_replay_completed_goal_on_recovery():
+    node = _completed_target()
+    node.last_joint_state = time.monotonic() - 2.0
+    before = len(node.command_pub.messages)
+    node._tick()
+    assert node.held_target_positions is None
+    assert len(node.command_pub.messages) == before
+    node.last_joint_state = time.monotonic()
+    node._tick()
+    assert node.command_pub.messages[-1].data == pytest.approx(node.startup_pose)
 
 
 def test_joint_velocity_stream_integrates_then_watchdog_holds_feedback():

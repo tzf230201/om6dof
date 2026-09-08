@@ -37,6 +37,10 @@ The two canonical arm-command topics are:
 The command stream expires after 0.3 seconds. On timeout the target is reseeded
 from measured joint feedback, so an old velocity never continues moving.
 
+Joint limits for teleop are read at controller startup from the rendered
+`om6dof_description` URDF, then reduced by `joint_limit_margin` (default
+0.02 rad). There is no duplicate controller YAML limit table.
+
 Linear velocities and `radius_dot` use m/s. Joint and angular velocities,
 including `theta_dot`, use rad/s. `operation_mode` is a discrete request;
 `control_cmd` is a velocity stream and should normally be published at 20--50
@@ -51,6 +55,64 @@ Confirmed read-only state is published on:
 Both state topics use reliable, transient-local QoS. `remote_enabled` becomes
 true only after `forward_position_controller` owns the arm interfaces; the
 operation-mode state reports the mode actually accepted by the controller.
+
+## Absolute-target pipeline
+
+Web inputs (mm/degrees) are converted to SI once, then published on
+`/om6dof/target_cmd`. The controller validates ownership, fresh feedback,
+effective URDF limits and the requested duration. Cartesian/cylindrical IK
+tries several initial configurations before accepting an approximation;
+each candidate is checked with FK **after** limit clamping. When enabled,
+self-collision checking samples the complete joint-space path, not just its
+endpoint. This approximate link-capsule check does not detect external
+obstacles or guarantee continuous collision freedom.
+
+An accepted target follows a software triangular velocity profile through
+`/forward_position_controller/commands` and the existing ros2_control hardware
+interface. Acceleration takes half the requested duration, deceleration the
+other half. Duration must be 0.5–5 seconds; a request exceeding the configured
+joint velocity limit is rejected with its required minimum time. Cartesian
+targets interpolate **joint positions**, not a straight Cartesian path.
+
+`/om6dof/target_status` reports measured feedback and errors:
+
+- `running`: the time profile is in progress.
+- `holding`: the ramp has ended; the final goal remains commanded.
+- `reached`: measured joint error is at most 0.5 degrees and, for pose targets,
+  Cartesian position/orientation errors are at most 1 mm / 0.5 degrees.
+- `approximate`: the approximate joint goal is reached, but the requested
+  Cartesian pose still differs; the message includes its residual error.
+- `stopped`, `blocked`, `rejected`, `timeout`: cancellation or failure details.
+
+`active` denotes an executing ramp, not the lifetime of the retained goal.
+Accuracy reported here is based on encoder feedback and URDF FK; it is not
+an independent measurement of the physical gripper position.
+
+### Cartesian absolute-target orientation
+
+After an absolute-target time profile finishes, its final joint goal remains
+commanded even when the servos are still catching up. Neutral teleop packets
+do not replace that goal. Stop target, a nonzero jog, an explicit mode change,
+or a new pose request takes over; jogging starts from measured feedback.
+Loss of feedback cancels the retained goal so it cannot replay on recovery.
+Profile completion is time-based and is not a measurement of target accuracy.
+This retention applies to the existing software profile; it does not enable
+per-target Dynamixel register programming.
+
+For `/om6dof/target_cmd` with `mode: CARTESIAN`, the six values are
+`[x, y, z, roll, pitch, yaw]` in metres/radians (web inputs use mm/degrees).
+Orientation describes a frame at the URDF tip whose X points along the
+gripper: X = URDF tip +Z, Y = tip +Y, Z = tip -X. Zero RPY means a horizontal
+gripper facing base +X, with its lateral axis along base +Y. Yaw is the
+heading viewed from above; roll twists around the gripper; positive pitch
+tilts toward base -Z. Euler heading remains undefined for a vertical gripper.
+Both Cartesian target IK and `target_status.current.cartesian` apply this
+fixed frame transform in opposite directions. Positions, cylindrical targets,
+URDF geometry and velocity-jog conventions are unchanged.
+
+This changes the meaning of previously saved Cartesian target angles. Reload
+the monitor and use current position to populate new targets after updating
+both the monitor and controller.
 
 ## Starting
 

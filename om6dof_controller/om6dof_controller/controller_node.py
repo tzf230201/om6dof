@@ -15,6 +15,7 @@ remote forward-position controller.
 from __future__ import annotations
 
 import math
+import json
 import threading
 import time
 from typing import List, Optional, Sequence
@@ -49,17 +50,24 @@ from .control_math import (
     MOTION_MODES,
     SEMI_PITCH_LIMIT,
     clamp_positions,
+    cartesian_rpy_to_tip_rotation,
+    tip_rotation_to_cartesian_rpy,
     integrate_cylindrical_position,
     limit_norm,
     normalize_operation_mode,
     rotation_error,
     rotation_from_rotvec,
+    rotation_from_zyx,
     rotation_to_zyx,
     semi_cylindrical_rotation,
     step_toward,
     validated_control_command,
     validated_joint_positions,
     wrap_angle,
+)
+from .target_planner import (
+    plan_pose, path_is_clear, pose_error, POSITION_TOLERANCE,
+    ORIENTATION_TOLERANCE, JOINT_TOLERANCE,
 )
 
 
@@ -112,6 +120,8 @@ class OM6DOFController(Node):
             "operation_mode_topic", "/om6dof/operation_mode"
         )
         self.declare_parameter("control_cmd_topic", "/om6dof/control_cmd")
+        self.declare_parameter("target_command_topic", "/om6dof/target_cmd")
+        self.declare_parameter("target_status_topic", "/om6dof/target_status")
         self.declare_parameter("gripper_command_topic", "/om6dof/gripper_cmd")
         self.declare_parameter("gripper_state_topic", "/om6dof/gripper_state")
         self.declare_parameter("gripper_action", "/gripper_controller/gripper_cmd")
@@ -141,8 +151,6 @@ class OM6DOFController(Node):
         # command then stops chasing it so the servo catches the arm
         # instead of following it all the way down.
         self.declare_parameter("float_follow_velocity", 0.35)
-        self.declare_parameter("joint_lower", list(DEFAULT_JOINT_LOWER))
-        self.declare_parameter("joint_upper", list(DEFAULT_JOINT_UPPER))
         self.declare_parameter("joint_limit_margin", 0.02)
         self.declare_parameter("ready_pose", list(DEFAULT_READY_JOINT_POSITIONS))
         self.declare_parameter("pose_target_velocity", 0.5)
@@ -150,6 +158,9 @@ class OM6DOFController(Node):
         self.declare_parameter("pose_target_timeout_seconds", 20.0)
         self.declare_parameter("pose_profile_duration_seconds", 4.0)
         self.declare_parameter("pose_profile_accel_seconds", 2.0)
+        # Absolute web targets use their own duration. Its acceleration and
+        # deceleration each take exactly half the requested reach time.
+        self.declare_parameter("target_reach_duration_seconds", 5.0)
 
         self.declare_parameter("ik_enabled", True)
         self.declare_parameter("ik_base_link", "world")
@@ -204,12 +215,7 @@ class OM6DOFController(Node):
             raise RuntimeError("invalid controller rate/timeout/velocity")
         self.nominal_dt = 1.0 / self.rate
 
-        lower = validated_joint_positions(
-            self.get_parameter("joint_lower").value, "joint_lower"
-        )
-        upper = validated_joint_positions(
-            self.get_parameter("joint_upper").value, "joint_upper"
-        )
+        lower, upper = self._load_urdf_joint_limits()
         margin = float(self.get_parameter("joint_limit_margin").value)
         if (
             not math.isfinite(margin)
@@ -243,6 +249,9 @@ class OM6DOFController(Node):
         )
         self.pose_profile_accel = float(
             self.get_parameter("pose_profile_accel_seconds").value
+        )
+        self.target_reach_duration = float(
+            self.get_parameter("target_reach_duration_seconds").value
         )
 
         self.max_cartesian_linear_velocity = float(
@@ -300,6 +309,7 @@ class OM6DOFController(Node):
             self.pose_target_timeout,
             self.pose_profile_duration,
             self.pose_profile_accel,
+            self.target_reach_duration,
         ])
         if (
             not np.all(np.isfinite(coordinate_scalars))
@@ -319,6 +329,7 @@ class OM6DOFController(Node):
             or self.pose_profile_duration <= 0.0
             or self.pose_profile_accel <= 0.0
             or self.pose_profile_accel > self.pose_profile_duration / 2.0
+            or self.target_reach_duration <= 0.0
             or self.cylindrical_origin_xy.shape != (2,)
             or not np.all(np.isfinite(self.cylindrical_origin_xy))
         ):
@@ -351,14 +362,26 @@ class OM6DOFController(Node):
         self.last_tick = time.monotonic()
 
         self.pose_target: Optional[list[float]] = None
+        self.held_target_positions: Optional[list[float]] = None
         self.pose_phase_targets: list[list[float]] = []
         self.pose_phase_index = 0
         self.pose_phase_start: Optional[list[float]] = None
         self.pose_phase_started_at = 0.0
+        self.active_pose_profile_duration = self.pose_profile_duration
+        self.active_pose_profile_accel = self.pose_profile_accel
         self.pose_operation: Optional[str] = None
         self.pose_target_until = 0.0
         self.post_pose_mode = MODE_JOINT
         self.return_autonomous_after_pose = False
+        self.target_active = False
+        self.target_mode = ""
+        self.target_goal: Optional[list[float]] = None
+        self.target_command_joints: Optional[list[float]] = None
+        self.target_request_id = ""
+        self.target_approximate = False
+        self.target_status_state = "idle"
+        self.target_status_message = "no target yet"
+        self.last_target_status_publish = 0.0
         self.ready_pending_on_enable = False
         self.ready_pending_mode = MODE_JOINT
 
@@ -407,6 +430,11 @@ class OM6DOFController(Node):
             str(self.get_parameter("gripper_state_topic").value),
             state_qos,
         )
+        self.target_status_pub = self.create_publisher(
+            String,
+            str(self.get_parameter("target_status_topic").value),
+            state_qos,
+        )
         self.create_subscription(
             JointState,
             str(self.get_parameter("joint_state_topic").value),
@@ -424,6 +452,12 @@ class OM6DOFController(Node):
             str(self.get_parameter("control_cmd_topic").value),
             self._on_control_cmd,
             command_qos,
+        )
+        self.create_subscription(
+            String,
+            str(self.get_parameter("target_command_topic").value),
+            self._on_target_command,
+            10,
         )
         self.create_subscription(
             String,
@@ -448,6 +482,7 @@ class OM6DOFController(Node):
         self._initialize_ik()
         self.create_timer(self.nominal_dt, self._tick)
         self._publish_state()
+        self._publish_target_status_locked("idle", "no target yet")
         self.get_logger().info(
             "controller ready: /om6dof/operation_mode + /om6dof/control_cmd "
             "-> forward_position_controller"
@@ -464,6 +499,93 @@ class OM6DOFController(Node):
         )
         self.remote_state_pub.publish(Bool(data=bool(self.remote_enabled)))
 
+    def _target_current_locked(self) -> dict[str, list[float]]:
+        """Return current arm pose in controller SI units for target feedback."""
+        joint = self._joint_vector_locked()
+        if joint is None:
+            return {}
+        current = {"joint": [float(value) for value in joint]}
+        if self.ik is None:
+            return current
+        try:
+            position, rotation = self.ik.fk_pose(np.asarray(joint, dtype=float))
+            roll, pitch, yaw = rotation_to_zyx(rotation)
+            xyzrpy = [float(value) for value in position] + list(
+                tip_rotation_to_cartesian_rpy(rotation)
+            )
+            current["cartesian"] = xyzrpy
+            dx = float(position[0] - self.cylindrical_origin_xy[0])
+            dy = float(position[1] - self.cylindrical_origin_xy[1])
+            current["cylindrical"] = [
+                math.hypot(dx, dy), math.atan2(dy, dx), float(position[2]),
+                roll, pitch, yaw,
+            ]
+        except Exception as exc:
+            self.get_logger().warn(
+                f"target feedback FK unavailable: {exc}",
+                throttle_duration_sec=5.0,
+            )
+        return current
+
+    def _publish_target_status_locked(self, state: str, message: str) -> None:
+        current = self._target_current_locked()
+        errors = {}
+        command_joints = getattr(self, 'target_command_joints', None)
+        if command_joints is not None and 'joint' in current:
+            errors['joint_max_deg'] = math.degrees(max(
+                abs(a - b) for a, b in zip(command_joints, current['joint'])
+            ))
+        if self.target_goal is not None and self.target_mode in ('CARTESIAN', 'CYLINDRICAL') and self.ik is not None:
+            try:
+                goal = self.target_goal
+                if self.target_mode == 'CARTESIAN':
+                    position = np.asarray(goal[:3])
+                    rotation = cartesian_rpy_to_tip_rotation(*goal[3:])
+                else:
+                    position = np.array([
+                        self.cylindrical_origin_xy[0] + goal[0] * math.cos(goal[1]),
+                        self.cylindrical_origin_xy[1] + goal[0] * math.sin(goal[1]), goal[2],
+                    ])
+                    rotation = rotation_from_zyx(*goal[3:])
+                if 'joint' in current:
+                    ep, er = pose_error(self.ik, current['joint'], position, rotation)
+                    errors.update(position_mm=1000.0 * ep, orientation_deg=math.degrees(er))
+            except Exception as exc:
+                self.get_logger().warn(f'Target error feedback unavailable: {exc}', throttle_duration_sec=5.0)
+        if self.held_target_positions is not None and state in ('holding', 'reached', 'approximate'):
+            joints_reached = errors.get('joint_max_deg', math.inf) <= math.degrees(JOINT_TOLERANCE)
+            pose_reached = self.target_mode == 'JOINT' or (
+                errors.get('position_mm', math.inf) <= POSITION_TOLERANCE * 1000
+                and errors.get('orientation_deg', math.inf) <= math.degrees(ORIENTATION_TOLERANCE)
+            )
+            if joints_reached and pose_reached:
+                state, message = 'reached', 'Target reached within feedback tolerance; final goal held.'
+            elif joints_reached and self.target_approximate:
+                state, message = 'approximate', 'Approximate IK goal reached; requested pose differs.'
+            else:
+                state, message = 'holding', 'Profile complete; servo is still pursuing the final goal.'
+            if 'position_mm' in errors:
+                message += f" Error: {errors['position_mm']:.2f} mm / {errors['orientation_deg']:.2f} deg."
+        self.target_status_state = state
+        self.target_status_message = message
+        self.last_target_status_publish = time.monotonic()
+        payload = {
+            "state": state,
+            "active": bool(self.target_active),
+            "mode": self.target_mode,
+            "request_id": self.target_request_id,
+            "goal": self.target_goal,
+            "approximate": bool(self.target_approximate),
+            "current": current,
+            "command_joints": command_joints,
+            "errors": errors,
+            "feedback_fresh": self._joint_state_fresh_locked(time.monotonic()),
+            "message": message,
+        }
+        self.target_status_pub.publish(String(data=json.dumps(
+            payload, separators=(",", ":"), allow_nan=False
+        )))
+
     def _initialize_ik(self) -> None:
         if not bool(self.get_parameter("ik_enabled").value):
             self.get_logger().warn(
@@ -479,6 +601,10 @@ class OM6DOFController(Node):
                 urdf_pkg=str(self.get_parameter("ik_urdf_pkg").value),
                 damping=float(self.get_parameter("ik_damping").value),
             )
+            # Search inside the same effective limits used for commands;
+            # otherwise post-IK clamping invalidates a supposedly exact pose.
+            self.ik.q_min = np.asarray(self.joint_lower)
+            self.ik.q_max = np.asarray(self.joint_upper)
             self.get_logger().info(
                 f"IK ready: {self.ik.base_link} -> {self.ik.tip_link}"
             )
@@ -487,6 +613,30 @@ class OM6DOFController(Node):
             self.get_logger().error(
                 f"IK initialization failed; coordinate modes disabled: {exc}"
             )
+
+    def _load_urdf_joint_limits(self) -> tuple[list[float], list[float]]:
+        """Load the one authoritative joint range used by both URDF and jog."""
+        from .ik_solver import joint_limits_from_urdf
+
+        try:
+            lower, upper = joint_limits_from_urdf(
+                self.joint_names,
+                base_link=str(self.get_parameter("ik_base_link").value),
+                tip_link=str(self.get_parameter("ik_tip_link").value),
+                urdf_pkg=str(self.get_parameter("ik_urdf_pkg").value),
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "could not load finite joint limits from the OM6DOF URDF"
+            ) from exc
+        self.get_logger().info(
+            "joint limits loaded from URDF: "
+            + ", ".join(
+                f"{name}=[{lo:.3f}, {hi:.3f}]"
+                for name, lo, hi in zip(self.joint_names, lower, upper)
+            )
+        )
+        return lower, upper
 
     def _joint_vector_locked(self) -> Optional[list[float]]:
         if len(self.joint_positions) != 6:
@@ -512,14 +662,51 @@ class OM6DOFController(Node):
             return
         with self.lock:
             self.joint_positions = positions
-            self.last_joint_state = time.monotonic()
+            now = time.monotonic()
+            self.last_joint_state = now
             vector = [positions[name] for name in self.joint_names]
             if self.startup_pose is None:
                 self.startup_pose = list(vector)
+            # Keep the web form's "Use current position" feedback fresh
+            # without making this status topic another high-rate joint stream.
+            if now - self.last_target_status_publish >= 0.2:
+                self._publish_target_status_locked(
+                    self.target_status_state, self.target_status_message
+                )
 
     def _clear_stream_command_locked(self) -> None:
         self.control_velocity = np.zeros(6)
         self.last_control_cmd = 0.0
+        self.held_target_positions = None
+
+    def _cancel_target_locked(self, message: str) -> None:
+        if not getattr(self, 'target_active', False) and self.held_target_positions is None:
+            return
+        self.target_active = False
+        self._release_target_hold_locked()
+        if self.pose_operation == 'TARGET':
+            self.pose_target = None
+            self.pose_operation = None
+            self.pose_phase_targets = []
+            self.pose_phase_start = None
+            feedback = self._joint_vector_locked()
+            if feedback is not None:
+                self.command_positions = clamp_positions(feedback, self.joint_lower, self.joint_upper)
+        self._clear_stream_command_locked()
+        self._publish_target_status_locked('stopped', message)
+
+    def _release_target_hold_locked(self) -> None:
+        """Start a new manual command from feedback, not an unreached goal."""
+        if self.held_target_positions is None:
+            return
+        self.held_target_positions = None
+        feedback = self._joint_vector_locked()
+        if feedback is not None:
+            self.command_positions = clamp_positions(
+                feedback, self.joint_lower, self.joint_upper
+            )
+            if self.motion_mode in COORDINATE_MODES:
+                self._seed_ik_anchor_locked(self.command_positions)
 
     def _float_follow_velocity(self) -> float:
         """How fast the lead-through command may chase the arm.
@@ -605,6 +792,8 @@ class OM6DOFController(Node):
                 f"{source} request rejected: IK is unavailable"
             )
             return False
+        self._cancel_target_locked('Target cancelled by mode selection.')
+        self._release_target_hold_locked()
         if mode == self.motion_mode and self.pose_target is None:
             self._publish_state()
             return True
@@ -629,6 +818,8 @@ class OM6DOFController(Node):
         operation: str,
         target: Sequence[float],
         post_mode: str = MODE_JOINT,
+        via_zero: bool = True,
+        profile_duration: Optional[float] = None,
     ) -> bool:
         now = time.monotonic()
         if not self.remote_enabled or not self.remote_controller_active:
@@ -644,6 +835,8 @@ class OM6DOFController(Node):
         vector = self._joint_vector_locked()
         if vector is None:
             return False
+        if operation != 'TARGET':
+            self._cancel_target_locked(f'Target cancelled by {operation}.')
         self.command_positions = clamp_positions(
             vector, self.joint_lower, self.joint_upper
         )
@@ -652,29 +845,50 @@ class OM6DOFController(Node):
         self.ik_target_pos = None
         self.ik_target_rotation = None
         self.pose_target = clamp_positions(target, self.joint_lower, self.joint_upper)
-        # Every READY/STARTUP transition first moves the six arm servos to
-        # their zero-radian pose. The gripper has its own action controller.
-        zero_pose = clamp_positions([0.0] * 6, self.joint_lower, self.joint_upper)
-        self.pose_phase_targets = [zero_pose, self.pose_target]
+        # READY/STARTUP retain their two-phase zero crossing. An absolute
+        # target must instead travel directly to its requested pose: passing
+        # through zero could be unexpectedly large and unsafe.
+        if via_zero:
+            zero_pose = clamp_positions(
+                [0.0] * 6, self.joint_lower, self.joint_upper
+            )
+            self.pose_phase_targets = [zero_pose, self.pose_target]
+        else:
+            self.pose_phase_targets = [self.pose_target]
         self.pose_phase_index = 0
         self.pose_phase_start = list(self.command_positions)
         self.pose_phase_started_at = now
+        default_duration = getattr(self, "pose_profile_duration", 4.0)
+        default_accel = getattr(self, "pose_profile_accel", 2.0)
+        self.active_pose_profile_duration = (
+            float(profile_duration)
+            if profile_duration is not None else default_duration
+        )
+        self.active_pose_profile_accel = self.active_pose_profile_duration / 2.0
+        if via_zero:
+            self.active_pose_profile_accel = default_accel
         self.pose_operation = operation
         self.pose_target_until = now + self.pose_target_timeout
         self.post_pose_mode = post_mode
         self.return_autonomous_after_pose = False
         self._publish_state()
         self.get_logger().info(
-            f"{operation} profile: current -> zero -> {self.pose_target}; "
-            f"{getattr(self, 'pose_profile_duration', 4.0):.1f}s per phase "
-            f"({getattr(self, 'pose_profile_accel', 2.0):.1f}s accel/decel)"
+            f"{operation} profile: {'current -> zero ->' if via_zero else 'current ->'} {self.pose_target}; "
+            f"{self.active_pose_profile_duration:.1f}s per phase "
+            f"({self.active_pose_profile_accel:.1f}s accel/decel)"
         )
         return True
 
     def _pose_profile_fraction(self, elapsed: float) -> float:
         """Normalized trapezoid/triangle position profile with symmetric ramps."""
-        duration = getattr(self, "pose_profile_duration", 4.0)
-        accel = getattr(self, "pose_profile_accel", 2.0)
+        duration = getattr(
+            self, "active_pose_profile_duration",
+            getattr(self, "pose_profile_duration", 4.0),
+        )
+        accel = getattr(
+            self, "active_pose_profile_accel",
+            getattr(self, "pose_profile_accel", 2.0),
+        )
         t = max(0.0, min(duration, elapsed))
         cruise = duration - 2.0 * accel
         denominator = accel * (duration - accel)
@@ -794,6 +1008,8 @@ class OM6DOFController(Node):
                         "ownership"
                     )
                     return
+                self._cancel_target_locked('Target cancelled by FLOAT mode.')
+                self._release_target_hold_locked()
                 self.motion_mode = MODE_FLOAT
                 self.pose_target = None
                 self.pose_operation = None
@@ -836,6 +1052,177 @@ class OM6DOFController(Node):
                     MODE_REST, self.startup_pose, MODE_JOINT
                 ):
                     self.return_autonomous_after_pose = True
+
+    def _on_target_command(self, msg: String) -> None:
+        """Accept one validated absolute target from the web monitor.
+
+        The wire protocol deliberately uses SI units: metre/radian. The web
+        UI converts its mm/degree form values before publishing this message.
+        """
+        try:
+            request = json.loads(msg.data)
+            if not isinstance(request, dict):
+                raise ValueError("command must be an object")
+            action = str(request.get("action", "")).strip().lower()
+            request_id = str(request.get("request_id", ""))[:80]
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            self.get_logger().warn(f"target command rejected: {exc}")
+            return
+
+        with self.lock:
+            if action == "stop":
+                if self.target_active or self.held_target_positions is not None:
+                    feedback = self._joint_vector_locked()
+                    if feedback is not None:
+                        self.command_positions = clamp_positions(
+                            feedback, self.joint_lower, self.joint_upper
+                        )
+                    self.pose_target = None
+                    self.pose_phase_targets = []
+                    self.pose_phase_start = None
+                    self.pose_operation = None
+                    self._clear_stream_command_locked()
+                    self.target_active = False
+                    self.target_request_id = request_id
+                    self._publish_target_status_locked(
+                        "stopped", "Target stopped; holding current position."
+                    )
+                else:
+                    self._publish_target_status_locked(
+                        "stopped", "No target was running."
+                    )
+                return
+            if action != "move":
+                self._publish_target_status_locked(
+                    "rejected", "Target rejected: action must be move or stop."
+                )
+                return
+
+            mode = str(request.get("mode", "")).strip().upper()
+            try:
+                values = [float(value) for value in request.get("values", [])]
+                reach_duration = float(
+                    request.get("reach_duration", self.target_reach_duration)
+                )
+            except (TypeError, ValueError):
+                values = []
+            if (
+                mode not in (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL)
+                or len(values) != 6
+                or not all(math.isfinite(value) for value in values)
+            ):
+                self._publish_target_status_locked(
+                    "rejected", "Target rejected: invalid mode or six SI values."
+                )
+                return
+            if not math.isfinite(reach_duration) or not 0.5 <= reach_duration <= 5.0:
+                self._publish_target_status_locked(
+                    "rejected", "Target rejected: reach time must be 0.5–5 seconds."
+                )
+                return
+            if not self.remote_enabled or not self.remote_controller_active or self.switch_in_progress:
+                self._publish_target_status_locked(
+                    "rejected", "Target rejected: remote arm ownership is inactive."
+                )
+                return
+            if self.pose_target is not None or self.target_active:
+                self._publish_target_status_locked(
+                    "rejected", "Target rejected: another pose is still running."
+                )
+                return
+            feedback = self._joint_vector_locked()
+            if feedback is None or not self._joint_state_fresh_locked(time.monotonic()):
+                self._publish_target_status_locked(
+                    "rejected", "Target rejected: joint feedback is unavailable."
+                )
+                return
+
+            target_joint: Optional[list[float]] = None
+            approximate = False
+            if mode == MODE_JOINT:
+                if any(value < lower or value > upper for value, lower, upper in zip(
+                    values, self.joint_lower, self.joint_upper
+                )):
+                    self._publish_target_status_locked(
+                        "rejected", "Target rejected: joint target exceeds URDF limits."
+                    )
+                    return
+                target_joint = values
+            elif self.ik is None:
+                self._publish_target_status_locked(
+                    "rejected", "Target rejected: inverse kinematics is unavailable."
+                )
+                return
+            else:
+                if mode == MODE_CARTESIAN:
+                    target_position = np.asarray(values[:3], dtype=float)
+                    target_rotation = cartesian_rpy_to_tip_rotation(*values[3:])
+                else:
+                    radius, theta, z, roll, pitch, yaw = values
+                    if radius < self.cylindrical_min_radius:
+                        self._publish_target_status_locked(
+                            "rejected", "Target rejected: cylindrical radius is too small."
+                        )
+                        return
+                    target_position = np.asarray([
+                        self.cylindrical_origin_xy[0] + radius * math.cos(theta),
+                        self.cylindrical_origin_xy[1] + radius * math.sin(theta), z,
+                    ])
+                    target_rotation = rotation_from_zyx(roll, pitch, yaw)
+                try:
+                    plan = plan_pose(
+                        self.ik, feedback, target_position, target_rotation,
+                        self.joint_lower, self.joint_upper, self.ready_pose,
+                        self.ik_collision_radius if self.ik_self_collision else None,
+                    )
+                except Exception as exc:
+                    self._publish_target_status_locked(
+                        "rejected", f"Target rejected: pose planning failed ({exc})."
+                    )
+                    return
+                approximate = plan.approximate
+                target_joint = plan.joints.tolist()
+
+            # JOINT targets need the same path check as Cartesian targets.
+            if mode == MODE_JOINT and self.ik_self_collision:
+                try:
+                    if self.ik is None or not path_is_clear(
+                        self.ik, np.asarray(feedback), np.asarray(target_joint),
+                        self.ik_collision_radius,
+                    ):
+                        raise ValueError('joint path is blocked or collision checking unavailable')
+                except Exception as exc:
+                    self._publish_target_status_locked('blocked', f'Target blocked: {exc}')
+                    return
+            peak_velocity = 2.0 * max(abs(a - b) for a, b in zip(target_joint, feedback)) / reach_duration
+            if peak_velocity > self.max_joint_velocity:
+                minimum = 2.0 * max(abs(a - b) for a, b in zip(target_joint, feedback)) / self.max_joint_velocity
+                self._publish_target_status_locked(
+                    'rejected', f'Target requires at least {minimum:.2f} s to respect joint velocity limits.'
+                )
+                return
+
+            self.target_active = True
+            self.target_mode = mode
+            self.target_goal = values
+            self.target_command_joints = list(target_joint)
+            self.target_request_id = request_id
+            self.target_approximate = approximate
+            if self._schedule_pose_locked(
+                "TARGET", target_joint, post_mode=mode, via_zero=False,
+                profile_duration=reach_duration,
+            ):
+                self._publish_target_status_locked(
+                    "running", (
+                        f"{mode} target is running"
+                        + (" toward the closest reachable pose." if approximate else ".")
+                    )
+                )
+            else:
+                self.target_active = False
+                self._publish_target_status_locked(
+                    "rejected", "Target rejected: unable to schedule profile."
+                )
 
     def _on_gripper_command(self, msg: String) -> None:
         command = msg.data.strip().lower()
@@ -882,6 +1269,12 @@ class OM6DOFController(Node):
                         throttle_duration_sec=2.0,
                     )
                 return
+            if self.held_target_positions is not None:
+                # Neutral teleop packets are a heartbeat, not a request to
+                # replace the final absolute goal with measured positions.
+                if not np.any(np.abs(values) > 1.0e-9):
+                    return
+                self._cancel_target_locked('Target hold replaced by joystick input.')
             self.control_velocity = values
             self.last_control_cmd = time.monotonic()
 
@@ -965,6 +1358,7 @@ class OM6DOFController(Node):
             self.remote_enabled = enable_remote
             self.remote_controller_active = enable_remote
             self.arm_controller_active = not enable_remote
+            self._cancel_target_locked('Target cancelled by controller ownership change.')
             self._clear_stream_command_locked()
             if enable_remote:
                 self.motion_mode = MODE_JOINT
@@ -1026,6 +1420,7 @@ class OM6DOFController(Node):
             if actual_remote == self.remote_enabled:
                 return
             self.remote_enabled = actual_remote
+            self._cancel_target_locked('Target cancelled by external ownership change.')
             self._clear_stream_command_locked()
             if actual_remote:
                 self.motion_mode = MODE_JOINT
@@ -1360,6 +1755,11 @@ class OM6DOFController(Node):
             ):
                 return
             if not self._joint_state_fresh_locked(now):
+                if getattr(self, 'target_active', False) or self.held_target_positions is not None:
+                    self._cancel_target_locked('Target cancelled: joint feedback lost.')
+                    self._publish_target_status_locked('blocked', 'Joint feedback lost; target will not resume automatically.')
+                # Do not replay an old target after feedback recovers.
+                self.held_target_positions = None
                 self.command_positions = None
                 self.ik_target_pos = None
                 self.ik_target_rotation = None
@@ -1407,7 +1807,7 @@ class OM6DOFController(Node):
                     ]
                     phase_finished = (
                         now - self.pose_phase_started_at
-                        >= self.pose_profile_duration
+                        >= self.active_pose_profile_duration
                     )
                     # Advance on the configured profile time. The zero phase
                     # remains part of every READY/STARTUP transition, but it
@@ -1431,9 +1831,16 @@ class OM6DOFController(Node):
                             )
                             self.return_autonomous_after_pose = False
                             self._clear_stream_command_locked()
+                            if reached_operation == "TARGET":
+                                self.held_target_positions = list(self.command_positions)
                             if next_mode != MODE_JOINT:
                                 self._seed_ik_anchor_locked(feedback)
                             self._publish_state()
+            elif self.held_target_positions is not None:
+                # Time controls the ramp, not the lifetime of the goal.
+                # Keep the final goal so the servo can close its remaining
+                # following error even after the ramp has finished.
+                self.command_positions = list(self.held_target_positions)
             elif self.motion_mode == MODE_FLOAT:
                 # Chase the measurement so the servo's position error, and so
                 # its holding torque, stay near zero. Rate limited: a hand
@@ -1516,8 +1923,24 @@ class OM6DOFController(Node):
             self.command_pub.publish(Float64MultiArray(data=command))
         if timeout_operation:
             self.get_logger().warn(f"{timeout_operation} target timed out")
+            if timeout_operation == "TARGET":
+                with self.lock:
+                    self.target_active = False
+                    self._publish_target_status_locked(
+                        "timeout", "Target timed out; holding current position."
+                    )
         if reached_operation:
-            self.get_logger().info(f"{reached_operation} target reached")
+            self.get_logger().info(f"{reached_operation} time profile complete")
+            if reached_operation == "TARGET":
+                with self.lock:
+                    self.target_active = False
+                    self._publish_target_status_locked(
+                        "holding", (
+                            "Profile complete; holding approximate IK goal."
+                            if self.target_approximate else
+                            "Profile complete; holding final goal."
+                        )
+                    )
         if return_to_autonomous:
             with self.lock:
                 self._request_controller_mode_locked(False, "REST complete")

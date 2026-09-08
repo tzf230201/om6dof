@@ -10,6 +10,7 @@ action server or hardware interface itself.
 from __future__ import annotations
 
 import glob
+import json
 import math
 import os
 import select
@@ -93,6 +94,9 @@ class _LinuxJoystick:
         self.axes: List[int] = []
         self.buttons: List[bool] = []
         self.last_scan = 0.0
+        self.path = ""
+        self.name = ""
+        self.last_event = ""
 
     def _close(self) -> None:
         if self.fd is not None:
@@ -103,6 +107,8 @@ class _LinuxJoystick:
         self.fd = None
         self.axes = []
         self.buttons = []
+        self.path = ""
+        self.name = ""
 
     @staticmethod
     def _name(fd: int) -> str:
@@ -132,9 +138,11 @@ class _LinuxJoystick:
                 fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
             except OSError:
                 continue
-            name = self._name(fd).lower()
-            if any(hint in name for hint in self.name_hints):
+            name = self._name(fd)
+            if any(hint in name.lower() for hint in self.name_hints):
                 self.fd = fd
+                self.path = path
+                self.name = name
                 self.axes = [0] * self._count(fd, JSIOCGAXES)
                 self.buttons = [False] * self._count(fd, JSIOCGBUTTONS)
                 return
@@ -158,13 +166,26 @@ class _LinuxJoystick:
                 kind &= ~JS_EVENT_INIT
                 if kind == JS_EVENT_AXIS and index < len(self.axes):
                     self.axes[index] = value
+                    self.last_event = f"Axis {index + 1}: {value / 32767.0:.3f}"
                 elif kind == JS_EVENT_BUTTON and index < len(self.buttons):
                     self.buttons[index] = bool(value)
+                    self.last_event = f"Button {index + 1}: {'PRESSED' if value else 'released'}"
         return (
             self.fd is not None,
             [value / 32767.0 for value in self.axes],
             {index for index, down in enumerate(self.buttons) if down},
         )
+
+    def state(self) -> dict:
+        connected, axes, buttons = self.snapshot()
+        return {
+            "connected": connected,
+            "device": self.name or "No joystick detected",
+            "path": self.path,
+            "axes": axes,
+            "buttons": [index + 1 for index in sorted(buttons)],
+            "last_event": self.last_event,
+        }
 
 
 def _decode_lowstate_remote(
@@ -200,6 +221,7 @@ class TeleopNode(Node):
             "operation_mode_topic", "/om6dof/operation_mode"
         )
         self.declare_parameter("control_cmd_topic", "/om6dof/control_cmd")
+        self.declare_parameter("web_input_topic", "/om6dof/teleop/web_input")
         self.declare_parameter(
             "operation_mode_state_topic", "/om6dof/operation_mode/state"
         )
@@ -230,6 +252,7 @@ class TeleopNode(Node):
         self.declare_parameter("joint_signs", [1.0] * 6)
 
         self.declare_parameter("gripper_command_topic", "/om6dof/gripper_cmd")
+        self.declare_parameter("input_state_topic", "/om6dof/teleop/input_state")
 
         self.rate = float(self.get_parameter("publish_rate_hz").value)
         self.input_source = str(
@@ -296,7 +319,7 @@ class TeleopNode(Node):
             not all(math.isfinite(value) for value in scalar_values)
             or self.rate <= 0.0
             or self.input_source not in (
-                "go2w", "keyboard", "gamepad", "airbus"
+            "go2w", "keyboard", "gamepad", "airbus", "web"
             )
             or self.keyboard_pulse_seconds <= 0.0
             or self.speed_scale_min <= 0.0
@@ -356,6 +379,8 @@ class TeleopNode(Node):
         self.keyboard_command_until = 0.0
         self.keyboard_thread: Optional[threading.Thread] = None
         self.keyboard_running = False
+        self.last_keyboard_event = ""
+        self.web_input = {"mode": MODE_JOINT, "axis_pair": 0, "x": 0.0, "y": 0.0, "scale": 1.0, "stamp": 0.0}
         self.gamepad = _LinuxJoystick(GAMEPAD_NAME_HINTS)
         self.airbus = _LinuxJoystick(TCA_NAME_HINTS)
         self.stick_buttons: set[int] = set()
@@ -408,6 +433,9 @@ class TeleopNode(Node):
             str(self.get_parameter("gripper_command_topic").value),
             10,
         )
+        self.input_state_pub = self.create_publisher(
+            String, str(self.get_parameter("input_state_topic").value), command_qos
+        )
         self.create_subscription(
             LowState,
             str(self.get_parameter("lowstate_topic").value),
@@ -431,6 +459,10 @@ class TeleopNode(Node):
             str(self.get_parameter("operation_mode_state_topic").value),
             self._on_operation_state,
             state_qos,
+        )
+        self.create_subscription(
+            String, str(self.get_parameter("web_input_topic").value),
+            self._on_web_input, command_qos,
         )
 
         self.create_timer(self.dt, self._tick)
@@ -681,6 +713,47 @@ class TeleopNode(Node):
         if gripper is not None:
             self._publish_gripper(gripper)
 
+    def _on_web_input(self, msg: String) -> None:
+        """Accept raw browser-stick input; this node alone maps it to arm cmd."""
+        try:
+            data = json.loads(msg.data)
+            mode = str(data["mode"]).strip().upper()
+            pair = int(data["axis_pair"])
+            x, y = float(data["x"]), float(data["y"])
+            scale = float(data.get("scale", 1.0))
+            if mode not in (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL):
+                raise ValueError("invalid mode")
+            if pair not in (0, 1, 2) or not all(
+                math.isfinite(value) and -1.0 <= value <= 1.0 for value in (x, y)
+            ):
+                raise ValueError("invalid joystick values")
+            if not math.isfinite(scale) or not 0.15 <= scale <= 5.0:
+                raise ValueError("invalid speed scale")
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            self.get_logger().warn("invalid web teleop input ignored", throttle_duration_sec=2.0)
+            return
+        with self.lock:
+            self.web_input = {"mode": mode, "axis_pair": pair, "x": x, "y": y,
+                              "scale": scale, "stamp": time.monotonic()}
+
+    def _web_velocity_locked(self, now: float) -> list[float]:
+        data = self.web_input
+        if now - float(data["stamp"]) > self.remote_timeout:
+            return [0.0] * 6
+        if data["mode"] != self.control_mode:
+            return [0.0] * 6
+        speed_pairs = {
+            MODE_JOINT: ((0.25, 0.25),) * 3,
+            MODE_CARTESIAN: ((0.03, 0.03), (0.03, 0.35), (0.35, 0.35)),
+            MODE_CYLINDRICAL: ((0.025, 0.20), (0.025, 0.35), (0.35, 0.35)),
+        }
+        x_speed, y_speed = speed_pairs[self.control_mode][data["axis_pair"]]
+        result = [0.0] * 6
+        index = data["axis_pair"] * 2
+        result[index] = data["x"] * x_speed * data["scale"]
+        result[index + 1] = data["y"] * y_speed * data["scale"]
+        return result
+
     def _on_remote_state(self, msg: Bool) -> None:
         with self.lock:
             previous = self.remote_enabled
@@ -756,10 +829,10 @@ class TeleopNode(Node):
         for parameter in parameters:
             if parameter.name == "input_source":
                 requested = str(parameter.value).lower()
-        if requested not in ("go2w", "keyboard", "gamepad", "airbus"):
+        if requested not in ("go2w", "keyboard", "gamepad", "airbus", "web"):
             return SetParametersResult(
                 successful=False,
-                reason="input_source must be go2w, keyboard, gamepad, or airbus",
+                reason="input_source must be go2w, keyboard, gamepad, airbus, or web",
             )
         if requested == self.input_source:
             return SetParametersResult(successful=True)
@@ -826,6 +899,7 @@ class TeleopNode(Node):
         operation = None
         gripper = None
         with self.lock:
+            self.last_keyboard_event = "Esc" if key == "\x1b" else key
             if key == "\x1b":
                 self.keyboard_running = False
                 return
@@ -990,7 +1064,9 @@ class TeleopNode(Node):
                         self.remote_waiting_for_neutral = False
                     velocity = [0.0] * 6
             elif not self.remote_enabled:
-                return
+                velocity = [0.0] * 6
+            elif self.input_source == "web":
+                velocity = self._web_velocity_locked(now)
             elif self.input_source == "keyboard":
                 velocity = (
                     self.keyboard_command
@@ -1010,6 +1086,9 @@ class TeleopNode(Node):
                     velocity = self._remote_joint_velocity(keys, axes)
                 else:
                     velocity = self._remote_coordinate_velocity(keys, axes)
+            self.input_state_pub.publish(String(data=json.dumps(
+                self._input_state_locked(now), separators=(",", ":")
+            )))
         self.control_pub.publish(
             Float64MultiArray(data=[value * self.speed_scale for value in velocity])
         )
@@ -1017,6 +1096,33 @@ class TeleopNode(Node):
             self.operation_pub.publish(String(data=operation))
         if gripper and self.remote_enabled:
             self._publish_gripper(gripper)
+
+    def _input_state_locked(self, now: float) -> dict:
+        if self.input_source == "gamepad":
+            state = self.gamepad.state()
+        elif self.input_source == "airbus":
+            state = self.airbus.state()
+        elif self.input_source == "keyboard":
+            state = {"connected": True, "device": "Keyboard", "path": "stdin",
+                     "axes": [], "buttons": [], "last_event": self.last_keyboard_event}
+        elif self.input_source == "web":
+            state = {"connected": True, "device": "Web joystick", "path": "ROS topic",
+                     "axes": [self.web_input["x"], self.web_input["y"]], "buttons": [],
+                     "last_event": self.web_input["mode"]}
+        else:
+            keys, axes, stamp = self._selected_remote_state_locked(now)
+            state = {"connected": bool(stamp and now - stamp <= self.remote_timeout),
+                     "device": "Go2W wireless remote", "path": "/lowstate",
+                     "axes": list(axes),
+                     "buttons": [index + 1 for index in range(16) if keys & (1 << index)],
+                     "last_event": ""}
+        state["source"] = self.input_source
+        # Web has a browser-side throttle value in its raw input. The
+        # dashboard must show the effective scale that reaches control_cmd.
+        state["speed_scale"] = self.speed_scale * (
+            float(self.web_input["scale"]) if self.input_source == "web" else 1.0
+        )
+        return state
 
     def destroy_node(self):
         self.keyboard_running = False

@@ -220,11 +220,12 @@ def integrate_cylindrical_position(
 
 
 def rotation_from_zyx(roll: float, pitch: float, yaw: float) -> np.ndarray:
-    """Build a rotation from intrinsic Z-Y-X angles (yaw, then pitch, then roll).
+    """Build a rotation from RPY angles as ``Rz(yaw) @ Ry(pitch) @ Rx(roll)``.
 
-    This is the convention the semi-cylindrical mode is described in: yaw
-    about the base vertical, pitch about the resulting lateral axis, roll
-    about the tool axis.
+    The same matrix has two equivalent descriptions: intrinsic Z-Y-X or
+    extrinsic/fixed X-Y-Z. Cartesian target inputs use the latter: Roll,
+    Pitch and Yaw are respectively rotations about the base/global X, Y and
+    Z axes. SEMI_CYLINDRICAL reuses the matrix with its own theta semantics.
     """
     cr, sr = math.cos(roll), math.sin(roll)
     cp, sp = math.cos(pitch), math.sin(pitch)
@@ -234,6 +235,27 @@ def rotation_from_zyx(roll: float, pitch: float, yaw: float) -> np.ndarray:
         [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
         [-sp, cp * sr, cp * cr],
     ])
+
+
+# Cartesian target frame at the same origin as end_effector_link:
+# X points along the gripper (URDF +Z), Y is URDF +Y, Z is URDF -X.
+# A horizontal forward-facing gripper therefore has RPY=(0, 0, 0).
+# This fixed frame rotation does not alter the URDF, FK, or jogging axes.
+_TIP_FROM_CARTESIAN_FRAME = np.array([
+    [0.0, 0.0, -1.0],
+    [0.0, 1.0, 0.0],
+    [1.0, 0.0, 0.0],
+])
+
+
+def cartesian_rpy_to_tip_rotation(roll: float, pitch: float, yaw: float) -> np.ndarray:
+    """Convert absolute gripper-forward RPY into the URDF tip rotation for IK."""
+    return rotation_from_zyx(roll, pitch, yaw) @ _TIP_FROM_CARTESIAN_FRAME.T
+
+
+def tip_rotation_to_cartesian_rpy(rotation: np.ndarray) -> tuple:
+    """Express FK orientation as RPY of the gripper-forward Cartesian frame."""
+    return rotation_to_zyx(np.asarray(rotation) @ _TIP_FROM_CARTESIAN_FRAME)
 
 
 def rotation_to_zyx(matrix: Sequence[Sequence[float]]) -> tuple:

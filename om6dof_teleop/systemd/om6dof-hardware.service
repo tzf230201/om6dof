@@ -14,11 +14,12 @@ Environment=RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 # launch service real-time (do not set CPUSchedulingPolicy here).
 LimitRTPRIO=60
 LimitMEMLOCK=infinity
-# The AGX owns U2D2, ros2_control, and om6dof_controller. The Go2W adapter is
-# disabled because the Go2W stack remains on the Jetson NX.
+# The AGX owns U2D2, ros2_control, and om6dof_controller. The input adapter
+# receives one selected source and is the only controller-input conversion
+# path to the canonical ROS command topics.
 # JOINT/CARTESIAN/CYLINDRICAL all resolve in om6dof_controller; no second
 # process ever opens U2D2 or publishes final arm positions.
-ExecStart=/bin/bash -c 'set -e; source /opt/ros/humble/setup.bash; source /home/kublab/ros2_ws/install/setup.bash; unset CYCLONEDDS_URI; exec ros2 launch om6dof_teleop full_stack.launch.py start_go2w_teleop:=false'
+ExecStart=/bin/bash -c 'set -e; source /opt/ros/humble/setup.bash; source /home/kublab/ros2_ws/install/setup.bash; unset CYCLONEDDS_URI; exec ros2 launch om6dof_teleop full_stack.launch.py start_go2w_teleop:=true input_source:=go2w'
 KillMode=control-group
 KillSignal=SIGINT
 TimeoutStopSec=20

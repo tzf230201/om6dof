@@ -96,6 +96,43 @@ def render_chain_urdf(
     return out.stdout.decode()
 
 
+def joint_limits_from_urdf(
+    joint_names: List[str],
+    base_link: str = "world",
+    tip_link: str = "end_effector_link",
+    urdf_pkg: str = "om6dof_description",
+    xacro_rel: str = "urdf/om6dof.urdf.xacro",
+) -> Tuple[List[float], List[float]]:
+    """Return hard limits for the requested arm joints from the rendered URDF.
+
+    The caller's joint order is preserved. Missing or unlimited joints are an
+    error: commanding an invented fallback range is unsafe for teleoperation.
+    ``base_link`` and ``tip_link`` also ensure every requested joint belongs
+    to the arm chain used by IK.
+    """
+    robot = URDF.from_xml_string(render_chain_urdf(urdf_pkg, xacro_rel))
+    chain = set(robot.get_chain(base_link, tip_link, joints=True, links=False))
+    lower: List[float] = []
+    upper: List[float] = []
+    for name in joint_names:
+        if name not in chain:
+            raise ValueError(f"joint '{name}' is not in {base_link}->{tip_link}")
+        joint = robot.joint_map.get(name)
+        limit = getattr(joint, "limit", None)
+        if (
+            limit is None
+            or limit.lower is None
+            or limit.upper is None
+            or not math.isfinite(float(limit.lower))
+            or not math.isfinite(float(limit.upper))
+            or float(limit.lower) >= float(limit.upper)
+        ):
+            raise ValueError(f"joint '{name}' has no finite lower/upper URDF limit")
+        lower.append(float(limit.lower))
+        upper.append(float(limit.upper))
+    return lower, upper
+
+
 class IKSolver:
     """Velocity-resolved IK for the arm group, joint1..joint6."""
 
@@ -534,8 +571,21 @@ class IKSolver:
                 q = q_new
                 pre_Ek = new_Ek
             else:
-                q = np.clip(q + (1.0 - gamma) * dq, self.q_min, self.q_max)
-                err = pose_err(q)
-                pre_Ek = float(err.T @ We @ err)
+                # Retain the best solution on a rejected step. Previously
+                # even a worsening half-step replaced it, so a timed-out
+                # solve could return something worse than an earlier iterate.
+                accepted = False
+                fraction = 1.0 - gamma
+                for _ in range(8):
+                    trial = np.clip(q + fraction * dq, self.q_min, self.q_max)
+                    trial_err = pose_err(trial)
+                    trial_cost = float(trial_err.T @ We @ trial_err)
+                    if trial_cost < pre_Ek:
+                        q, err, pre_Ek = trial, trial_err, trial_cost
+                        accepted = True
+                        break
+                    fraction *= 0.5
+                if not accepted:
+                    break
 
         return q, False

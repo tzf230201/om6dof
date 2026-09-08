@@ -20,6 +20,9 @@ om6dof_controller:
     # Each phase takes 4 seconds, with a 2-second acceleration and deceleration.
     pose_profile_duration_seconds: 4.0
     pose_profile_accel_seconds: 2.0
+    # Absolute Target-mode moves: 5 s total, triangular profile with 2.5 s
+    # acceleration then 2.5 s deceleration.
+    target_reach_duration_seconds: 5.0
 
     ik_enabled: true
     ik_base_link: world

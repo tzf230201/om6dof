@@ -83,7 +83,7 @@ def generate_launch_description():
         DeclareLaunchArgument("joint_velocity", default_value="0.5"),
         DeclareLaunchArgument(
             "input_source", default_value="go2w",
-            choices=["go2w", "keyboard", "gamepad", "airbus"],
+            choices=["go2w", "keyboard", "gamepad", "airbus", "web"],
             description="Human input source for om6dof_teleop.",
         ),
         DeclareLaunchArgument(

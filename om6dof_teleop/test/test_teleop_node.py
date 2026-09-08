@@ -86,6 +86,8 @@ def _adapter(remote_enabled=False):
     node.keyboard_command = [0.0] * 6
     node.keyboard_command_until = 0.0
     node.keyboard_running = True
+    node.last_keyboard_event = ""
+    node.web_input = {"mode": MODE_JOINT, "axis_pair": 0, "x": 0.0, "y": 0.0, "scale": 1.0, "stamp": 0.0}
     node.stick_buttons = set()
     node.stick_primed = False
     node.stick_speed_direction = 0
@@ -120,6 +122,7 @@ def _adapter(remote_enabled=False):
 
     node.operation_pub = _Publisher()
     node.control_pub = _Publisher()
+    node.input_state_pub = _Publisher()
     node._logger = _Logger()
     node.get_logger = lambda: node._logger
     node.gripper_pub = _Publisher()
@@ -367,6 +370,18 @@ def test_keyboard_speed_adjustment_scales_published_velocity(monkeypatch):
     assert node.speed_scale == pytest.approx(1.1)
     assert node.control_pub.messages[-1].data == pytest.approx(
         [0.55, 0, 0, 0, 0, 0]
+    )
+
+
+def test_web_input_is_mapped_only_by_teleop(monkeypatch):
+    monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
+    node = _adapter(remote_enabled=True)
+    node.control_mode = MODE_CARTESIAN
+
+    node._on_web_input(String(data='{"mode":"CARTESIAN","axis_pair":0,"x":1.0,"y":-0.5,"scale":1.0}'))
+
+    assert node._web_velocity_locked(100.0) == pytest.approx(
+        [0.03, -0.015, 0.0, 0.0, 0.0, 0.0]
     )
 
 

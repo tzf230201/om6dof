@@ -16,6 +16,8 @@ from om6dof_controller.control_math import (
     rotation_error,
     rotation_from_rotvec,
     rotation_from_zyx,
+    cartesian_rpy_to_tip_rotation,
+    tip_rotation_to_cartesian_rpy,
     rotation_to_zyx,
     semi_cylindrical_rotation,
     step_toward,
@@ -103,6 +105,44 @@ def test_zyx_round_trip_recovers_the_angles():
         assert math.isclose(float(np.linalg.det(matrix)), 1.0, abs_tol=1e-9)
         back = rotation_to_zyx(matrix)
         assert np.allclose(back, (roll, pitch, yaw), atol=1e-9)
+
+
+def test_gripper_heading_feedback_from_reported_problem_pose():
+    physical = rotation_from_zyx(*np.radians([-18.435, 89.722, -18.523]))
+    roll, pitch, yaw = tip_rotation_to_cartesian_rpy(physical)
+    assert math.degrees(yaw) == pytest.approx(-0.0877976687, abs=1e-8)
+    assert abs(math.degrees(roll)) < 0.1
+    assert abs(math.degrees(pitch)) < 0.3
+
+
+@pytest.mark.parametrize('roll,pitch,yaw', [(0, 0, 0), (0.5, 0, 0.7), (-0.3, 0.4, 1.2)])
+def test_cartesian_heading_is_gripper_z_heading_and_roll_does_not_change_it(roll, pitch, yaw):
+    physical = cartesian_rpy_to_tip_rotation(roll, pitch, yaw)
+    forward = physical[:, 2]
+    assert math.atan2(forward[1], forward[0]) == pytest.approx(yaw)
+    assert forward[2] == pytest.approx(-math.sin(pitch))
+    assert tip_rotation_to_cartesian_rpy(physical) == pytest.approx((roll, pitch, yaw))
+
+
+def test_cartesian_rpy_matrix_is_fixed_base_xyz_rotation_order():
+    """Cartesian Roll/Pitch/Yaw means global X then Y then Z rotation."""
+    roll, pitch, yaw = 0.31, -0.42, 0.73
+    rx = np.array([
+        [1.0, 0.0, 0.0],
+        [0.0, math.cos(roll), -math.sin(roll)],
+        [0.0, math.sin(roll), math.cos(roll)],
+    ])
+    ry = np.array([
+        [math.cos(pitch), 0.0, math.sin(pitch)],
+        [0.0, 1.0, 0.0],
+        [-math.sin(pitch), 0.0, math.cos(pitch)],
+    ])
+    rz = np.array([
+        [math.cos(yaw), -math.sin(yaw), 0.0],
+        [math.sin(yaw), math.cos(yaw), 0.0],
+        [0.0, 0.0, 1.0],
+    ])
+    assert np.allclose(rotation_from_zyx(roll, pitch, yaw), rz @ ry @ rx)
 
 
 def test_zyx_survives_gimbal_lock():

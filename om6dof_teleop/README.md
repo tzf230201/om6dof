@@ -20,7 +20,9 @@ ros2 launch om6dof_teleop teleop.launch.py input_source:=go2w
 ```
 
 Valid sources are `go2w`, `keyboard`, `gamepad` (Logicool/Logitech F710 in
-XInput mode), and `airbus` (Thrustmaster TCA). Change a running source safely:
+XInput mode), `airbus` (Thrustmaster TCA), and `web`. The `web` source accepts
+raw browser joystick input on `/om6dof/teleop/web_input`; it still maps that
+input to arm commands only inside this package. Change a running source safely:
 
 ```bash
 ros2 param set /om6dof_teleop input_source gamepad
@@ -50,6 +52,7 @@ On the F710, holding D-pad up/down repeats the adjustment every 0.2 seconds.
 |---|---|---|
 | `/om6dof/operation_mode` | `std_msgs/msg/String` | JOINT, CARTESIAN, CYLINDRICAL, AUTONOMOUS, READY, STARTUP, REST |
 | `/om6dof/control_cmd` | `std_msgs/msg/Float64MultiArray` | Six velocity values for the selected mode |
+| `/om6dof/teleop/input_state` | `std_msgs/msg/String` (JSON) | Selected input source, device connection, axes, buttons, and last event for dashboard visualization |
 
 `control_cmd` is a 50 Hz velocity stream, not an absolute pose. Only one
 publisher should control it at a time.
