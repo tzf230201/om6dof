@@ -1,5 +1,16 @@
 # om6dof_description
 
+## License and provenance
+
+See [LICENSE](LICENSE) for Apache-2.0 and [NOTICE](NOTICE) for ROBOTIS author
+credits, exact upstream mesh matches, and modifications to the robot model.
+Both files are installed into this package's share directory. The unchanged
+ALOHA wrist bracket retains the [MIT license](meshes/LICENSE-ALOHA.txt),
+Copyright (c) 2023 Tony Z. Zhao; this license is installed with the meshes.
+Other additional
+camera/bracket assets listed in NOTICE still require source/license
+confirmation; they are not automatically covered by the upstream arm license.
+
 URDF/Xacro, meshes, kinematic frames, joint limits, and inertial parameters for
 the OM6DOF manipulator. This package is the common robot model for MoveIt,
 `robot_state_publisher`, collision checking, and the KDL gravity model used by

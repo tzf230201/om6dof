@@ -13,6 +13,35 @@ AGX works fine without it.
 The arm and what its camera sees share one world frame, so a detection can be
 reached for directly.
 
+## Mechanical design reference
+
+The mechanical design and robot-description assets are adapted from the ROBOTIS
+[OpenManipulator Friends](https://github.com/ROBOTIS-GIT/open_manipulator_friends)
+six-DOF arm. For a ROS 2-oriented reference, see
+[open_manipulator_friends_ros2](https://github.com/tzf230201/open_manipulator_friends_ros2).
+
+This project adds a wrist-mounted RealSense camera and uses updated dynamics
+parameters. The upstream OpenManipulator Friends repository is licensed under
+[Apache License 2.0](https://github.com/ROBOTIS-GIT/open_manipulator_friends/blob/main/LICENSE).
+Upstream authors, reused files, and modifications are documented in
+[NOTICE](NOTICE) and the [robot-description notice](om6dof_description/NOTICE).
+
+## License and attribution
+
+The wrist-camera bracket comes from [ALOHA](https://github.com/tonyzhaozh/aloha)
+and retains its MIT license, Copyright (c) 2023 Tony Z. Zhao. The standalone
+bracket mesh is unchanged apart from its filename; its full license is included
+in [LICENSE-ALOHA.txt](om6dof_description/meshes/LICENSE-ALOHA.txt).
+
+Original OM6DOF contributions are licensed under [Apache License 2.0](LICENSE),
+except where a file or component states different terms. Third-party files
+retain their original copyright and license terms. The robot-description
+package installs its own copies of `LICENSE` and `NOTICE` alongside its assets.
+
+See [licensing and provenance](docs/LICENSING.md) for the verified upstream
+inventory, redistribution requirements, and unresolved sources of additional
+camera/bracket meshes and legacy DD-GNG components.
+
 ## Interactive workspace demo
 
 [Open the 3D workspace explorer](https://tzf230201.github.io/om6dof/viewer3d.html)

@@ -1,0 +1,51 @@
+OM6DOF
+
+Original OM6DOF contributions are provided under Apache License, Version 2.0,
+except where a file or component states different terms. See LICENSE.
+Third-party material retains its original ownership and applicable terms.
+
+OpenManipulator Friends
+----------------------
+This distribution includes robot-description material from:
+  ROBOTIS-GIT/open_manipulator_friends
+  https://github.com/ROBOTIS-GIT/open_manipulator_friends
+  Apache License, Version 2.0
+
+Upstream description-package authors:
+  Hae-Bum Jung (zang09@naver.com)
+  Darby Lim (thlim@robotis.com)
+  Hye-Jong KIM (hjkim@robotis.com)
+  Ryan Shim (jhshim@robotis.com)
+  Yong-Ho Na (yhna@robotis.com)
+Upstream maintainer: Pyo (pyo@robotis.com).
+
+The robot-description adaptation includes a wrist-mounted RealSense camera,
+updated inertial parameters, joint limits and frames, a base pedestal, renamed
+package references, and ROS 2 integration. See om6dof_description/NOTICE for
+the file inventory and upstream revisions used for comparison.
+
+ALOHA wrist bracket
+------------------
+meshes/aloha_cam_wrist_mount_v13.stl in om6dof_description is an unchanged
+copy (renamed) of aloha2/Aloha cam wrist mount v13.stl from:
+  https://github.com/tonyzhaozh/aloha
+  Copyright (c) 2023 Tony Z. Zhao
+  MIT License; see om6dof_description/meshes/LICENSE-ALOHA.txt.
+This component retains its MIT terms, not the root Apache-2.0 terms.
+See om6dof_description/NOTICE for the verified source tree and blob hash.
+
+Other components
+----------------
+DynamixelSDK, dynamixel_interfaces, and dynamixel_hardware_interface retain
+their own LICENSE files and original copyright notices.
+
+The ODE drawstuff files under om6dof_dd_gng/third_party/drawstuff state a choice
+of LGPL-2.1-or-later or a BSD-style license in their original headers. They are
+not relicensed by this repository's Apache license.
+
+Additional camera/bracket meshes and legacy DD-GNG sources have unresolved
+provenance or license documentation. This NOTICE does not grant rights to
+third-party material or resolve those missing permissions. See
+docs/LICENSING.md for the exact outstanding items.
+
+This NOTICE records attribution; it does not modify any license.

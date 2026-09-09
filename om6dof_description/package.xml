@@ -6,6 +6,12 @@
   <description>Robot description, meshes, and visualization launch files for OM6DOF.</description>
   <maintainer email="biancanobelia@gmail.com">unitree</maintainer>
   <license>Apache-2.0</license>
+  <!-- Modified for OM6DOF ROS 2 integration; original description authors follow. -->
+  <author email="zang09@naver.com">Hae-Bum Jung</author>
+  <author email="thlim@robotis.com">Darby Lim</author>
+  <author email="hjkim@robotis.com">Hye-Jong KIM</author>
+  <author email="jhshim@robotis.com">Ryan Shim</author>
+  <author email="yhna@robotis.com">Yong-Ho Na</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <exec_depend>joint_state_publisher_gui</exec_depend>

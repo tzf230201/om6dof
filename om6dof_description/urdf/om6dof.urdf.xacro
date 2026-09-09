@@ -1,5 +1,14 @@
 <?xml version="1.0"?>
 <!-- OM6DOF robot description -->
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  Derived from ROBOTIS-GIT/open_manipulator_friends,
+  open_manipulator_6dof_description/urdf/open_manipulator_6dof.urdf.xacro.
+  Modified by OM6DOF maintainers: ROS 2/package integration, inertial
+  parameters, joint limits, base/end-effector and gripper configuration,
+  pedestal, and wrist-mounted RealSense camera/payload frames.
+  See the accompanying LICENSE and NOTICE for terms and upstream credits.
+-->
 <robot name="om6dof" xmlns:xacro="http://ros.org/wiki/xacro">
 
   <!-- Import all Gazebo-customization elements, including Gazebo colors -->

@@ -1,0 +1,71 @@
+OM6DOF robot description: upstream attribution and changes
+
+Upstream: https://github.com/ROBOTIS-GIT/open_manipulator_friends
+License: Apache License, Version 2.0 (see the accompanying LICENSE).
+Reference revision: f029a07a76597f3f30b52e90a8cf2571b2cf835d
+Upstream package: open_manipulator_6dof_description
+
+Upstream package authors, retained from package.xml:
+  Hae-Bum Jung (zang09@naver.com)
+  Darby Lim (thlim@robotis.com)
+  Hye-Jong KIM (hjkim@robotis.com)
+  Ryan Shim (jhshim@robotis.com)
+  Yong-Ho Na (yhna@robotis.com)
+Upstream maintainer: Pyo (pyo@robotis.com).
+
+The ROS 2 reference is:
+  https://github.com/tzf230201/open_manipulator_friends_ros2
+  revision 5e1531c5b4031d49a61f4b11238eb03bb35d0a9e
+Its LICENSE and the unchanged files below match the ROBOTIS reference.
+Neither inspected upstream tree contains a NOTICE file. This is an OM6DOF
+attribution notice, not a reproduction of an upstream NOTICE.
+
+Unchanged upstream files (verified by Git blob SHA-1):
+  urdf/materials.xacro         74abea43bfe3870fca650189f755cc2ca2e248e7
+  meshes/chain_link1.stl      3a3a6cf7bc85ac86b90df28cad5472e264590af3
+  meshes/chain_link2.stl      50b665cd98574cc6933ab4b82923f1b18abd4541
+  meshes/chain_link3.stl      0c012bbbf5ccaf43deb2769190a9dbdd00cd2b69
+  meshes/chain_link4.stl      754da63c14b1d81f8fb5b2336d65badf40a48dbf
+  meshes/chain_link5.stl      e95749745adbb308b58778e0d300e4d71169c4e7
+  meshes/chain_link6.stl      b7c4cae4bdb96a5885bf8bdfb552d4c11c939b9d
+  meshes/chain_link7.stl      18f72c09df039a2f5ad6b822195ed2f496aeabef
+  meshes/chain_link_grip_l.stl 72b64b418a59eab85953d32f7f9ca3aa74664051
+  meshes/chain_link_grip_r.stl 00ece6ee6adbac1ca35fd90d3289739674f58dd6
+
+Modified upstream file:
+  urdf/om6dof.urdf.xacro derives from upstream
+  urdf/open_manipulator_6dof.urdf.xacro.
+  OM6DOF maintainers changed package/robot names, ROS integration, inertial
+  parameters, joint limits, base/end-effector frames, gripper configuration,
+  and added a pedestal and wrist-mounted RealSense camera/payload frames.
+  The changed file also carries an in-file modification notice.
+
+Package integration:
+  CMakeLists.txt and package.xml provide the OM6DOF ROS 2 ament integration
+  instead of the upstream catkin package and install these licensing files.
+  Original author credits are retained in this notice and package.xml.
+
+ALOHA wrist bracket (MIT, not Apache-2.0):
+  Source: https://github.com/tonyzhaozh/aloha
+  Inspected tree: 06369f03cd8e0a47e16d3a90167853fd33af7557
+  Upstream path: aloha2/Aloha cam wrist mount v13.stl
+  Local path: meshes/aloha_cam_wrist_mount_v13.stl
+  Git blob SHA-1: a1fedb360dc7380454314499873042521f6093e7
+  The local file is byte-identical to upstream; only the filename changed.
+  Copyright (c) 2023 Tony Z. Zhao
+  Full upstream MIT license: meshes/LICENSE-ALOHA.txt (also installed).
+  The inspected tree contains no additional NOTICE or bracket-specific license.
+  This verification does not establish the camera component's license or the
+  assembly modifications in the combined meshes/d405_wrist_cam.stl.
+
+Additional assets whose source/license still needs confirmation:
+  meshes/chain_link3_v2stl
+  meshes/d405.stl
+  meshes/d405_wrist_cam.stl
+  meshes/d435.stl
+  meshes/stand_rs-d435_s01.stl
+These files were not found in the inspected upstream trees. Their names or
+presence here do not establish that Apache-2.0 covers them. Preserve this
+distinction when redistributing the package.
+
+This notice is informational and does not modify the Apache License.
