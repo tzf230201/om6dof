@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 870" role="img"><title>OM6DOF X = 500.00 mm</title><rect width="100%" height="100%" fill="#f7f8fa"/><style>text{font-family:Arial,sans-serif;fill:#243244}.grid{stroke:#d7dde5;stroke-width:.6}</style>
+<g><text x="370" y="26" text-anchor="middle" font-size="21">X = 500 mm (constant)</text>
+<text x="370" y="45" text-anchor="middle" font-size="11">n=1; position 0.0%; pose 0.0%</text>
+<rect x="61" y="63" width="654" height="654" fill="white" stroke="#a5afbd"/>
+<path class="grid" d="M 68.9756 63 v 654 M 61 709.024 h 654"/><text x="68.9756" y="732" text-anchor="middle" font-size="9">-500</text><text x="56" y="712.024" text-anchor="end" font-size="9">-500</text>
+<path class="grid" d="M 100.878 63 v 654 M 61 677.122 h 654"/><text x="100.878" y="732" text-anchor="middle" font-size="9">-450</text><text x="56" y="680.122" text-anchor="end" font-size="9">-450</text>
+<path class="grid" d="M 132.78 63 v 654 M 61 645.22 h 654"/><text x="132.78" y="732" text-anchor="middle" font-size="9">-400</text><text x="56" y="648.22" text-anchor="end" font-size="9">-400</text>
+<path class="grid" d="M 164.683 63 v 654 M 61 613.317 h 654"/><text x="164.683" y="732" text-anchor="middle" font-size="9">-350</text><text x="56" y="616.317" text-anchor="end" font-size="9">-350</text>
+<path class="grid" d="M 196.585 63 v 654 M 61 581.415 h 654"/><text x="196.585" y="732" text-anchor="middle" font-size="9">-300</text><text x="56" y="584.415" text-anchor="end" font-size="9">-300</text>
+<path class="grid" d="M 228.488 63 v 654 M 61 549.512 h 654"/><text x="228.488" y="732" text-anchor="middle" font-size="9">-250</text><text x="56" y="552.512" text-anchor="end" font-size="9">-250</text>
+<path class="grid" d="M 260.39 63 v 654 M 61 517.61 h 654"/><text x="260.39" y="732" text-anchor="middle" font-size="9">-200</text><text x="56" y="520.61" text-anchor="end" font-size="9">-200</text>
+<path class="grid" d="M 292.293 63 v 654 M 61 485.707 h 654"/><text x="292.293" y="732" text-anchor="middle" font-size="9">-150</text><text x="56" y="488.707" text-anchor="end" font-size="9">-150</text>
+<path class="grid" d="M 324.195 63 v 654 M 61 453.805 h 654"/><text x="324.195" y="732" text-anchor="middle" font-size="9">-100</text><text x="56" y="456.805" text-anchor="end" font-size="9">-100</text>
+<path class="grid" d="M 356.098 63 v 654 M 61 421.902 h 654"/><text x="356.098" y="732" text-anchor="middle" font-size="9">-50</text><text x="56" y="424.902" text-anchor="end" font-size="9">-50</text>
+<path class="grid" d="M 388 63 v 654 M 61 390 h 654"/><text x="388" y="732" text-anchor="middle" font-size="9">0</text><text x="56" y="393" text-anchor="end" font-size="9">0</text>
+<path class="grid" d="M 419.902 63 v 654 M 61 358.098 h 654"/><text x="419.902" y="732" text-anchor="middle" font-size="9">50</text><text x="56" y="361.098" text-anchor="end" font-size="9">50</text>
+<path class="grid" d="M 451.805 63 v 654 M 61 326.195 h 654"/><text x="451.805" y="732" text-anchor="middle" font-size="9">100</text><text x="56" y="329.195" text-anchor="end" font-size="9">100</text>
+<path class="grid" d="M 483.707 63 v 654 M 61 294.293 h 654"/><text x="483.707" y="732" text-anchor="middle" font-size="9">150</text><text x="56" y="297.293" text-anchor="end" font-size="9">150</text>
+<path class="grid" d="M 515.61 63 v 654 M 61 262.39 h 654"/><text x="515.61" y="732" text-anchor="middle" font-size="9">200</text><text x="56" y="265.39" text-anchor="end" font-size="9">200</text>
+<path class="grid" d="M 547.512 63 v 654 M 61 230.488 h 654"/><text x="547.512" y="732" text-anchor="middle" font-size="9">250</text><text x="56" y="233.488" text-anchor="end" font-size="9">250</text>
+<path class="grid" d="M 579.415 63 v 654 M 61 198.585 h 654"/><text x="579.415" y="732" text-anchor="middle" font-size="9">300</text><text x="56" y="201.585" text-anchor="end" font-size="9">300</text>
+<path class="grid" d="M 611.317 63 v 654 M 61 166.683 h 654"/><text x="611.317" y="732" text-anchor="middle" font-size="9">350</text><text x="56" y="169.683" text-anchor="end" font-size="9">350</text>
+<path class="grid" d="M 643.22 63 v 654 M 61 134.78 h 654"/><text x="643.22" y="732" text-anchor="middle" font-size="9">400</text><text x="56" y="137.78" text-anchor="end" font-size="9">400</text>
+<path class="grid" d="M 675.122 63 v 654 M 61 102.878 h 654"/><text x="675.122" y="732" text-anchor="middle" font-size="9">450</text><text x="56" y="105.878" text-anchor="end" font-size="9">450</text>
+<path class="grid" d="M 707.024 63 v 654 M 61 70.9756 h 654"/><text x="707.024" y="732" text-anchor="middle" font-size="9">500</text><text x="56" y="73.9756" text-anchor="end" font-size="9">500</text>
+<path d="M 388 63 v 654 M 61 390 h 654" fill="none" stroke="#8a95a3" stroke-width="1"/>
+<g class="marker" data-status="position_unresolved" data-shape="cross" data-context="point"><title>X=500.00; Y=0.00; Z=0.00 mm; Position unresolved; position error=n/a mm; orientation error=n/a deg; rcond=n/a; margin=n/a deg</title><path d="M 381.939 383.939 L 394.061 396.061 M 394.061 383.939 L 381.939 396.061" fill="none" stroke="#d15b59" stroke-width="2.18213" stroke-linecap="round"/></g>
+<text x="388" y="748" text-anchor="middle" font-size="12">Y (mm)</text><text transform="translate(17,390) rotate(-90)" text-anchor="middle" font-size="12">Z (mm)</text></g>
+<g class="marker" data-status="pose_found" data-shape="circle" data-context="legend"><circle cx="71" cy="768" r="6" fill="#15976b"/></g><text x="85" y="772" font-size="13">Pose found (circle)</text>
+<g class="marker" data-status="pose_near_singular" data-shape="triangle" data-context="legend"><polygon points="71,784 77,796 65,796" fill="#397ac6"/></g><text x="85" y="794" font-size="13">Pose near singularity (triangle)</text>
+<g class="marker" data-status="orientation_unresolved" data-shape="square" data-context="legend"><rect x="65" y="806" width="12" height="12" fill="#e5a21a"/></g><text x="85" y="816" font-size="13">Position found; orientation unresolved (square)</text>
+<g class="marker" data-status="collision_candidates_only" data-shape="diamond" data-context="legend"><polygon points="71,828 77,834 71,840 65,834" fill="#9658ad"/></g><text x="85" y="838" font-size="13">Colliding candidates only (diamond)</text>
+<g class="marker" data-status="position_unresolved" data-shape="cross" data-context="legend"><path d="M 65 850 L 77 862 M 77 850 L 65 862" fill="none" stroke="#d15b59" stroke-width="2.16" stroke-linecap="round"/></g><text x="85" y="860" font-size="13">Position unresolved (X)</text>
+<text x="420" y="783" font-size="12">Model samples; no robot test.</text><text x="420" y="805" font-size="12">White: untested / outside grid.</text><text x="420" y="827" font-size="12">Red does not prove impossibility.</text></svg>

@@ -1,0 +1,14 @@
+OM6DOF offline Cartesian workspace reports
+
+Generated from the OM6DOF C++ workspace scanner/report generator:
+https://github.com/tzf230201/om6dof/tree/main/experiments/cartesian_workspace
+
+Original OM6DOF software contributions are licensed under Apache License,
+Version 2.0. See LICENSE and the source repository's attribution records.
+
+This static website contains generated HTML/JavaScript, SVG figures, sampled
+CSV/JSON data and analysis. It does not distribute robot STL meshes, rendered
+URDF snapshots, numerical seed banks or the scanner's linked libraries.
+
+The original V1 demo is retained at the root. The matched V1/V2 comparison is
+under comparison/. These results are model-based samples, not hardware tests.
