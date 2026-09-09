@@ -13,6 +13,34 @@ AGX works fine without it.
 The arm and what its camera sees share one world frame, so a detection can be
 reached for directly.
 
+## Interactive workspace demo
+
+[Open the 3D workspace explorer](https://tzf230201.github.io/om6dof/viewer3d.html)
+or [browse the 2D slices, analysis, and data](https://tzf230201.github.io/om6dof/).
+No installation, ROS, or robot connection is required; just open the link in a
+browser. Rotate, pan, and zoom the view, filter result categories, select
+constant-X/Y/Z planes, and inspect a sample's coordinates and saved joint solution.
+
+The current snapshot contains **31,799 sampled points on a 25 mm grid**, up
+from 3,911 points at 50 mm. There are **117 coordinate slices**: 39 per axis,
+from -475 to +475 mm in 25 mm increments. Both the 3D viewer and 2D maps use
+the same markers:
+
+| Marker | Result |
+|---|---|
+| Green circle | Pose found |
+| Blue triangle | Pose found · near singular |
+| Yellow square | Position found · orientation unresolved |
+| Purple diamond | Only colliding candidates found |
+| Red X | Position unresolved |
+
+This is a saved, model-based experiment computed in C++, not the live robot
+dashboard or an interactive IK solver. Browser controls only display and filter
+the recorded data; they do not send robot commands or recompute reachability.
+The scan tests one orientation per point. Unresolved samples are not proof of
+mechanical dead zones, and successful samples do not guarantee a safe path
+between them.
+
 ## Clone
 
 The Dynamixel packages are upstream repositories, so clone recursively:
