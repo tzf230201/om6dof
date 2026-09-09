@@ -5,6 +5,77 @@ URDF and joint limits, without starting ROS nodes, publishing commands, opening
 the serial port, or moving the robot. The experiment is separate from the
 teleop/controller runtime.
 
+## New: v1 / v2 workspace comparison
+
+The current source models have been rescanned on a **matched 25 mm grid inside
+a 500 mm sphere: 33,401 points per model**, with 41 planes per axis. Read the
+[v1 / v2 analysis](ANALYSIS_V1_V2_25MM_20260909.md). Both scans use the same
+orientation, random seed, search budget, tolerances and collision approximation.
+The original public demo below is unchanged and uses a smaller bounding sphere.
+
+[Open the published comparison](https://tzf230201.github.io/om6dof/comparison/comparison.html).
+V2 is the selected direction for the next mechanical revision because this
+matched test finds 3,532 complete poses versus 2,935 for V1 (+20.34% relative).
+Position coverage and conditioning have trade-offs, detailed in the analysis;
+this does not automatically change the runtime robot-description defaults.
+
+The dedicated `comparison.html` includes synchronized v1/v2/overlap 3D panels,
+constant-X/Y/Z slices, position-versus-pose comparison, paired point inspection,
+category transitions, and links to each model's full 3D viewer and 2D report.
+Data is embedded: it works offline without a server or any robot connection.
+The GUI and reports are in English. Numerical scanning and comparison statistics
+are generated in C++; JavaScript only displays the saved data.
+
+To reproduce from `~/ros2_ws/src` (choose unused output directories):
+
+```bash
+bash om6dof/experiments/cartesian_workspace/run_cpp.sh /tmp/om6dof-compare-v1 \
+  --model v1 --spacing-mm 25 --radius-mm 500
+bash om6dof/experiments/cartesian_workspace/run_cpp.sh /tmp/om6dof-compare-v2 \
+  --model v2 --spacing-mm 25 --radius-mm 500
+/tmp/om6dof-workspace-cpp-build/workspace_report_cpp \
+  --input /tmp/om6dof-compare-v1 --compare /tmp/om6dof-compare-v2 \
+  --output /tmp/om6dof-comparison
+xdg-open /tmp/om6dof-comparison/comparison.html
+```
+
+`--model v1` and `--model v2` render the **current source checkout**, including
+the matching payload YAML, without needing a package rebuild. Omitting `--model`
+retains the old installed-overlay behaviour. Each scan saves `model.urdf`,
+`summary.json`, `seed_bank.csv`, `command.sh`, and `SHA256SUMS` for provenance.
+The comparison refuses mismatched settings/grids/orientations, duplicate XYZ,
+inconsistent summary counts, and existing output directories. Its output copies
+the individual presentation/data files into `v1/` and `v2/`; source scans remain
+untouched. `comparison.json` records aggregate overlap and the transition matrix;
+`comparison_slices.csv` records per-plane counts and percentage-point deltas.
+
+For this checkout's completed run, open:
+
+```bash
+xdg-open ~/ros2_ws/src/om6dof/experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/report/comparison.html
+```
+
+Generated `results/` are local and gitignored on `main`; the generator and analysis
+are versioned there. A validated snapshot of the self-contained `report/` directory
+is published under `comparison/` on the separate `gh-pages` branch, without
+replacing the old demo. Generating another local report does not automatically
+update that published snapshot.
+
+**Scope:** this is a kinematic workspace comparison, with chain-capsule collision
+checks. It does **not** evaluate the new link3 mesh or D435/bracket collision
+geometry, masses, CoM, payload dynamics, physical accuracy, or safe trajectories.
+Unresolved samples are not proof of unreachable mechanical dead zones.
+
+Comparison regression checks:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider \
+  om6dof/experiments/cartesian_workspace/test_run_cpp.py \
+  om6dof/experiments/cartesian_workspace/cpp/test_comparison.py
+node om6dof/experiments/cartesian_workspace/cpp/test_comparison_view.js \
+  /tmp/om6dof-comparison/comparison.html
+```
+
 ## Public browser demo
 
 Open the [interactive 3D workspace viewer](https://tzf230201.github.io/om6dof/viewer3d.html)
@@ -60,7 +131,7 @@ The script prepares the ROS environment, builds in Release mode under
 `/tmp/om6dof-workspace-cpp-build`, renders the model, scans the workspace, and
 generates the report. Existing output directories are not overwritten: use a
 new output name for another scan. Build dependencies are CMake, a C++17 compiler,
-Eigen3, KDL, `kdl_parser`, and `urdf` from ROS Humble. The first build takes longer
+Eigen3, Boost headers, KDL, `kdl_parser`, and `urdf` from ROS Humble. The first build takes longer
 than subsequent scans.
 
 For the tested model, the scan evaluates all 3,911 grid centers spaced 50 mm
@@ -158,8 +229,9 @@ bash om6dof/experiments/cartesian_workspace/run_cpp.sh /tmp/om6dof-uji-deep \
 
 Other arguments match the Python version below (`--spacing-mm`, radius, margin,
 and tolerances). The C++ `--urdf` option accepts rendered URDF XML, not xacro.
-The wrapper uses the description from the active ROS overlay; use the executable
-directly to test another snapshot/model. The wrapper report matches the requested
+By default the wrapper uses the description from the active ROS overlay; select
+`--model v1` / `--model v2` for the current source, or use the executable directly
+to test another rendered snapshot. The wrapper report matches the requested
 grid spacing (50 mm by default). When calling the reporter directly with a
 different slice interval, planes without samples are marked n/a, not failed.
 

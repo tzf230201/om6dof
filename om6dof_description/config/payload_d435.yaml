@@ -1,0 +1,21 @@
+# D435 wrist assembly, used only by om6dof_v2. SI units: kg and metres.
+# Camera mass: Intel D400 datasheet, March 2023, Table 3-52, p.67:
+# https://www.realsenseai.com/wp-content/uploads/2023/03/Intel-RealSense-D400-Series-Datasheet-March-2023.pdf
+# Nominal 75 g (+/-10%); replace with a measured value when available.
+# Bracket mass: user measurement, 6.47 g. Extra screws/cable are not modelled.
+payload:
+  camera_mass: 0.075
+  bracket_mass: 0.00647
+
+  # Coordinates in the ORIGINAL d435_wrist_cam.stl CAD frame, converted
+  # from mm to m. Xacro subtracts the same datum as visual/collision, then
+  # the fixed mounting joint transforms the complete assembly into link7.
+  # Camera estimate: housing bounding-box centre (internal mass unknown).
+  # Bracket estimate: closed-solid volume centroid, uniform density assumed.
+  # These are geometric estimates, NOT measured centres of mass.
+  camera_com_cad: [0.07139551735, 0.02872562885, 0.03902726865]
+  bracket_com_cad: [0.05931246434, 0.02133934286, 0.03907500395]
+  mount_offset_z: 0.0
+
+  # Retained sphere approximation; not an identified D435 inertia tensor.
+  inertia_radius: 0.02

@@ -75,9 +75,9 @@ Apache LICENSE at the root does not resolve them.
 
 | Files/component | Evidence and remaining information |
 |---|---|
-| `om6dof_description/meshes/chain_link3_v2stl` | Not in either inspected arm tree. Confirm author/source, whether it modifies `chain_link3.stl`, and the changes and applicable license. |
+| `om6dof_description/meshes/chain_link3_v2.stl` (formerly `chain_link3_v2stl`) | Not in either inspected arm tree. Confirm author/source, whether it modifies `chain_link3.stl`, and the changes and applicable license. The corrected filename does not resolve provenance. |
 | `om6dof_description/meshes/d405.stl`, `d435.stl`, `stand_rs-d435_s01.stl` | Obtain the model sources and applicable redistribution terms. A hardware vendor's software license does not establish the license of a CAD model. |
-| `om6dof_description/meshes/d405_wrist_cam.stl` | URDF comments describe a combined camera/bracket mesh. Confirm component sources/licenses and record assembly modifications. |
+| `om6dof_description/meshes/d405_wrist_cam.stl`, `d435_wrist_cam.stl` | Combined camera/bracket meshes. Confirm component sources/licenses and record assembly modifications; the verified standalone ALOHA bracket does not establish permission for the camera model or the combined assemblies. |
 | `om6dof_dd_gng/realsense_ddgng/core` and `om6dof_dd_gng/DepthSensor_Buggy` | Files retain credits to Naoyuki Kubota, 首都大学東京, and Azhar Aulia Saputra, including "All rights reserved" notices. A package-level Apache declaration alone is insufficient evidence of permission for those pre-existing contributions; obtain their license or authorization. |
 | `om6dof_dd_gng/third_party/drawstuff` | Existing headers identify Open Dynamics Engine, Copyright (C) 2001-2003 Russell L. Smith, and LGPL-2.1-or-later/BSD-style alternatives. The referenced `LICENSE.TXT` and `LICENSE-BSD.TXT` were not found in this copy. Identify the imported version and restore its license texts before distributing it under the applicable option. |
 

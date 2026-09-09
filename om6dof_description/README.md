@@ -16,6 +16,51 @@ the OM6DOF manipulator. This package is the common robot model for MoveIt,
 `robot_state_publisher`, collision checking, and the KDL gravity model used by
 the Mode 0 leader controller.
 
+The `om6dof_v2` variant uses `chain_link3_v2.stl` for link3 visual and collision
+geometry, while retaining the existing joint/link names. This v2 mesh is authored
+in metres (unlike the original millimetre mesh), so the URDF applies unit scale
+and an origin alignment. The named `link3_v2_*_offset` Xacro properties are
+available for small mechanical fit adjustments. Its `joint3` origin is also
+relocated to the v2 output mounting-hole centre (measured from its STL), so
+link4 attaches to that hole rather than the original mesh's datum. Link4 is
+mounted perpendicular to link3 with a +90-degree rotation about the joint3
+axis. `joint4` retains link4's original horn datum; moving that joint would
+move child link5 rather than repositioning the horn. A +1 mm X fitting offset
+at `joint3` instead moves the complete link4 branch, including its horn and
+downstream links. After rebuilding this package, open it with:
+
+```bash
+ros2 launch om6dof_description view_robot_v2.launch.py
+ros2 launch om6dof_description view_com_v2.launch.py
+```
+
+The COM viewer retains link3's existing inertial values; they have not yet been
+recalculated from the v2 mesh.
+
+`om6dof_v2` displays the D435 wrist-camera assembly. Its legacy D405 TF names
+are retained temporarily for compatibility with existing ROS consumers; do not
+use them as calibrated D435 optical extrinsics. Its two bracket bolt axes
+(16 mm spacing) align with the link7 hole pair at Y=+/-8 mm, Z=28 mm.
+The bracket underside at the bolt axes is seated on link7's outer surface
+(X=-37.80499 mm), using the underside triangles as the contact reference.
+The underside has a small slope, so this aligns contact at the bolt axes.
+These coordinates come from the STL. V2 uses its own
+[payload_d435.yaml](config/payload_d435.yaml), leaving the original D405
+configuration unchanged. The D435 nominal mass is **75 g** (manufacturer
+tolerance +/-10%) from the [Intel March 2023 datasheet, Table 3-52](https://www.realsenseai.com/wp-content/uploads/2023/03/Intel-RealSense-D400-Series-Datasheet-March-2023.pdf#page=67).
+With the measured **6.47 g bracket**, the modelled payload is **81.47 g**;
+extra mounting screws and the USB cable are not included.
+
+The camera CoM is estimated at the housing bounding-box centre; the bracket
+CoM is its closed-mesh volume centroid assuming uniform density. Both are
+stored in the original STL CAD frame (converted from mm to m), combined as
+`(camera_mass * camera_com + bracket_mass * bracket_com) / total_mass`, and
+translated by the same CAD datum as the visual. This puts the combined CoM
+at approximately **[18.565, 16.150, -0.044] mm** in `d405_payload_link`,
+without moving the accepted camera mounting pose. This is a geometric
+estimate, not a measurement of the camera's internal mass distribution.
+The inertia tensor remains a sphere approximation, not calibrated dynamics.
+
 For the complete gravity-compensation architecture and the current validation
 status, see [the leader-arm research record](../docs/leader_arm_gravity_compensation.md).
 

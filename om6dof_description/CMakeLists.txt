@@ -7,7 +7,9 @@ find_package(ament_cmake REQUIRED)
 install(FILES LICENSE NOTICE DESTINATION share/${PROJECT_NAME})
 
 install(DIRECTORY config launch meshes rviz urdf
-  DESTINATION share/${PROJECT_NAME})
+  DESTINATION share/${PROJECT_NAME}
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "*.pyc" EXCLUDE)
 
 install(PROGRAMS
   scripts/com_markers.py

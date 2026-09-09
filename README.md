@@ -26,6 +26,27 @@ parameters. The upstream OpenManipulator Friends repository is licensed under
 Upstream authors, reused files, and modifications are documented in
 [NOTICE](NOTICE) and the [robot-description notice](om6dof_description/NOTICE).
 
+### Why we are moving to V2
+
+**V2 is our chosen direction for the next mechanical revision because it finds
+more complete poses (position + gripper orientation) in the matched workspace
+experiment.** On the same 33,401-point, 25 mm grid, with the same outward-horizontal
+gripper orientation policy and IK budget, V2 found **3,532 complete poses versus
+2,935 for V1: 597 additional samples, or +20.34% relative**. Full-pose sample
+coverage increased from **8.79% to 10.57%** (+1.79 percentage points).
+
+This is a task-specific trade-off, not a universal improvement: free-orientation
+position coverage fell slightly (**15,532 → 15,175** samples), and near-singular
+pose witnesses increased (**197 → 334**). The scan uses simplified chain-capsule
+collision checks; it does not establish physical accuracy, payload capacity,
+mesh collision clearance or safe trajectories. See the
+[full comparison analysis](experiments/cartesian_workspace/ANALYSIS_V1_V2_25MM_20260909.md).
+
+The V2 URDF, D435 wrist-camera model and dedicated viewers are available in
+`om6dof_description`. This design choice does **not** automatically migrate
+hardware/controller launch defaults: V1 is retained, and V2 is selected explicitly
+with the V2 viewers or the workspace scanner's `--model v2` option.
+
 ## License and attribution
 
 The wrist-camera bracket comes from [ALOHA](https://github.com/tonyzhaozh/aloha)
@@ -44,13 +65,20 @@ camera/bracket meshes and legacy DD-GNG components.
 
 ## Interactive workspace demo
 
+New: [open the V1 / V2 comparison](https://tzf230201.github.io/om6dof/comparison/comparison.html)
+with synchronized 3D views, matching slices and same-point inspection, or read
+the [V1 / V2 workspace analysis](experiments/cartesian_workspace/ANALYSIS_V1_V2_25MM_20260909.md).
+Both current URDF models were rescanned on the same 33,401-point, 25 mm grid.
+See the [comparison run/view instructions](experiments/cartesian_workspace/README.md#new-v1--v2-workspace-comparison).
+This comparison is a separate section; the older public snapshot below is retained.
+
 [Open the 3D workspace explorer](https://tzf230201.github.io/om6dof/viewer3d.html)
 or [browse the 2D slices, analysis, and data](https://tzf230201.github.io/om6dof/).
 No installation, ROS, or robot connection is required; just open the link in a
 browser. Rotate, pan, and zoom the view, filter result categories, select
 constant-X/Y/Z planes, and inspect a sample's coordinates and saved joint solution.
 
-The current snapshot contains **31,799 sampled points on a 25 mm grid**, up
+The original V1 snapshot contains **31,799 sampled points on a 25 mm grid**, up
 from 3,911 points at 50 mm. There are **117 coordinate slices**: 39 per axis,
 from -475 to +475 mm in 25 mm increments. Both the 3D viewer and 2D maps use
 the same markers:

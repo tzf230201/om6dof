@@ -32,13 +32,19 @@ Unchanged upstream files (verified by Git blob SHA-1):
   meshes/chain_link_grip_l.stl 72b64b418a59eab85953d32f7f9ca3aa74664051
   meshes/chain_link_grip_r.stl 00ece6ee6adbac1ca35fd90d3289739674f58dd6
 
-Modified upstream file:
+Modified upstream files:
   urdf/om6dof.urdf.xacro derives from upstream
   urdf/open_manipulator_6dof.urdf.xacro.
   OM6DOF maintainers changed package/robot names, ROS integration, inertial
   parameters, joint limits, base/end-effector frames, gripper configuration,
   and added a pedestal and wrist-mounted RealSense camera/payload frames.
   The changed file also carries an in-file modification notice.
+  urdf/om6dof_v2.urdf.xacro is a further derivative of that OM6DOF description:
+  changed link3 mesh alignment and joint3 mounting pose, added V2 viewers,
+  replaced the displayed wrist assembly with a D435, and introduced separate
+  component masses and estimated CAD-frame centres of mass in payload_d435.yaml.
+  Existing ROBOTIS credits and the ALOHA MIT notice remain applicable to their
+  respective reused components; this does not establish rights in other assets.
 
 Package integration:
   CMakeLists.txt and package.xml provide the OM6DOF ROS 2 ament integration
@@ -56,13 +62,15 @@ ALOHA wrist bracket (MIT, not Apache-2.0):
   Full upstream MIT license: meshes/LICENSE-ALOHA.txt (also installed).
   The inspected tree contains no additional NOTICE or bracket-specific license.
   This verification does not establish the camera component's license or the
-  assembly modifications in the combined meshes/d405_wrist_cam.stl.
+  assembly modifications in the combined meshes/d405_wrist_cam.stl or
+  meshes/d435_wrist_cam.stl.
 
 Additional assets whose source/license still needs confirmation:
-  meshes/chain_link3_v2stl
+  meshes/chain_link3_v2.stl (replaces the earlier extensionless chain_link3_v2stl)
   meshes/d405.stl
   meshes/d405_wrist_cam.stl
   meshes/d435.stl
+  meshes/d435_wrist_cam.stl (combined D435 wrist assembly)
   meshes/stand_rs-d435_s01.stl
 These files were not found in the inspected upstream trees. Their names or
 presence here do not establish that Apache-2.0 covers them. Preserve this

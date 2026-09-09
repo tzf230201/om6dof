@@ -12,8 +12,11 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <boost/bind/bind.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 #include "viewer3d.hpp"
+#include "comparison_view.hpp"
 
 namespace fs = std::filesystem;
 namespace {
@@ -481,25 +484,35 @@ void write_viewer3d(const fs::path& output, const std::vector<Point>& points) {
   }
   out << "],\"summaryText\":" << json_string(metadata_text(output)) << '}' << kViewer3dAfterData;
 }
+#include "comparison.hpp"
 }  // namespace
 
 int main(int argc, char** argv) {
   try {
-    fs::path input;
+    fs::path input, compare, output;
     double step = 50;
     for (int i = 1; i < argc; ++i) {
       const std::string arg = argv[i];
       if (arg == "--help" || arg == "-h") {
         std::cout << "Usage: workspace_report --input DIR [--slice-step-mm 50]\n"
+                  << "       workspace_report --input V1_DIR --compare V2_DIR --output NEW_DIR\n"
                   << "Reads points.csv; writes slices/, slices_X/Y/Z.svg, slices.csv, analysis.md, index.html, viewer3d.html.\n"
                   << "Offline only. Input CSV is never modified.\n";
         return 0;
       }
       if (arg == "--input" && i + 1 < argc) input = argv[++i];
+      else if (arg == "--compare" && i + 1 < argc) compare = argv[++i];
+      else if (arg == "--output" && i + 1 < argc) output = argv[++i];
       else if (arg == "--slice-step-mm" && i + 1 < argc) step = numeric(argv[++i], true);
       else throw std::runtime_error("Unknown/incomplete argument: " + arg);
     }
     if (input.empty()) throw std::runtime_error("--input DIR is required");
+    if (!compare.empty()) {
+      if (output.empty()) throw std::runtime_error("Comparison requires --output NEW_DIR");
+      write_comparison(input, compare, output);
+      return 0;
+    }
+    if (!output.empty()) throw std::runtime_error("--output requires --compare");
     if (!std::isfinite(step) || step <= 0) throw std::runtime_error("Slice step must be finite and positive");
     const auto points = read_points(input / "points.csv");
     Counts totals;
