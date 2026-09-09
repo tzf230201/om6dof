@@ -8,6 +8,12 @@ the Mode 0 leader controller.
 For the complete gravity-compensation architecture and the current validation
 status, see [the leader-arm research record](../docs/leader_arm_gravity_compensation.md).
 
+![Each link's centre of mass and mass, drawn on the arm in RViz](../docs/assets/description-com-markers.jpg)
+
+`ros2 launch om6dof_description view_com.launch.py` draws every link's centre
+of mass with its mass in kg. Drag the joint sliders and the levers swing --
+that is what `g(q)` is computing.
+
 ## Kinematic chain
 
 The arm chain used by the leader controller is:

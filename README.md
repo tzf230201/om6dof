@@ -1,10 +1,17 @@
 # OM6DOF
 
+![OM6DOF picking up a bottle](docs/assets/om6dof-arm.jpg)
+
 ROS 2 Humble stack for a six-axis Dynamixel manipulator: hardware, control,
 MoveIt, RealSense perception, pick-and-place, and DD-GNG mapping.
 
 Runs on a Jetson AGX. A Jetson NX optionally adds Unitree Go2W services; the
 AGX works fine without it.
+
+![Live RealSense point cloud registered against the arm model](docs/assets/perception-pointcloud.jpg)
+
+The arm and what its camera sees share one world frame, so a detection can be
+reached for directly.
 
 ## Clone
 

@@ -10,6 +10,11 @@ target class, OpenCV CSRT tracks it between detections, and aligned depth
 produces its 3D position in `camera_color_optical_frame`. Ollama and a VLM are
 not used by this node.
 
+![Camera depth converted to world coordinates](../docs/assets/perception-depth-to-world.jpg)
+
+The viewer shows both sides of the conversion: the pixel and its depth on the
+left, the same point in camera and world coordinates in the overlay.
+
 ## Run
 
 Download the Apache-2.0 OpenCV Zoo YOLOX-S ONNX model once on the AGX:

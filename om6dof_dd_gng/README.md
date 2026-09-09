@@ -2,6 +2,11 @@
 
 DD-GNG experiments and RealSense processing for the OM6DOF stack.
 
+![DD-GNG topological graph of the workspace, with the bench it was built from](../docs/assets/ddgng-graph.jpg)
+
+Nodes are learned in the world frame, so the graph stays put while the camera
+on the wrist moves. Colours mark the segmented clusters.
+
 The project lives under `om6dof/om6dof_dd_gng`. It is a proper ament_cmake
 ROS 2 package (`package.xml` + `find_package(ament_cmake ...)` +
 `ament_package()` in `CMakeLists.txt`) that also still carries its original
