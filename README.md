@@ -41,6 +41,14 @@ The scan tests one orientation per point. Unresolved samples are not proof of
 mechanical dead zones, and successful samples do not guarantee a safe path
 between them.
 
+![3D workspace preview filtered to green pose-found samples](docs/assets/workspace-3d-pose-found-25mm.png)
+
+3D preview filtered to green "Pose found" samples; coordinates are in millimetres.
+
+![Twelve selected constant-X workspace slices showing Y-Z coordinates and result markers](docs/assets/workspace-constant-x-slices-25mm.png)
+
+Twelve selected Y–Z slices at constant X = 125–400 mm, in 25 mm steps.
+
 ## Clone
 
 The Dynamixel packages are upstream repositories, so clone recursively:
