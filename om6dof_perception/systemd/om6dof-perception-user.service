@@ -6,7 +6,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 Environment=HOME=/home/kublab
-ExecStart=/bin/bash -c 'set -e; source /opt/ros/humble/setup.bash; source /home/kublab/ros2_ws/install/setup.bash; unset CYCLONEDDS_URI; exec ros2 launch om6dof_perception perception.launch.py'
+# The wrist camera is a RealSense D435I, so this must run the V2/D435
+# profile: the default model_version=v1 looks for a D405 and retries
+# forever without ever opening a device.
+# camera_model must name D435i explicitly. select_camera() matches on the
+# whole word \bD435\b, which does NOT match the SDK name
+# 'Intel RealSense D435I', so model_version:=v2 alone still finds nothing.
+ExecStart=/bin/bash -c 'set -e; source /opt/ros/humble/setup.bash; source /home/kublab/ros2_ws/install/setup.bash; unset CYCLONEDDS_URI; exec ros2 launch om6dof_perception perception.launch.py model_version:=v2 camera_model:=D435i reacquire_period_sec:=0.5 frame_rate_hz:=15.0 web_stream_max_width:=480'
 KillMode=control-group
 KillSignal=SIGINT
 TimeoutStopSec=15

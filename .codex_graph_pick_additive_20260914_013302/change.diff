@@ -1,0 +1,461 @@
+--- before/om6dof_pick_and_place/om6dof_pick_and_place/graph_pick_node.py
++++ after/om6dof_pick_and_place/om6dof_pick_and_place/graph_pick_node.py
+@@ -23,6 +23,7 @@
+ import rclpy
+ from action_msgs.msg import GoalStatus
+ from control_msgs.action import FollowJointTrajectory, GripperCommand
++from controller_manager_msgs.srv import ListControllers
+ from diagnostic_msgs.msg import DiagnosticArray
+ from geometry_msgs.msg import Point, PointStamped
+ from nav_msgs.msg import Path
+@@ -33,12 +34,13 @@
+ from rclpy.qos import (DurabilityPolicy, HistoryPolicy, QoSProfile,
+                        ReliabilityPolicy)
+ from sensor_msgs.msg import JointState
+-from std_msgs.msg import Bool, String
++from std_msgs.msg import String
+ from std_srvs.srv import Trigger
+ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+ from visualization_msgs.msg import Marker, MarkerArray
+ 
+ from om6dof_dd_gng.msg import EnvironmentGraph, ReachabilityPlan
++from .additive_control_guard import additive_controller_blockers
+ 
+ 
+ def _duration_seconds(duration) -> float:
+@@ -369,9 +371,10 @@
+             "target_classes_topic", "/om6dof_topo_gng_v2/set_target_classes")
+         self.declare_parameter("joint_state_topic", "/joint_states")
+         self.declare_parameter(
+-            "operation_mode_state_topic", "/om6dof/operation_mode/state")
+-        self.declare_parameter(
+-            "remote_enabled_state_topic", "/om6dof/remote_enabled/state")
++            "controller_manager_service", "/controller_manager/list_controllers")
++        self.declare_parameter("arm_controller_name", "arm_controller")
++        self.declare_parameter("offset_controller_name", "forward_offset_controller")
++        self.declare_parameter("controller_state_timeout_sec", 1.5)
+         self.declare_parameter(
+             "dynamixel_health_topic", "/dynamixel_hardware_interface/health")
+         self.declare_parameter(
+@@ -416,7 +419,8 @@
+             raise ValueError("tool_approach_axis must be a nonzero finite 3-vector")
+         self.tool_axis = axis
+         for parameter_name in (
+-                "max_object_track_association_m", "max_object_track_shift_m"):
++                "max_object_track_association_m", "max_object_track_shift_m",
++                "controller_state_timeout_sec"):
+             value = float(self.get_parameter(parameter_name).value)
+             if not math.isfinite(value) or value <= 0.0:
+                 raise ValueError(f"{parameter_name} must be positive and finite")
+@@ -435,8 +439,10 @@
+         self._selected_target = ""
+         self._joint_state = None
+         self._joint_state_time = 0.0
+-        self._operation_mode = None
+-        self._remote_enabled = None
++        self._controller_snapshot = None
++        self._controller_snapshot_time = 0.0
++        self._controller_query_future = None
++        self._controller_query_started = 0.0
+         self._bus_health = None
+         self._bus_health_time = 0.0
+         self._frozen: Optional[FrozenPickPlan] = None
+@@ -492,12 +498,6 @@
+             history=HistoryPolicy.KEEP_LAST,
+         )
+         self.create_subscription(
+-            String, str(self.get_parameter("operation_mode_state_topic").value),
+-            self._on_operation_mode, state_qos, callback_group=cb)
+-        self.create_subscription(
+-            Bool, str(self.get_parameter("remote_enabled_state_topic").value),
+-            self._on_remote_enabled, state_qos, callback_group=cb)
+-        self.create_subscription(
+             DiagnosticArray, str(self.get_parameter("dynamixel_health_topic").value),
+             self._on_bus_health, state_qos, callback_group=cb)
+ 
+@@ -528,6 +528,10 @@
+             Trigger, "/graph_pick_status", self._on_status, callback_group=cb)
+         self.create_service(
+             Trigger, "/cancel_graph_pick", self._on_cancel, callback_group=cb)
++        self._controller_client = self.create_client(
++            ListControllers, str(self.get_parameter("controller_manager_service").value),
++            callback_group=cb)
++        self.create_timer(0.5, self._poll_controllers, callback_group=cb)
+         self.create_timer(0.5, self._publish_status, callback_group=cb)
+         self.create_timer(0.1, self._monitor_execution_interlocks, callback_group=cb)
+         self._publish_status()
+@@ -599,13 +603,44 @@
+             self._joint_state = copy.deepcopy(message)
+             self._joint_state_time = time.monotonic()
+ 
+-    def _on_operation_mode(self, message: String) -> None:
+-        with self._lock:
+-            self._operation_mode = message.data.strip().upper()
+-
+-    def _on_remote_enabled(self, message: Bool) -> None:
+-        with self._lock:
+-            self._remote_enabled = bool(message.data)
++    def _poll_controllers(self) -> None:
++        """Query topology without switching controllers or sending a command."""
++        now = time.monotonic()
++        timeout = float(self.get_parameter("controller_state_timeout_sec").value)
++        with self._lock:
++            pending = self._controller_query_future
++            if pending is not None:
++                if now - self._controller_query_started < timeout:
++                    return
++                # Invalidate identity before cancellation; late replies cannot
++                # overwrite a newer snapshot or make an old state look fresh.
++                self._controller_query_future = None
++                self._controller_snapshot = None
++                self._controller_client.remove_pending_request(pending)
++                pending.cancel()
++            if not self._controller_client.service_is_ready():
++                self._controller_snapshot = None
++                return
++            try:
++                future = self._controller_client.call_async(ListControllers.Request())
++            except Exception:
++                self._controller_snapshot = None
++                return
++            self._controller_query_future = future
++            self._controller_query_started = now
++            future.add_done_callback(self._on_controllers)
++
++    def _on_controllers(self, future) -> None:
++        with self._lock:
++            if future is not self._controller_query_future:
++                return
++            self._controller_query_future = None
++            try:
++                self._controller_snapshot = list(future.result().controller)
++                # Count age from request, not receipt of a potentially delayed reply.
++                self._controller_snapshot_time = self._controller_query_started
++            except Exception:
++                self._controller_snapshot = None
+ 
+     def _on_bus_health(self, message: DiagnosticArray) -> None:
+         expected = str(self.get_parameter("dynamixel_health_status_name").value)
+@@ -654,28 +689,25 @@
+ 
+     def _interlock_blockers(self, plan: Optional[FrozenPickPlan] = None) -> List[str]:
+         blockers = []
+-        operation_topic = str(
+-            self.get_parameter("operation_mode_state_topic").value)
+-        remote_topic = str(self.get_parameter("remote_enabled_state_topic").value)
+         health_topic = str(self.get_parameter("dynamixel_health_topic").value)
+         try:
+-            if self.count_publishers(operation_topic) != 1:
+-                blockers.append("operation_mode_publisher_count_not_one")
+-            if self.count_publishers(remote_topic) != 1:
+-                blockers.append("remote_state_publisher_count_not_one")
+             if self.count_publishers(health_topic) != 1:
+                 blockers.append("dynamixel_health_publisher_count_not_one")
+         except Exception:
+             blockers.append("controller_publisher_count_unavailable")
+         with self._lock:
+-            operation_mode = self._operation_mode
+-            remote_enabled = self._remote_enabled
++            controllers = copy.deepcopy(self._controller_snapshot)
++            controller_time = self._controller_snapshot_time
+             health = copy.deepcopy(self._bus_health)
+             health_time = self._bus_health_time
+-        if operation_mode != "AUTONOMOUS":
+-            blockers.append(f"operation_mode_not_autonomous:{operation_mode}")
+-        if remote_enabled is not False:
+-            blockers.append(f"remote_control_not_disabled:{remote_enabled}")
++        controller_timeout = float(self.get_parameter("controller_state_timeout_sec").value)
++        if controllers is None or time.monotonic() - controller_time > controller_timeout:
++            blockers.append("controller_state_missing_or_stale")
++        else:
++            blockers.extend(additive_controller_blockers(
++                controllers, self.joint_names,
++                str(self.get_parameter("arm_controller_name").value),
++                str(self.get_parameter("offset_controller_name").value)))
+         timeout = float(self.get_parameter("dynamixel_health_timeout_sec").value)
+         if health is None or time.monotonic() - health_time > timeout:
+             blockers.append("dynamixel_health_missing_or_stale")
+--- before/om6dof_pick_and_place/om6dof_pick_and_place/additive_control_guard.py
++++ after/om6dof_pick_and_place/om6dof_pick_and_place/additive_control_guard.py
+@@ -0,0 +1,32 @@
++"""Read-only validation of ros2_control's independent command channels.
++
++Topology validation does not certify the collision safety of a modified path.
++"""
++
++
++def additive_controller_blockers(controllers, joints, arm_name, offset_name):
++    blockers = []
++    names = [controller.name for controller in controllers]
++    if len(names) != len(set(names)) or arm_name == offset_name:
++        return ['controller_snapshot_ambiguous']
++    by_name = {controller.name: controller for controller in controllers}
++    expected = (
++        (arm_name, 'joint_trajectory_controller/JointTrajectoryController', 'position'),
++        (offset_name, 'forward_command_controller/ForwardCommandController', 'position_offset'),
++    )
++    for name, controller_type, interface in expected:
++        controller = by_name.get(name)
++        if controller is None or controller.state != 'active':
++            blockers.append(f'required_controller_not_active:{name}')
++            continue
++        if controller.type != controller_type:
++            blockers.append(f'controller_type_mismatch:{name}')
++        required = {f'{joint}/{interface}' for joint in joints}
++        claims = list(controller.claimed_interfaces)
++        if set(claims) != required or len(claims) != len(required):
++            blockers.append(f'controller_command_interfaces_mismatch:{name}')
++        if any(other.name != name and other.state == 'active'
++               and required.intersection(other.claimed_interfaces)
++               for other in controllers):
++            blockers.append(f'controller_command_interfaces_conflict:{name}')
++    return blockers
+--- before/om6dof_pick_and_place/config/graph_pick.yaml
++++ after/om6dof_pick_and_place/config/graph_pick.yaml
+@@ -12,8 +12,11 @@
+     object_clusters_topic: /om6dof_topo_gng_v2/object_clusters
+     target_classes_topic: /om6dof_topo_gng_v2/set_target_classes
+     joint_state_topic: /joint_states
+-    operation_mode_state_topic: /om6dof/operation_mode/state
+-    remote_enabled_state_topic: /om6dof/remote_enabled/state
++    # Independent additive channels; coordinate mode and remote are not ownership.
++    controller_manager_service: /controller_manager/list_controllers
++    arm_controller_name: arm_controller
++    offset_controller_name: forward_offset_controller
++    controller_state_timeout_sec: 1.5
+     dynamixel_health_topic: /dynamixel_hardware_interface/health
+     dynamixel_health_status_name: dynamixel_hardware_interface/BusHealth
+     dynamixel_health_timeout_sec: 0.30
+--- before/om6dof_pick_and_place/package.xml
++++ after/om6dof_pick_and_place/package.xml
+@@ -21,6 +21,7 @@
+   <exec_depend>sensor_msgs</exec_depend>
+   <exec_depend>trajectory_msgs</exec_depend>
+   <exec_depend>control_msgs</exec_depend>
++  <exec_depend>controller_manager_msgs</exec_depend>
+   <exec_depend>diagnostic_msgs</exec_depend>
+   <exec_depend>moveit_msgs</exec_depend>
+   <exec_depend>std_msgs</exec_depend>
+--- before/om6dof_pick_and_place/test/test_graph_pick_node.py
++++ after/om6dof_pick_and_place/test/test_graph_pick_node.py
+@@ -283,8 +283,20 @@
+ def _interlock_node():
+     node = object.__new__(GraphPickNode)
+     node._lock = threading.RLock()
+-    node._operation_mode = "AUTONOMOUS"
+-    node._remote_enabled = False
++    node._operation_mode = "CARTESIAN"
++    node._remote_enabled = True
++    node.joint_names = JOINTS
++    node._controller_snapshot_time = time.monotonic()
++    node._controller_snapshot = [
++        SimpleNamespace(name="arm_controller", state="active",
++                        type="joint_trajectory_controller/JointTrajectoryController",
++                        claimed_interfaces=[f"{j}/position" for j in JOINTS]),
++        SimpleNamespace(name="forward_offset_controller", state="active",
++                        type="forward_command_controller/ForwardCommandController",
++                        claimed_interfaces=[f"{j}/position_offset" for j in JOINTS]),
++    ]
++    node._controller_query_future = None
++    node._controller_query_started = 0.0
+     node._bus_health_time = time.monotonic()
+     node._bus_health = {
+         "level": 0,
+@@ -300,8 +312,9 @@
+         "hardware_error_mask": 0,
+     }
+     parameters = {
+-        "operation_mode_state_topic": "/mode",
+-        "remote_enabled_state_topic": "/remote",
++        "arm_controller_name": "arm_controller",
++        "offset_controller_name": "forward_offset_controller",
++        "controller_state_timeout_sec": 1.5,
+         "dynamixel_health_topic": "/health",
+         "dynamixel_health_timeout_sec": 0.3,
+     }
+@@ -310,14 +323,100 @@
+     return node
+ 
+ 
+-def test_execution_interlocks_require_autonomous_remote_off_and_clean_bus():
++def test_additive_execution_accepts_cartesian_and_remote_enabled():
+     node = _interlock_node()
+     plan = SimpleNamespace(bus_read_failures=4, bus_write_failures=2)
+     assert GraphPickNode._interlock_blockers(node, plan) == []
+ 
+-    node._remote_enabled = True
+-    assert "remote_control_not_disabled:True" in \
+-        GraphPickNode._interlock_blockers(node, plan)
++
++@pytest.mark.parametrize("state", ["inactive", "unconfigured"])
++def test_additive_execution_requires_active_offset_controller(state):
++    node = _interlock_node()
++    node._controller_snapshot[1].state = state
++    assert "required_controller_not_active:forward_offset_controller" in node._interlock_blockers()
++
++
++def test_additive_execution_rejects_absolute_interface_on_offset_channel():
++    node = _interlock_node()
++    node._controller_snapshot[1].claimed_interfaces = [f"{j}/position" for j in JOINTS]
++    blockers = node._interlock_blockers()
++    assert "controller_command_interfaces_mismatch:forward_offset_controller" in blockers
++    assert "controller_command_interfaces_conflict:arm_controller" in blockers
++
++
++@pytest.mark.parametrize("missing", [True, False])
++def test_additive_execution_rejects_unavailable_topology(missing):
++    node = _interlock_node()
++    if missing:
++        node._controller_snapshot = None
++    else:
++        node._controller_snapshot_time -= 2.0
++    assert "controller_state_missing_or_stale" in node._interlock_blockers()
++
++
++def test_additive_execution_still_rejects_bad_bus():
++    node = _interlock_node()
++    node._bus_health["torque_all_enabled"] = False
++    assert any(b.startswith("dynamixel_bus_not_healthy:") for b in node._interlock_blockers())
++
++
++@pytest.mark.parametrize("mutation, expected", [
++    ("missing", "required_controller_not_active:arm_controller"),
++    ("duplicate", "controller_snapshot_ambiguous"),
++    ("wrong_type", "controller_type_mismatch:arm_controller"),
++    ("missing_joint", "controller_command_interfaces_mismatch:arm_controller"),
++])
++def test_additive_execution_rejects_invalid_topology(mutation, expected):
++    node = _interlock_node()
++    if mutation == "missing":
++        node._controller_snapshot.pop(0)
++    elif mutation == "duplicate":
++        node._controller_snapshot.append(node._controller_snapshot[0])
++    elif mutation == "wrong_type":
++        node._controller_snapshot[0].type = "other"
++    else:
++        node._controller_snapshot[0].claimed_interfaces.pop()
++    assert expected in node._interlock_blockers()
++
++
++def test_controller_query_timeout_and_late_reply_cannot_refresh_snapshot():
++    from concurrent.futures import Future
++    node = _interlock_node()
++    old, new = Future(), Future()
++    removed = []
++    node._controller_client = SimpleNamespace(
++        service_is_ready=lambda: True, call_async=lambda _: new,
++        remove_pending_request=lambda future: removed.append(future))
++    node._controller_query_future = old
++    node._controller_query_started = time.monotonic() - 2.0
++    node._poll_controllers()
++    assert old.cancelled() and removed == [old]
++    assert node._controller_snapshot is None
++    assert node._controller_query_future is new
++    node._on_controllers(old)
++    assert node._controller_query_future is new
++    new.set_result(SimpleNamespace(controller=[]))
++    assert node._controller_snapshot == []
++    assert node._controller_query_future is None
++
++
++def test_slow_controller_response_is_not_treated_as_fresh():
++    from concurrent.futures import Future
++    node = _interlock_node()
++    future = Future()
++    node._controller_query_future = future
++    node._controller_query_started = time.monotonic() - 2.0
++    future.set_result(SimpleNamespace(controller=node._controller_snapshot))
++    node._on_controllers(future)
++    assert "controller_state_missing_or_stale" in node._interlock_blockers()
++
++
++def test_controller_poll_has_only_one_outstanding_request():
++    from concurrent.futures import Future
++    node = _interlock_node()
++    node._controller_query_future = Future()
++    node._controller_query_started = time.monotonic()
++    node._poll_controllers()  # No client needed: must return before a second query.
+ 
+ 
+ def test_execution_interlock_rejects_bus_failure_after_preview():
+--- before/om6dof_dd_gng/scripts/semantic_target_gui.py
++++ after/om6dof_dd_gng/scripts/semantic_target_gui.py
+@@ -26,6 +26,8 @@
+ 
+ def friendly_blocker(value):
+     exact = {
++        "controller_state_missing_or_stale": "Status dua controller belum tersedia atau kedaluwarsa",
++        "controller_snapshot_ambiguous": "Identitas dua controller ambigu",
+         "execution_disabled_at_launch": "Eksekusi tidak diaktifkan saat launch",
+         "frozen_plan_stale": "Preview kedaluwarsa; buat Preview baru",
+         "motion_faulted": "Coordinator motion sedang fault",
+@@ -35,6 +37,14 @@
+     }
+     if value in exact:
+         return exact[value]
++    for prefix, description in {
++        "required_controller_not_active:": "Controller belum aktif",
++        "controller_type_mismatch:": "Jenis controller tidak sesuai",
++        "controller_command_interfaces_mismatch:": "Interface controller tidak sesuai jalur position/offset",
++        "controller_command_interfaces_conflict:": "Interface controller berkonflik",
++    }.items():
++        if value.startswith(prefix):
++            return f"{description}: {value.split(':', 1)[1]}"
+     if value.startswith("camera_calibration_not_verified:"):
+         reasons = {
+             "artifact_not_configured": "file kalibrasi hand-eye belum dipasang",
+--- before/om6dof_dd_gng/launch/ddgng_rviz_target_planning.launch.py
++++ after/om6dof_dd_gng/launch/ddgng_rviz_target_planning.launch.py
+@@ -4,7 +4,7 @@
+ 
+ from ament_index_python.packages import get_package_share_directory
+ from launch import LaunchDescription
+-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
++from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
+ from launch.launch_description_sources import PythonLaunchDescriptionSource
+ from launch.substitutions import LaunchConfiguration
+ from launch_ros.actions import Node
+@@ -14,6 +14,9 @@
+     share = Path(get_package_share_directory("om6dof_dd_gng"))
+     pick_share = Path(get_package_share_directory("om6dof_pick_and_place"))
+     return LaunchDescription([
++        # Match the hardware service; mixed DDS service requests timed out on AGX.
++        DeclareLaunchArgument("rmw_implementation", default_value="rmw_fastrtps_cpp"),
++        SetEnvironmentVariable("RMW_IMPLEMENTATION", LaunchConfiguration("rmw_implementation")),
+         DeclareLaunchArgument("execution_enabled", default_value="false"),
+         DeclareLaunchArgument("camera_calibration_file", default_value=""),
+         IncludeLaunchDescription(
+@@ -26,7 +29,10 @@
+         ),
+         IncludeLaunchDescription(
+             PythonLaunchDescriptionSource(str(pick_share / "launch" / "graph_pick.launch.py")),
+-            launch_arguments={"execution_enabled": LaunchConfiguration("execution_enabled")}.items(),
++            launch_arguments={
++                "execution_enabled": LaunchConfiguration("execution_enabled"),
++                "rmw_implementation": LaunchConfiguration("rmw_implementation"),
++            }.items(),
+         ),
+         Node(
+             package="om6dof_dd_gng",
+--- before/om6dof_pick_and_place/launch/graph_pick.launch.py
++++ after/om6dof_pick_and_place/launch/graph_pick.launch.py
+@@ -28,6 +28,10 @@
+             "Planning and preview remain available when false."
+         ),
+     )
++    middleware = DeclareLaunchArgument(
++        "rmw_implementation", default_value="rmw_fastrtps_cpp",
++        description="DDS implementation used by the hardware controller manager",
++    )
+     coordinator = Node(
+         package="om6dof_pick_and_place",
+         executable="graph_pick_node",
+@@ -37,6 +41,7 @@
+             LaunchConfiguration("config_file"),
+             {"execution_enabled": LaunchConfiguration("execution_enabled")},
+         ],
++        additional_env={"RMW_IMPLEMENTATION": LaunchConfiguration("rmw_implementation")},
+         emulate_tty=True,
+     )
+-    return LaunchDescription([config, execution, coordinator])
++    return LaunchDescription([config, execution, middleware, coordinator])

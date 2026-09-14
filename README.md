@@ -47,6 +47,19 @@ The V2 URDF, D435 wrist-camera model and dedicated viewers are available in
 hardware/controller launch defaults: V1 is retained, and V2 is selected explicitly
 with the V2 viewers or the workspace scanner's `--model v2` option.
 
+V2/D435 perception is also available explicitly through
+`ros2 launch om6dof_perception perception_v2.launch.py`. It uses separate D435
+optical frames and V2 URDF kinematics for a read-only base-coordinate preview.
+Camera-to-arm extrinsics remain CAD/nominal, not hand-eye calibrated; the V1
+pickup backend rejects V2 input rather than applying its old D405 calibration.
+See [V2 perception setup and limitations](om6dof_perception/README.md#v2--d435).
+
+DD-GNG also has explicit V2 entry points: `dd_gng_yolo_v2.launch.py` for the
+desktop/web camera-space segmentation view, and `topo_gng_v2.launch.py` for
+world mapping with V2 kinematics. Their V2 camera default is **D435i**; one
+matching camera needs no serial. V1 remains available, and reachability is
+preview-only. See [DD-GNG V1/V2 setup](om6dof_dd_gng/README.md#v1-and-v2).
+
 ## License and attribution
 
 The wrist-camera bracket comes from [ALOHA](https://github.com/tonyzhaozh/aloha)

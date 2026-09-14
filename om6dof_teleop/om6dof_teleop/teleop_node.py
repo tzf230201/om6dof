@@ -5,6 +5,12 @@ publisher. It converts Go2W, keyboard, Logitech F710, or Airbus TCA input into
 ``/om6dof/operation_mode``, ``/om6dof/control_cmd``, and
 ``/om6dof/gripper_cmd``. It never controls an
 action server or hardware interface itself.
+
+Downstream, om6dof_controller turns ``/om6dof/control_cmd`` into an additive
+joint offset on its own command channel, which the hardware adds to whatever
+autonomous motion is commanding. So this node always publishes what the
+operator is actually doing: there is no ownership to acquire first, and a
+neutral stick simply contributes nothing.
 """
 
 from __future__ import annotations
@@ -229,7 +235,7 @@ class TeleopNode(Node):
             "remote_enabled_state_topic", "/om6dof/remote_enabled/state"
         )
         self.declare_parameter("publish_rate_hz", 50.0)
-        self.declare_parameter("input_source", "go2w")
+        self.declare_parameter("input_source", "gamepad")
         self.declare_parameter("keyboard_pulse_seconds", 0.15)
         self.declare_parameter("speed_scale", 1.0)
         self.declare_parameter("speed_scale_min", 0.15)
@@ -653,52 +659,37 @@ class TeleopNode(Node):
                 self.last_remote_action[button] = now
                 return True
 
-            ownership_rising = accepted_rising(BTN_F3)
-            if ownership_rising:
-                if now < self.mode_request_pending_until:
-                    self.get_logger().warn(
-                        "F3 ignored: previous ownership request is pending"
-                    )
-                else:
-                    operation_request = (
-                        MODE_AUTONOMOUS if self.remote_enabled else MODE_JOINT
-                    )
-                    self.mode_request_pending_until = (
-                        now + self.mode_request_timeout
-                    )
-                    if operation_request == MODE_JOINT:
-                        self.remote_waiting_for_neutral = True
+            # No ownership handshake: the controller auto-acquires remote
+            # control on any real motion/mode/gripper request and
+            # auto-releases it back to autonomous when idle. F3 is now just
+            # an explicit "give it back to autonomous right now" panic
+            # control, not a toggle.
+            if accepted_rising(BTN_F3):
+                operation_request = MODE_AUTONOMOUS
 
             elif accepted_rising(BTN_SELECT):
-                if self.remote_enabled:
-                    self.control_mode = _next_teleop_mode(self.control_mode)
-                    operation_request = self.control_mode
-                    self.remote_waiting_for_neutral = True
-                else:
-                    self.get_logger().warn(
-                        "Select ignored: enable remote control with F3 first"
-                    )
+                self.control_mode = _next_teleop_mode(self.control_mode)
+                operation_request = self.control_mode
+                self.remote_waiting_for_neutral = True
 
             elif accepted_rising(BTN_F1):
-                if not self.remote_enabled:
-                    self.get_logger().warn(
-                        "F1 ignored: enable remote control with F3 first"
-                    )
-                else:
-                    operation_request = (
-                        MODE_STARTUP
-                        if self.f1_destination == MODE_READY
-                        else MODE_READY
-                    )
-                    self.control_mode = MODE_JOINT
-                    self.remote_waiting_for_neutral = True
+                operation_request = (
+                    MODE_STARTUP
+                    if self.f1_destination == MODE_READY
+                    else MODE_READY
+                )
+                self.control_mode = MODE_JOINT
+                self.remote_waiting_for_neutral = True
 
-            if self.remote_enabled and accepted_rising(BTN_L1):
+            if accepted_rising(BTN_L1):
                 gripper = "open"
-            if self.remote_enabled and accepted_rising(BTN_L2):
+            if accepted_rising(BTN_L2):
                 gripper = "close"
 
-            if self.remote_enabled and self.remote_waiting_for_neutral:
+            # Arming does not wait on any ownership state any more; the offset
+            # channel is always live. It still waits for neutral, so a stick
+            # already held at startup cannot jog the arm before it is touched.
+            if self.remote_waiting_for_neutral:
                 if not self._remote_motion_active(self.keys, self.axes):
                     self.remote_waiting_for_neutral = False
                     self.get_logger().info(
@@ -768,7 +759,6 @@ class TeleopNode(Node):
         mode = msg.data.strip().upper()
         with self.lock:
             if mode == MODE_AUTONOMOUS:
-                self.remote_enabled = False
                 self.mode_request_pending_until = 0.0
             elif mode in (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL):
                 changed = mode != self.control_mode
@@ -790,16 +780,20 @@ class TeleopNode(Node):
             return
         self.gripper_pub.publish(String(data=command))
 
-    def _request_ownership_locked(self) -> Optional[str]:
-        """Request the opposite owner; state feedback remains authoritative."""
+    def _request_release_locked(self) -> Optional[str]:
+        """Zero the operator's offset, leaving the arm on the autonomous path.
+
+        There is no ownership to take or release any more: teleop writes an
+        additive offset channel that is live for as long as the stack is. The
+        one thing this button can still mean is "undo my correction", which
+        om6dof_controller implements for AUTONOMOUS. Debounced so a held
+        button does not spam the topic.
+        """
         now = time.monotonic()
         if now < self.mode_request_pending_until:
             return None
-        requested = MODE_AUTONOMOUS if self.remote_enabled else MODE_JOINT
         self.mode_request_pending_until = now + self.mode_request_timeout
-        if requested == MODE_JOINT:
-            self.remote_waiting_for_neutral = True
-        return requested
+        return MODE_AUTONOMOUS
 
     def _adjust_speed_locked(self, direction: int) -> None:
         self.speed_scale = max(
@@ -904,16 +898,16 @@ class TeleopNode(Node):
                 self.keyboard_running = False
                 return
             if key == "g":
-                operation = self._request_ownership_locked()
+                operation = self._request_release_locked()
             elif key in ("+", "="):
                 self._adjust_speed_locked(1)
             elif key == "-":
                 self._adjust_speed_locked(-1)
-            elif key == "m" and self.remote_enabled:
+            elif key == "m":
                 self.control_mode = _next_teleop_mode(self.control_mode)
                 self.remote_waiting_for_neutral = False
                 operation = self.control_mode
-            elif key == "r" and self.remote_enabled:
+            elif key == "r":
                 operation = (
                     MODE_STARTUP if self.f1_destination == MODE_READY
                     else MODE_READY
@@ -924,7 +918,7 @@ class TeleopNode(Node):
                 gripper = "open"
             elif key == "]":
                 gripper = "close"
-            elif self.remote_enabled:
+            else:
                 vector = [0.0] * 6
                 if self.control_mode == MODE_JOINT:
                     pairs = (("1", "q"), ("2", "w"), ("3", "e"),
@@ -954,7 +948,7 @@ class TeleopNode(Node):
                     self.remote_waiting_for_neutral = False
         if operation:
             self.operation_pub.publish(String(data=operation))
-        if gripper and self.remote_enabled:
+        if gripper:
             self._publish_gripper(gripper)
 
     def _stick_velocity_locked(
@@ -996,14 +990,20 @@ class TeleopNode(Node):
         toggle_button = 7
         cycle_button = 8
         back_button = 6
-        if back_button in new and self.remote_enabled:
+        if back_button in new:
             # Safe one-way exit: controller performs REST fully before
             # releasing ownership to MoveIt/autonomous control.
             self.remote_waiting_for_neutral = True
             operation = MODE_REST
         elif toggle_button in new:
-            operation = self._request_ownership_locked()
-        elif cycle_button in new and self.remote_enabled:
+            # Start used to acquire ownership, and the controller moved the
+            # arm to READY as part of that handshake. There is no ownership
+            # left to acquire, so the button keeps the half operators
+            # actually press it for: go to READY.
+            self.control_mode = MODE_JOINT
+            self.remote_waiting_for_neutral = True
+            operation = MODE_READY
+        elif cycle_button in new:
             self.control_mode = _next_teleop_mode(self.control_mode)
             self.remote_waiting_for_neutral = True
             operation = self.control_mode
@@ -1055,16 +1055,17 @@ class TeleopNode(Node):
         gripper = None
         with self.lock:
             now = time.monotonic()
+            # No ownership gate here any more: the controller auto-acquires
+            # remote control on any non-neutral command and auto-releases it
+            # when idle, so teleop always sends what the input actually is.
+            # remote_waiting_for_neutral still guards a stale stick from
+            # slamming the arm the instant ownership lands.
             if self.input_source in ("gamepad", "airbus"):
                 velocity, operation, gripper = self._stick_velocity_locked()
-                if not self.remote_enabled:
-                    velocity = [0.0] * 6
-                elif self.remote_waiting_for_neutral:
+                if self.remote_waiting_for_neutral:
                     if not any(abs(value) > 0.0 for value in velocity):
                         self.remote_waiting_for_neutral = False
                     velocity = [0.0] * 6
-            elif not self.remote_enabled:
-                velocity = [0.0] * 6
             elif self.input_source == "web":
                 velocity = self._web_velocity_locked(now)
             elif self.input_source == "keyboard":
@@ -1094,7 +1095,7 @@ class TeleopNode(Node):
         )
         if operation:
             self.operation_pub.publish(String(data=operation))
-        if gripper and self.remote_enabled:
+        if gripper:
             self._publish_gripper(gripper)
 
     def _input_state_locked(self, now: float) -> dict:

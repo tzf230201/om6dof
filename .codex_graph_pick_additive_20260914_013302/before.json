@@ -1,0 +1,7 @@
+{
+  "om6dof_pick_and_place/om6dof_pick_and_place/graph_pick_node.py": "f18f41ecd45b6fa1780064933e27a467955686b54d13f6b061ff6bd467932723",
+  "om6dof_pick_and_place/config/graph_pick.yaml": "4e2f48ebfadfcaa1e1fe50519818c46d55078f8750a2002552dd3ad8bbec0fac",
+  "om6dof_pick_and_place/package.xml": "2acfce446387a1296c354985e80e0e8968a93b37bff7ffd8ebc1edaa68fe7106",
+  "om6dof_pick_and_place/test/test_graph_pick_node.py": "930c59ab01dcefb2419ccdd73dabc5d98e48d62193a0796983b54d3dc872e100",
+  "om6dof_dd_gng/scripts/semantic_target_gui.py": "75ae2c5103938f1398238403ab68258cca5a90886248568426437b79288bb30f"
+}

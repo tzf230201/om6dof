@@ -4,7 +4,15 @@ topo_gng_node:
   ros__parameters:
     pixel_step: 6          # matches realsense_ddgng/ddgng_realsense.py's PIXEL_STEP
     max_nodes: 500          # matches realsense_ddgng/ddgng_realsense.py's MAX_NODES
-    updates: 300            # DynamicGrowingNeuralGas::partialFit updates per captured frame
+    updates: 300            # DynamicDensityGrowingNeuralGas updates per captured frame
+    # Environment only: semantic-attention DD-GNG; reachability below stays ordinary GNG.
+    environment_graph_method: "dd_gng"
+    ddgng_attention_sample_fraction: 0.5  # at least half the draws remain whole-cloud
+    ddgng_attention_radius_m: 0.05
+    ddgng_max_strength: 3.0
+    semantic_max_source_age_sec: 1.0     # from source image host receipt, not completion
+    semantic_max_camera_translation_m: 0.02
+    semantic_max_camera_rotation_rad: 0.10
     z_min: 0.2               # metres; matches ddgng_realsense.py's Z_MIN
     z_max: 4.0               # metres; matches ddgng_realsense.py's Z_MAX
     width: 640
@@ -24,7 +32,7 @@ topo_gng_node:
     yolo_confidence: 0.35
     yolo_nms_threshold: 0.5
     yolo_period_sec: 0.5     # matches dd_gng_yolo.py's --yolo-period default
-    target_classes: ""       # comma-separated, e.g. "bottle,cup"; empty = every COCO class is a target
+    target_classes: ""       # attention/planning target; YOLO display and graph colors retain all classes
     label_confidence: 0.35   # per-detection score floor before it can label any node
     min_label_nodes: 3       # a box needs >=3 supporting nodes to label anything
     labels_topic: "/om6dof_topo_gng/labels"

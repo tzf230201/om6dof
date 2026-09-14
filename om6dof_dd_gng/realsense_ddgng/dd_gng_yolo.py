@@ -2,10 +2,12 @@
 """DD-GNG nodes labelled by YOLO names and RealSense 3D segmentation.
 
 The RealSense point cloud feeds the unchanged DD-GNG core. GNG nodes are
-used as semantic seeds. For every YOLO detection, aligned RealSense depth
+used as semantic seeds. For every YOLO detection, registered RealSense depth
 segments the foreground surface and derives a robust camera-frame 3D bounding
 box. A DD-GNG node receives the YOLO class label only when it lies in that
-3D box.
+3D box. V1 retains aligned-depth preprocessing; V2 uses SDK-native depth
+vertices transformed into colour optical coordinates. All graph XYZ values
+are camera-relative metres, without robot FK or a world-frame projection.
 
 Optional ROS outputs:
   * CompressedImage: annotated DD-GNG + 3D box preview
@@ -24,7 +26,6 @@ import numpy as np
 import pyrealsense2 as rs
 
 from ddgng_realsense import (
-    FPS,
     GNG_ITERS,
     H,
     MAX_EDGES,
@@ -37,10 +38,11 @@ from ddgng_realsense import (
 )
 from om6dof_perception.yolox_detector import YoloXDetector
 from om6dof_perception.realsense_low_light import (
-    configure_color_sensor,
-    configure_depth_sensor,
     enhance_low_light_bgr,
     load_low_light_config,
+)
+from camera_input import (
+    RealSenseInput, add_camera_arguments, project_camera_points, sample_camera_points,
 )
 
 
@@ -73,7 +75,7 @@ def foreground_depth(depth, bbox, depth_scale, depth_band_m=0.06):
 
 
 def segment_3d_box(depth, bbox, depth_scale, fx, fy, ppx, ppy,
-                   depth_band_m=0.12, min_points=40):
+                   depth_band_m=0.12, min_points=40, *, points_xyz=None):
     """Segment the near object surface in a YOLO ROI and return a 3D box.
 
     YOLO supplies the class/name and 2D region.  Depth supplies the actual
@@ -91,6 +93,8 @@ def segment_3d_box(depth, bbox, depth_scale, fx, fy, ppx, ppy,
         return None
     raw = depth[y0:y1, x0:x1].astype(np.float64) * float(depth_scale)
     valid = np.isfinite(raw) & (raw > Z_MIN) & (raw < Z_MAX)
+    if points_xyz is not None:
+        valid &= np.isfinite(points_xyz[y0:y1, x0:x1]).all(axis=2)
     if int(valid.sum()) < int(min_points):
         return None
     anchor = float(np.quantile(raw[valid], 0.15))
@@ -101,9 +105,14 @@ def segment_3d_box(depth, bbox, depth_scale, fx, fy, ppx, ppy,
     uu = uu.astype(np.float64) + x0
     vv = vv.astype(np.float64) + y0
     zz = raw[foreground]
-    points = np.column_stack(((uu - float(ppx)) / float(fx) * zz,
-                              (vv - float(ppy)) / float(fy) * zz,
-                              zz))
+    if points_xyz is None:
+        points = np.column_stack(((uu - float(ppx)) / float(fx) * zz,
+                                  (vv - float(ppy)) / float(fy) * zz,
+                                  zz))
+    else:
+        # V2: SDK registered colour-frame metres, including sensor extrinsics
+        # and RGB distortion. Do not deproject these as old D405 pinhole depth.
+        points = points_xyz[y0:y1, x0:x1][foreground]
     lower = np.quantile(points, 0.02, axis=0)
     upper = np.quantile(points, 0.98, axis=0)
     if not np.all(np.isfinite(lower)) or not np.all(np.isfinite(upper)):
@@ -154,12 +163,15 @@ def assign_node_labels_3d(node_xyz, detections, segments, padding_m=0.015):
     return labels
 
 
-def draw_projected_3d_box(image, segment, fx, fy, ppx, ppy, color):
+def draw_projected_3d_box(image, segment, fx, fy, ppx, ppy, color, *, intrinsics=None):
     """Project a camera-frame 3D box onto the aligned RGB image."""
     corners = box_corners(segment)
-    uv = np.column_stack((corners[:, 0] / corners[:, 2] * float(fx) + float(ppx),
-                          corners[:, 1] / corners[:, 2] * float(fy) + float(ppy)))
-    uv = np.round(uv).astype(np.int32)
+    if intrinsics is None:
+        uv = np.column_stack((corners[:, 0] / corners[:, 2] * float(fx) + float(ppx),
+                              corners[:, 1] / corners[:, 2] * float(fy) + float(ppy)))
+        uv = np.round(uv).astype(np.int32)
+    else:
+        uv = project_camera_points(corners, intrinsics, sdk=rs)
     for first, second in ((0, 1), (1, 2), (2, 3), (3, 0),
                           (4, 5), (5, 6), (6, 7), (7, 4),
                           (0, 4), (1, 5), (2, 6), (3, 7)):
@@ -250,8 +262,9 @@ class AsyncYolo:
             return list(self.detections)
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="OM6DOF DD-GNG + YOLO 3D segmentation")
+    add_camera_arguments(parser)
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--confidence", type=float, default=0.35)
@@ -284,7 +297,7 @@ def parse_args():
              "this JPEG untouched, so it sets the preview's bandwidth: 80 "
              "costs about 52 kB per 640x480 frame, 50 about 25 kB",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def _ros_outputs(args):
@@ -321,70 +334,37 @@ def main():
     net = lib.ddgng_create()
     ros_node, image_pub, labels_pub, ros_types = _ros_outputs(args)
 
-    pipe = rs.pipeline()
-    config = rs.config()
     low_light_config = load_low_light_config()
-    camera_fps = 5 if low_light_config["enabled"] else FPS
-    config.enable_stream(rs.stream.depth, W, H, rs.format.z16, camera_fps)
-    config.enable_stream(rs.stream.color, W, H, rs.format.bgr8, camera_fps)
-    profile = pipe.start(config)
-    depth_low_light = configure_depth_sensor(profile, rs, low_light_config)
-    color_low_light = configure_color_sensor(profile, rs, low_light_config)
-    align = rs.align(rs.stream.color)
-    depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
-    intr = profile.get_stream(
-        rs.stream.color
-    ).as_video_stream_profile().get_intrinsics()
-    fx, fy, ppx, ppy = intr.fx, intr.fy, intr.ppx, intr.ppy
-
-    us = np.arange(0, W, PIXEL_STEP)
-    vs = np.arange(0, H, PIXEL_STEP)
-    uu, vv = np.meshgrid(us, vs)
-    uu = uu.ravel().astype(np.float64)
-    vv = vv.ravel().astype(np.float64)
+    camera = RealSenseInput(rs, args, W, H, low_light_config)
     node_buf = np.zeros((MAX_NODES, 3), dtype=np.float64)
     edge_buf = np.zeros((MAX_EDGES, 2), dtype=np.int32)
 
     window = "OM6DOF DD-GNG 3D Segmentation"
     if not args.headless:
         cv2.namedWindow(window, cv2.WINDOW_NORMAL)
-    print(
-        "[dd_gng_yolo] 3D segmentation running; "
-        + f"{camera_fps} FPS; "
-        + depth_low_light
-        + "; "
-        + color_low_light
-        + (" headless" if args.headless else "")
-    )
     previous_time = time.time()
     fps = 0.0
 
     try:
+        camera.start()
+        print('[dd_gng_yolo] camera-space graph (no robot FK): ' + json.dumps(camera.metadata))
+        print('[dd_gng_yolo] ' + '; '.join(camera.configuration_messages))
         while True:
-            frames = align.process(pipe.wait_for_frames())
-            depth_frame = frames.get_depth_frame()
-            color_frame = frames.get_color_frame()
-            if not depth_frame or not color_frame:
-                continue
-            color = np.asanyarray(color_frame.get_data())
-            color = enhance_low_light_bgr(color, low_light_config)
-            depth = np.asanyarray(depth_frame.get_data())
+            frame = camera.read()
+            color = enhance_low_light_bgr(frame.color, low_light_config)
+            depth, depth_scale, intr = frame.depth, frame.depth_scale, frame.intrinsics
+            fx, fy, ppx, ppy = intr.fx, intr.fy, intr.ppx, intr.ppy
             yolo.submit(color)
             detections = yolo.snapshot()
 
-            z = depth[vs][:, us].ravel().astype(np.float64) * depth_scale
-            valid = (z > Z_MIN) & (z < Z_MAX)
-            zf = z[valid]
-            xf = (uu[valid] - ppx) / fx * zf
-            yf = (vv[valid] - ppy) / fy * zf
-            points = np.ascontiguousarray(np.stack([xf, yf, zf], axis=1))
+            points = sample_camera_points(frame, PIXEL_STEP, Z_MIN, Z_MAX)
             point_count = points.shape[0]
             if point_count:
                 lib.ddgng_feed(
                     net,
                     points.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                     point_count,
-                    float(xf.mean()), float(yf.mean()), float(zf.mean()),
+                    *(float(value) for value in points.mean(axis=0)),
                     GNG_ITERS,
                 )
 
@@ -399,15 +379,13 @@ def main():
                 MAX_EDGES,
             )
             nodes = node_buf[:node_count]
-            node_z = np.maximum(nodes[:, 2], 1e-6)
-            node_uv = np.stack([
-                nodes[:, 0] / node_z * fx + ppx,
-                nodes[:, 1] / node_z * fy + ppy,
-            ], axis=1).astype(np.int32)
+            node_uv = project_camera_points(
+                nodes, intr, sdk=rs if camera.contract.version == 'v2' else None)
             segments = [
                 segment_3d_box(
                     depth, item.bbox, depth_scale, fx, fy, ppx, ppy,
                     args.segment_depth_band, args.segment_min_points,
+                    points_xyz=frame.points_xyz,
                 )
                 for item in detections
             ]
@@ -416,7 +394,8 @@ def main():
             # Semantic edges inherit a class colour only when both endpoints
             # have the same YOLO label; other topology stays muted green.
             for first, second in edge_buf[:edge_count]:
-                if first >= node_count or second >= node_count:
+                if (not (0 <= first < node_count and 0 <= second < node_count) or
+                        nodes[first, 2] <= 1e-6 or nodes[second, 2] <= 1e-6):
                     continue
                 first_label, second_label = labels[first], labels[second]
                 if (first_label is not None and second_label is not None and
@@ -466,6 +445,7 @@ def main():
                 if segment is not None:
                     draw_projected_3d_box(
                         color, segment, fx, fy, ppx, ppy, box_color,
+                        intrinsics=intr if camera.contract.version == 'v2' else None,
                     )
                 else:
                     cv2.rectangle(color, (x, y), (x + w, y + h), box_color, 1)
@@ -490,7 +470,8 @@ def main():
             previous_time = now
             cv2.putText(
                 color,
-                f"DD-GNG 3D boxes={sum(item is not None for item in segments)} "
+                f"{camera.contract.version.upper()} {camera.contract.camera_model} camera | "
+                f"boxes={sum(item is not None for item in segments)} "
                 f"nodes={node_count} labelled={len(labelled_nodes)} fps={fps:.1f}",
                 (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
                 (255, 255, 255), 2, cv2.LINE_AA,
@@ -498,7 +479,7 @@ def main():
 
             if labels_pub is not None:
                 payload = {
-                    "frame": "camera_color_optical_frame",
+                    **camera.metadata,
                     "node_count": node_count,
                     "labelled_count": len(labelled_nodes),
                     "nodes": labelled_nodes,
@@ -525,7 +506,7 @@ def main():
                 if ok:
                     msg = ros_types[0]()
                     msg.header.stamp = ros_node.get_clock().now().to_msg()
-                    msg.header.frame_id = "camera_color_optical_frame"
+                    msg.header.frame_id = camera.contract.optical_frame
                     msg.format = "jpeg"
                     msg.data = jpeg.tobytes()
                     image_pub.publish(msg)
@@ -535,7 +516,7 @@ def main():
                 if (cv2.waitKey(1) & 0xFF) in (27, ord("q")):
                     break
     finally:
-        pipe.stop()
+        camera.close()
         lib.ddgng_destroy(net)
         if not args.headless:
             cv2.destroyAllWindows()

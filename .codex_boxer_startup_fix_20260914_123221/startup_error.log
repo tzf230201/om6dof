@@ -1,0 +1,19 @@
+Loading official BOXER + DINO. Manual prompt labels: ['bottle', 'keyboard']
+Loading checkpoint from "/home/kublab/ros2_ws/src/.boxer_runtime/boxer/ckpts/boxernet_hw960in2x6d768-c88128f8.ckpt"
+==> Loaded checkpoint: 320/320 tensors, 85.81M/85.81M params (100.0%)
+BOXER ready: cpu | CPU mode is an initial compatibility test, not real-time.
+Traceback (most recent call last):
+  File "/home/kublab/ros2_ws/install/om6dof_boxer/lib/om6dof_boxer/boxer_preview.py", line 37, in __init__
+    try:self.profile=self.pipeline.start(cfg,callback)
+RuntimeError: Couldn't resolve requests
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/kublab/ros2_ws/install/om6dof_boxer/lib/om6dof_boxer/boxer_preview.py", line 206, in <module>
+    try:main()
+  File "/home/kublab/ros2_ws/install/om6dof_boxer/lib/om6dof_boxer/boxer_preview.py", line 165, in main
+    capture=Capture(args.serial);snap=None
+  File "/home/kublab/ros2_ws/install/om6dof_boxer/lib/om6dof_boxer/boxer_preview.py", line 38, in __init__
+    except RuntimeError as error:raise RuntimeError(f'RealSense could not start; ensure only BOXER owns the D435i: {error}') from error
+RuntimeError: RealSense could not start; ensure only BOXER owns the D435i: Couldn't resolve requests

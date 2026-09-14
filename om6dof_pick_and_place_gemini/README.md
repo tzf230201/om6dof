@@ -787,7 +787,7 @@ That frame is published by
 `robot_state_publisher` from `om6dof_description`'s URDF, which encodes this
 D405 mount's true extrinsic — SVD-fitted off the fused bracket+camera mesh and
 cross-checked against the Intel D400 datasheet (see the long comment above
-`d405_link_joint` in `om6dof.urdf.xacro`). That is measured for *this* robot's
+`d405_link_joint` in `om6dof_v2.urdf.xacro`). That is measured for *this* robot's
 mount, so it is the right source of truth, not a borrowed number.
 
 The `camera_xyz` / `camera_rpy` parameters are a **fallback only**, used when

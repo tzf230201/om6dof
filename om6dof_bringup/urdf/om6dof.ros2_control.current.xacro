@@ -110,6 +110,7 @@
            hardware the dxl interface reads encoders and ignores these. -->
       <joint name="${prefix}joint1">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <command_interface name="effort"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
@@ -119,6 +120,7 @@
       </joint>
       <joint name="${prefix}joint2">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <command_interface name="effort"/>
         <state_interface name="position">
           <param name="initial_value">-0.6806</param>
@@ -128,6 +130,7 @@
       </joint>
       <joint name="${prefix}joint3">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <command_interface name="effort"/>
         <state_interface name="position">
           <param name="initial_value">1.3613</param>
@@ -137,6 +140,7 @@
       </joint>
       <joint name="${prefix}joint4">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <command_interface name="effort"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
@@ -146,6 +150,7 @@
       </joint>
       <joint name="${prefix}joint5">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <command_interface name="effort"/>
         <state_interface name="position">
           <param name="initial_value">0.8901</param>
@@ -155,6 +160,7 @@
       </joint>
       <joint name="${prefix}joint6">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <command_interface name="effort"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>

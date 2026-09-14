@@ -10,7 +10,7 @@ The camera is on the wrist, so nothing in this chain is static:
 imported so this module — and its tests — stay usable without rclpy, KDL or a
 camera attached.
 
-Tool convention (from ``om6dof.urdf.xacro``): ``end_effector_link`` inherits
+Tool convention (from ``om6dof_v2.urdf.xacro``): ``end_effector_link`` inherits
 link7's orientation, the fingers translate along its **Y** axis, and the tool
 reaches along its **Z** axis. So a grasp is a position plus two unit vectors,
 ``approach`` (tool +Z) and ``closing`` (tool +Y).

@@ -1,0 +1,36 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: world
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 0.1
+      Plane: XY
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Nominal green - combined magenta (PREVIEW ONLY)
+      Enabled: true
+      Topic:
+        Value: /om6dof/combined_preview/markers
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 5
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1.5
+      Focal Point:
+        X: 0.3
+        Y: 0
+        Z: 0.15
+      Pitch: 0.5
+      Yaw: 0.8
+Window Geometry:
+  Width: 1000
+  Height: 700

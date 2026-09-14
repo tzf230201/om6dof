@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="30" failures="0" disabled="0" errors="0" time="2.396" timestamp="2026-09-11T17:46:12.525" name="AllTests">
+  <testsuite name="DynamicDensityGng" tests="13" failures="0" disabled="0" skipped="0" errors="0" time="2.395" timestamp="2026-09-11T17:46:12.525">
+    <testcase name="MaintainsFiniteBoundedUndirectedGraphDuringLongUpdates" status="run" result="completed" time="0.244" timestamp="2026-09-11T17:46:12.525" classname="DynamicDensityGng" />
+    <testcase name="StableIdsSurviveCompactionAndRetiredIdsAreNotReused" status="run" result="completed" time="0.065" timestamp="2026-09-11T17:46:12.769" classname="DynamicDensityGng" />
+    <testcase name="SeedAndResetReproduceGraphAndSamplingCounters" status="run" result="completed" time="0.015" timestamp="2026-09-11T17:46:12.834" classname="DynamicDensityGng" />
+    <testcase name="IgnoresNonfinitePointsAndNonpositiveUpdateCountsSafely" status="run" result="completed" time="0.002" timestamp="2026-09-11T17:46:12.850" classname="DynamicDensityGng" />
+    <testcase name="RejectsInvalidParametersBeforeAllocatingOrTraining" status="run" result="completed" time="0.001" timestamp="2026-09-11T17:46:12.852" classname="DynamicDensityGng" />
+    <testcase name="FiniteFloatExtremesDoNotOverflowNodeCoordinates" status="run" result="completed" time="0.003" timestamp="2026-09-11T17:46:12.854" classname="DynamicDensityGng" />
+    <testcase name="InvalidRegionReplacementPreservesPreviousAttention" status="run" result="completed" time="0.001" timestamp="2026-09-11T17:46:12.858" classname="DynamicDensityGng" />
+    <testcase name="NeutralStrengthIsIdenticalToNoAttention" status="run" result="completed" time="0.021" timestamp="2026-09-11T17:46:12.860" classname="DynamicDensityGng" />
+    <testcase name="GeometricStrengthIsBoundedLocalAndClearable" status="run" result="completed" time="0.014" timestamp="2026-09-11T17:46:12.881" classname="DynamicDensityGng" />
+    <testcase name="AttentionOutsideObservedGeometryDoesNotInventFocusedSamples" status="run" result="completed" time="0.006" timestamp="2026-09-11T17:46:12.896" classname="DynamicDensityGng" />
+    <testcase name="ReservesAtLeastHalfThePerCallBudgetForGlobalSampling" status="run" result="completed" time="0.002" timestamp="2026-09-11T17:46:12.903" classname="DynamicDensityGng" />
+    <testcase name="ReallocatesDensityWhenAttentionSwitchesAfterCapacity" status="run" result="completed" time="1.073" timestamp="2026-09-11T17:46:12.905" classname="DynamicDensityGng">
+<properties>
+<property name="attention_strength" value="20.000000"/>
+<property name="uses_core_defaults" value="false"/>
+<property name="max_nodes" value="64"/>
+<property name="density_switch_distribution" value="seed,neutral_left,focused_left,neutral_right,focused_right,right_before_switch;401,0.546875,0.984375,0.5,0.984375,0.015625;402,0.5,0.984375,0.5,0.984375,0.015625;403,0.515625,0.984375,0.515625,0.984375,0;404,0.484375,0.984375,0.515625,0.984375,0.015625;405,0.453125,0.984375,0.5,0.984375,0.015625;"/>
+<property name="mean_left_fraction_gain" value="0.484375"/>
+<property name="mean_right_fraction_gain" value="0.478125"/>
+<property name="mean_switch_fraction_gain" value="0.971875"/>
+</properties>
+    </testcase>
+    <testcase name="ReallocatesDensityAtDeployedSemanticStrength" status="run" result="completed" time="0.941" timestamp="2026-09-11T17:46:13.979" classname="DynamicDensityGng">
+<properties>
+<property name="attention_strength" value="3.000000"/>
+<property name="uses_core_defaults" value="true"/>
+<property name="max_nodes" value="64"/>
+<property name="density_switch_distribution" value="seed,neutral_left,focused_left,neutral_right,focused_right,right_before_switch;401,0.546875,0.96875,0.515625,0.890625,0.03125;402,0.5,0.96875,0.515625,0.921875,0.03125;403,0.5,0.96875,0.484375,0.90625,0.03125;404,0.5,0.96875,0.484375,0.90625,0.03125;405,0.515625,0.96875,0.515625,0.921875,0.03125;"/>
+<property name="mean_left_fraction_gain" value="0.456250"/>
+<property name="mean_right_fraction_gain" value="0.406250"/>
+<property name="mean_switch_fraction_gain" value="0.878125"/>
+</properties>
+    </testcase>
+  </testsuite>
+  <testsuite name="SemanticDensityAttention" tests="17" failures="0" disabled="0" skipped="0" errors="0" time="0.001" timestamp="2026-09-11T17:46:14.920">
+    <testcase name="ExpiresFromSourceCaptureNotInferenceCompletion" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.920" classname="SemanticDensityAttention" />
+    <testcase name="DuplicateResultDoesNotRefreshOrMoveAttention" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.920" classname="SemanticDensityAttention" />
+    <testcase name="NewUniqueResultReplacesAndEmptyResultClears" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.920" classname="SemanticDensityAttention" />
+    <testcase name="PoseMismatchClearsAndCannotResurrectSameResult" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="InvalidDuplicateClearsPreviousAttention" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="StaleUnknownAndFutureSourceClearAttention" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="SequenceZeroAndOutOfOrderFailClosed" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="NewSequenceWithRegressingCaptureTimeFailsClosed" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="InvalidOrRegressingReadClockClears" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="InvalidOrRegressingObservationClockConsumesResult" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="LengthMismatchClearsInsteadOfReadingOutOfBounds" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="RejectsInvalidPointsAndScoresAndClampsConfidence" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="ZeroDirectMatchesDoNotCreateAttention" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="GreedySelectionUsesScoreThenIndexAndHalfRadius" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="MaximumRegionBudgetIsBoundedAndDeterministic" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="ReturnedSnapshotCannotMutateInternalRegions" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+    <testcase name="ValidatesParameterBounds" status="run" result="completed" time="0" timestamp="2026-09-11T17:46:14.921" classname="SemanticDensityAttention" />
+  </testsuite>
+</testsuites>

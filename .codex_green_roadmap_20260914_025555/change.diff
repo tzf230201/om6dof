@@ -1,0 +1,206 @@
+--- before/ddgng_experiment_reachability.launch.py
++++ om6dof/om6dof_dd_gng/launch/ddgng_experiment_reachability.launch.py
+@@ -2,6 +2,7 @@
+ import csv
+ import hashlib
+ import io
++import json
+ from pathlib import Path
+ import shutil
+ import tempfile
+@@ -21,25 +22,49 @@
+                    'comparison_v1_v2_25mm_20260909/v2/points.csv')
+ 
+ 
+-def prepare_config(base_path, dataset_path, directory):
+-    """Freeze dataset bytes for this launch; change only reachability settings."""
+-    data = Path(dataset_path).expanduser().resolve(strict=True).read_bytes()
++def prepare_config(base_path, dataset_path, directory, sample_selection='green'):
++    """Freeze selected witnesses for this launch; change only reachability settings."""
++    if sample_selection not in ('green', 'all'):
++        raise ValueError('sample_selection must be green or all')
++    source = Path(dataset_path).expanduser().resolve(strict=True)
++    data = source.read_bytes()
++    source_sha256 = hashlib.sha256(data).hexdigest()
+     reader = csv.DictReader(io.StringIO(data.decode('utf-8')))
+     required = {'x_mm', 'y_mm', 'z_mm', 'position_found'} | {f'q{i}_rad' for i in range(1, 7)}
+     if not required.issubset(reader.fieldnames or []):
+         raise ValueError('Dataset must contain XYZ and q1_rad through q6_rad')
+-    witnesses = sum(row['position_found'] == '1' for row in reader)
++    if sample_selection == 'green':
++        if not {'status', 'pose_found'}.issubset(reader.fieldnames):
++            raise ValueError('Green selection requires status and pose_found columns')
++        # The experiment uses pose_found status for green; pose_near_singular
++        # is blue even though its numeric pose_found flag is also 1.
++        rows = [row for row in reader if row['status'] == 'pose_found'
++                and row['pose_found'] == '1' and row['position_found'] == '1']
++        output = io.StringIO(newline='')
++        writer = csv.DictWriter(output, fieldnames=reader.fieldnames, lineterminator='\n')
++        writer.writeheader()
++        writer.writerows(rows)
++        data = output.getvalue().encode('utf-8')
++        witnesses = len(rows)
++    else:
++        witnesses = sum(row['position_found'] == '1' for row in reader)
+     if not witnesses:
+-        raise ValueError('Dataset has no position-found joint configurations')
++        raise ValueError(f'Dataset has no {sample_selection} joint configurations')
+     directory = Path(directory)
+     snapshot = directory / 'workspace_samples.csv'
+     snapshot.write_bytes(data)
++    snapshot_sha256 = hashlib.sha256(data).hexdigest()
++    (directory / 'workspace_samples_manifest.json').write_text(json.dumps({
++        'source_path': str(source), 'source_sha256': source_sha256,
++        'sample_selection': sample_selection, 'selected_witnesses': witnesses,
++        'snapshot_sha256': snapshot_sha256,
++    }, indent=2) + '\n')
+     document = yaml.safe_load(Path(base_path).read_text())
+     parameters = document['reachability_graph_node']['ros__parameters']
+     parameters.update({
+         'graph_method': 'workspace_samples',
+         'workspace_samples_file': str(snapshot),
+-        'workspace_samples_sha256': hashlib.sha256(data).hexdigest(),
++        'workspace_samples_sha256': snapshot_sha256,
+         'sample_count': witnesses,
+         'target_refinement_enabled': False,
+         'gng_debug_publish_training_samples': False,
+@@ -57,7 +82,8 @@
+     directory = tempfile.mkdtemp(prefix='ddgng_experiment_')
+     try:
+         config = prepare_config(share / 'config/topo_gng_v2.yaml',
+-                                LaunchConfiguration('workspace_samples_file').perform(context), directory)
++                                LaunchConfiguration('workspace_samples_file').perform(context), directory,
++                                LaunchConfiguration('sample_selection').perform(context))
+     except Exception:
+         shutil.rmtree(directory)
+         raise
+@@ -90,6 +116,8 @@
+ def generate_launch_description():
+     return LaunchDescription([
+         DeclareLaunchArgument('workspace_samples_file', default_value=str(DEFAULT_DATASET)),
++        DeclareLaunchArgument('sample_selection', default_value='green', choices=['green', 'all'],
++                             description='Green experiment poses only, or all position-found witnesses'),
+         DeclareLaunchArgument('camera_calibration_file', default_value=''),
+         DeclareLaunchArgument('execution_enabled', default_value='false', choices=['true', 'false']),
+         DeclareLaunchArgument('launch_rviz', default_value='true', choices=['true', 'false']),
+--- before/test_experiment_launch.py
++++ om6dof/om6dof_dd_gng/test/test_experiment_launch.py
+@@ -1,5 +1,7 @@
+ import hashlib
+ import importlib.util
++import csv
++import json
+ from pathlib import Path
+ 
+ import pytest
+@@ -19,7 +21,7 @@
+     dataset.write_bytes(data)
+     run = tmp_path / 'run'
+     run.mkdir()
+-    config = launch.prepare_config(base, dataset, run)
++    config = launch.prepare_config(base, dataset, run, sample_selection='all')
+     document = yaml.safe_load(config.read_text())
+     original = yaml.safe_load(base.read_text())
+     for key in original:
+@@ -50,3 +52,40 @@
+     from launch import LaunchContext
+     from launch.utilities import perform_substitutions
+     assert perform_substitutions(LaunchContext(), args['execution_enabled'].default_value) == 'false'
++    assert perform_substitutions(LaunchContext(), args['sample_selection'].default_value) == 'green'
++
++
++def test_green_selection_excludes_blue_yellow_and_inconsistent_flags(tmp_path):
++    dataset = tmp_path / 'points.csv'
++    header = 'x_mm,y_mm,z_mm,position_found,pose_found,status,q1_rad,q2_rad,q3_rad,q4_rad,q5_rad,q6_rad\n'
++    rows = ['100,0,200,1,1,pose_found,0,0,0,0,0,0',
++            '125,0,200,1,1,pose_near_singular,0,0,0,0,0,0',
++            '150,0,200,1,0,orientation_unresolved,0,0,0,0,0,0',
++            '175,0,200,0,1,pose_found,0,0,0,0,0,0',
++            '200,0,200,1,0,pose_found,0,0,0,0,0,0']
++    original = (header + '\n'.join(rows) + '\n').encode()
++    dataset.write_bytes(original)
++    config = launch.prepare_config(PACKAGE / 'config/topo_gng_v2.yaml', dataset, tmp_path)
++    p = yaml.safe_load(config.read_text())['reachability_graph_node']['ros__parameters']
++    snapshot = Path(p['workspace_samples_file']).read_bytes()
++    selected = list(csv.DictReader(snapshot.decode().splitlines()))
++    assert len(selected) == p['sample_count'] == 1
++    assert selected[0]['x_mm'] == '100'
++    assert p['workspace_samples_sha256'] == hashlib.sha256(snapshot).hexdigest()
++    manifest = json.loads((tmp_path / 'workspace_samples_manifest.json').read_text())
++    assert manifest['source_sha256'] == hashlib.sha256(original).hexdigest()
++    assert manifest['sample_selection'] == 'green'
++    assert manifest['selected_witnesses'] == 1
++    assert dataset.read_bytes() == original
++
++
++@pytest.mark.parametrize('extra_header,extra_value,error', [
++    ('', '', 'requires status and pose_found'),
++    (',pose_found,status', ',1,pose_near_singular', 'no green'),
++])
++def test_green_selection_fails_closed(tmp_path, extra_header, extra_value, error):
++    dataset = tmp_path / 'points.csv'
++    dataset.write_text('x_mm,y_mm,z_mm,position_found,q1_rad,q2_rad,q3_rad,q4_rad,q5_rad,q6_rad'
++                       + extra_header + '\n100,0,200,1,0,0,0,0,0,0' + extra_value + '\n')
++    with pytest.raises(ValueError, match=error):
++        launch.prepare_config(PACKAGE / 'config/topo_gng_v2.yaml', dataset, tmp_path)
+--- before/experiment_workspace_roadmap.md
++++ om6dof/om6dof_dd_gng/docs/experiment_workspace_roadmap.md
+@@ -6,9 +6,14 @@
+ source /opt/ros/humble/setup.bash
+ source /home/kublab/ros2_ws/install/setup.bash
+ ros2 launch om6dof_dd_gng ddgng_experiment_reachability.launch.py \
++  sample_selection:=green \
+   camera_calibration_file:=/home/kublab/.config/om6dof/d435_hand_eye.yaml \
+   execution_enabled:=false
+ ```
++
++The default `sample_selection:=green` uses only green experiment poses (`status=pose_found`),
++excluding blue near-singular and yellow orientation-unresolved points. Green is a
++category from the original scan; all current-model collision checks still apply.
+ 
+ This opens YOLO + DD-GNG environment processing, the experiment-derived robot
+ roadmap, RViz, and the target GUI. It does not start hardware controllers, enable
+@@ -28,13 +33,18 @@
+ `~/ros2_ws/src/om6dof/experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/v2/points.csv`.
+ Override with `workspace_samples_file:=/absolute/path/points.csv`.
+ 
+-The launch copies the CSV into its temporary session directory and records its
+-SHA256 in the generated reachability configuration. Original experiment files are
++The launch filters the CSV into its temporary session directory and records the
++filtered SHA256 in the generated reachability configuration. A JSON manifest records
++the source path/hash, selection, count, and snapshot hash. Original experiment files are
+ never modified. Environment parameters are copied unchanged from `topo_gng_v2.yaml`;
+ only the reachability block is overridden. Existing launch defaults are unchanged.
+ Session files are removed on launch shutdown.
+ 
+-- Read rows with position_found=1, including orientation-unresolved witnesses.
++- By default, read only rows with status=pose_found, position_found=1 and pose_found=1.
++  The V2 dataset contains 3,198 such green witnesses. The numeric pose_found flag
++  alone is insufficient because blue near-singular rows also set it to 1.
++- Optional `sample_selection:=all` restores all position_found=1 witnesses,
++  including blue and orientation-unresolved rows. This is not the default.
+ - Each row must supply finite XYZ in mm and q1_rad through q6_rad in robot order.
+ - Recompute each node's full EoE pose using current URDF FK; CSV XYZ are checks,
+   not the runtime node coordinates. Reject the dataset if FK differs by >5 mm
+@@ -63,7 +73,20 @@
+ observations, collision-model accuracy and finite edge-check spacing remain relevant;
+ this is not a physical pickup certification or a guarantee of connectivity everywhere.
+ 
+-## Checked on the saved bottle scene
++## Green-only validation on the saved bottle scene
++
++All 3,198 green witnesses passed current-model node validation. The roadmap had
++18,554 candidate edges in one connected component; every node's joint configuration
++was verified against a green source row. Maximum FK discrepancy was 1 mm.
++
++The saved bottle scene returned `exact_collision_replan_exhausted` after 21 replans
++and 1,256 exact checks (final planning cycle approximately 224 ms). No validated
++trajectory was produced. A connected candidate graph does not guarantee a path
++after full-body collision checks, and this exhausted search does not prove that
++no path exists. Collision settings and search budgets were not loosened.
++Replay ran on isolated domain 71 without physical robot or camera operation.
++
++## Earlier all-category validation on the saved bottle scene
+ 
+ 15,175 position-found input rows; 15,064 accepted current-model nodes; 111 rejected
+ by current limits/self-collision/duplicate filtering. Maximum FK discrepancy was

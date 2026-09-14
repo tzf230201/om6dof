@@ -1,0 +1,28 @@
+# D435 camera-frame placement for om6dof_v2. Units: metres and radians.
+# CAD/nominal geometry only: NOT measured camera-to-arm hand-eye calibration.
+# Do not derive lens positions from payload_d435.yaml or its centre of mass.
+#
+# Local CAD registration, in millimetres:
+# p_assembly = [[0,0,1], [0,1,0], [-1,0,0]] * p_d435_stl
+#              + [83.92051849, 28.72564936, 39.07499743]
+# All 32424 d435.stl vertices match d435_wrist_cam.stl within 0.0000062 mm.
+# The bottom screw opening in d435.stl is centred at [0,-12.5,-14.9] mm.
+# V2 subtracts its existing visual CAD datum from bottom_screw_cad_xyz.
+#
+# Nominal screw-to-depth and depth-to-colour geometry follows the official
+# RealSense ROS D435 description (which explicitly labels these approximate):
+# https://github.com/realsenseai/realsense-ros/blob/ros2-development/realsense2_description/urdf/_d435.urdf.xacro
+# Screw-to-depth X = 14.9 mm - 0.1 mm glass inset - 4.2 mm depth-zero inset.
+# Actual sensor-to-sensor extrinsics should come from the device SDK:
+# https://dev.realsenseai.com/docs/projection-in-realsense-sdk-2-0/
+# Device factory calibration does not calibrate the camera mounting to the arm.
+camera:
+  model: D435
+  calibration_status: cad_nominal
+  bottom_screw_cad_xyz: [0.06902051849, 0.01622564936, 0.03907499743]
+  # Physical/body axes: X forward, Y left, Z up, expressed in assembly CAD.
+  bottom_screw_rpy: [-1.5707963267948966, 0.0, 0.0]
+  depth_from_bottom_screw_xyz: [0.0106, 0.0175, 0.0125]
+  color_from_depth_xyz: [0.0, 0.015, 0.0]
+  # Optical axes: X image-right, Y image-down, Z viewing-forward.
+  optical_rpy: [-1.5707963267948966, 0.0, -1.5707963267948966]

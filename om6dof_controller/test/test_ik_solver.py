@@ -86,3 +86,12 @@ def test_pose_ik_does_not_report_false_convergence_for_half_turn():
 def test_orientation_difference_rejects_wrong_matrix_shape():
     with pytest.raises(ValueError, match="shape"):
         IKSolver.orientation_difference(np.eye(4), np.eye(3))
+
+
+def test_v2_zero_joint_fk_uses_the_forward_mount_geometry():
+    solver = IKSolver(xacro_rel="urdf/om6dof_v2.urdf.xacro")
+
+    position, rotation = solver.fk_pose(np.zeros(6))
+
+    assert position == pytest.approx([0.303, 0.0, 0.2245], abs=1e-9)
+    assert rotation[:, 2] == pytest.approx([1.0, 0.0, 0.0], abs=1e-9)

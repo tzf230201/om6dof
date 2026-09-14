@@ -40,7 +40,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "input_source",
-            default_value="go2w",
+            default_value="gamepad",
             choices=["go2w", "keyboard", "gamepad", "airbus", "web"],
             description="Exactly one source: Unitree remote, terminal, Logitech F710, or Airbus TCA.",
         ),

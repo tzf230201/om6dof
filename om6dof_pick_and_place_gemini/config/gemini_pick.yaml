@@ -43,7 +43,7 @@ gemini_pick:
     # robot_state_publisher publishes this from om6dof_description's URDF,
     # which encodes the D405 mount's true extrinsic (SVD-fitted off the fused
     # bracket+camera mesh, cross-checked against the datasheet — see the
-    # comment above the d405_link_joint in om6dof.urdf.xacro). That is the
+    # comment above the d405_link_joint in om6dof_v2.urdf.xacro). That is the
     # right source: measured for THIS robot's mount, not borrowed from
     # another one.
     camera_optical_frame: "d405_depth_optical_frame"
@@ -301,6 +301,7 @@ gemini_pick:
     ik_base_link: "world"
     ik_tip_link: "end_effector_link"
     ik_urdf_pkg: "om6dof_description"
+    ik_xacro_rel: "urdf/om6dof_v2.urdf.xacro"
     joint_state_topic: "/joint_states"
     # Persistent counters from the hardware interface. Physical execution
     # requires a fresh OK sample and no read/write counter increment for the

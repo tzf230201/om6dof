@@ -1,0 +1,7 @@
+{
+  "source_path": "/home/kublab/ros2_ws/src/om6dof/experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/v2/points.csv",
+  "source_sha256": "ded51632edcd1b041cd3e3d07c9d9aa04dace55ef1624fdf80f6fb1ad636fa1b",
+  "sample_selection": "green",
+  "selected_witnesses": 3198,
+  "snapshot_sha256": "18fa82e0e8486923ffb174c74c08c751d21b4c7cb8d1f6f8427d6155351a23c0"
+}

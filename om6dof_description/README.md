@@ -37,9 +37,9 @@ ros2 launch om6dof_description view_com_v2.launch.py
 The COM viewer retains link3's existing inertial values; they have not yet been
 recalculated from the v2 mesh.
 
-`om6dof_v2` displays the D435 wrist-camera assembly. Its legacy D405 TF names
-are retained temporarily for compatibility with existing ROS consumers; do not
-use them as calibrated D435 optical extrinsics. Its two bracket bolt axes
+`om6dof_v2` displays the D435 wrist-camera assembly. Only its payload link/joint
+retain legacy D405 names for compatibility; the camera frames are D435-specific
+(see below). Its two bracket bolt axes
 (16 mm spacing) align with the link7 hole pair at Y=+/-8 mm, Z=28 mm.
 The bracket underside at the bolt axes is seated on link7's outer surface
 (X=-37.80499 mm), using the underside triangles as the contact reference.
@@ -60,6 +60,42 @@ at approximately **[18.565, 16.150, -0.044] mm** in `d405_payload_link`,
 without moving the accepted camera mounting pose. This is a geometric
 estimate, not a measurement of the camera's internal mass distribution.
 The inertia tensor remains a sphere approximation, not calibrated dynamics.
+
+### V2 D435 camera frames
+
+[camera_d435.yaml](config/camera_d435.yaml) defines the camera mounting datum
+and nominal sensor offsets independently from payload mass/CoM. Its
+`camera.calibration_status` is **`cad_nominal`**, not measured hand-eye
+calibration. The accepted mesh mounting pose and inertia are unchanged.
+
+```text
+link7 -> d405_payload_link -> d435_bottom_screw_frame -> d435_link
+                                                     |-> d435_depth_frame -> d435_depth_optical_frame
+                                                     `-> d435_color_frame -> d435_color_optical_frame
+```
+
+The bottom screw datum was registered from `d435.stl` to the camera/bracket
+assembly and is approximately `[17.150, 4.236, 0] mm` in the payload frame.
+Nominal screw-to-depth translation is `[10.6, 17.5, 12.5] mm` in the camera
+body axes. Colour is offset by another `+15 mm` along body Y. Those offsets
+and the physical-to-optical rotation follow the
+[official RealSense D435 description](https://github.com/realsenseai/realsense-ros/blob/ros2-development/realsense2_description/urdf/_d435.urdf.xacro).
+Physical frames use X forward/Y left/Z up; optical frames use X image-right,
+Y image-down/Z forward. RGB-aligned depth points belong to the **colour
+optical frame**, not raw depth optical.
+
+The old `d405_link` and `d405_depth_optical_frame` are intentionally absent
+from V2 so an old D405 extrinsic cannot silently appear to be correct. They
+remain available in V1. The D435 nominal frames do not replace device-specific
+sensor-to-sensor extrinsics from the SDK or camera-to-arm hand-eye calibration.
+Validate the mounting transform against measured targets before precision
+pickup; factory camera calibration does not measure the robot mounting.
+
+Offline frame regression tests (no camera or ROS nodes started):
+
+```bash
+python3 -m unittest discover -s om6dof_description/scripts -p 'test_d435_frames.py' -v
+```
 
 For the complete gravity-compensation architecture and the current validation
 status, see [the leader-arm research record](../docs/leader_arm_gravity_compensation.md).

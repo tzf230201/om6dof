@@ -1,0 +1,24 @@
+"""V2/D435i DD-GNG with isolated, read-only robot TF from /joint_states."""
+
+from pathlib import Path
+
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+
+
+def generate_launch_description():
+    return LaunchDescription([
+        DeclareLaunchArgument("model_version", default_value="v2", choices=["v2"]),
+        DeclareLaunchArgument("camera_calibration_file", default_value=""),
+        DeclareLaunchArgument("publish_robot_state", default_value="true", choices=["true", "false"]),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(str(Path(__file__).with_name("topo_gng_node.launch.py"))),
+            launch_arguments={
+                "model_version": "v2",
+                "publish_robot_state": LaunchConfiguration("publish_robot_state"),
+                "camera_calibration_file": LaunchConfiguration("camera_calibration_file"),
+            }.items(),
+        ),
+    ])

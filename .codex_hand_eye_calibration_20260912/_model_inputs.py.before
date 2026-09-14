@@ -1,0 +1,84 @@
+"""Offline model inputs shared by the two DD-GNG launch descriptions.
+
+V1 bytes and provenance remain unchanged. V2 always uses a separate TF tree;
+its state publisher consumes measured joint states but never controls hardware.
+"""
+
+import hashlib
+import os
+import shutil
+import subprocess
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+from launch.substitutions import LaunchConfiguration
+
+
+# These remaps also protect custom RViz/parameter files that still contain
+# the old V1 default topic/service names when used with a V2 launch.
+GRAPH_ENDPOINTS = (
+    "environment_graph", "environment_graph_data", "robot_graph", "labels",
+    "status", "reachability_query", "reachability_graph_data",
+    "reachability_graph", "reachability_plan", "reachability_path",
+    "reachability_training_samples", "reachability_training_samples_cloud",
+    "rebuild_reachability", "plan_reachability", "validate_reachability_scene",
+)
+
+
+def _sha256(payload):
+    return hashlib.sha256(payload).hexdigest()
+
+
+def resolve_model_inputs(context, *, moveit_share, description_share, dd_gng_share):
+    version = LaunchConfiguration("model_version").perform(context)
+    if version not in ("v1", "v2"):
+        raise RuntimeError("model_version must be v1 or v2")
+    configured_params = LaunchConfiguration("params_file").perform(context)
+    params_name = "topo_gng_v2.yaml" if version == "v2" else "topo_gng.yaml"
+    params_path = Path(configured_params or Path(dd_gng_share) / "config" / params_name)
+    params_path = params_path.expanduser().resolve(strict=True)
+    model_name = "om6dof_v2.urdf.xacro" if version == "v2" else "om6dof.urdf.xacro"
+    xacro_path = Path(description_share) / "urdf" / model_name
+    executable = shutil.which("xacro")
+    if not executable:
+        raise RuntimeError("could not resolve the xacro executable")
+    expanded = subprocess.run(
+        [executable, os.fspath(xacro_path)], stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, check=False,
+    )
+    if expanded.returncode:
+        detail = expanded.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"xacro expansion failed: {detail}")
+    urdf_bytes = expanded.stdout
+    srdf_bytes = (Path(moveit_share) / "config" / "om6dof.srdf").read_bytes()
+    if version == "v2":
+        urdf = ET.fromstring(urdf_bytes)
+        srdf = ET.fromstring(srdf_bytes)
+        srdf.set("name", urdf.attrib["name"])
+        links = {link.attrib["name"] for link in urdf.findall("link")}
+        # Dropping an exemption can only make collision checking stricter.
+        # Old "Never" pairs were sampled for V1, not the changed V2 geometry.
+        # Never map a removed D405 frame onto a different physical V2 link.
+        for pair in list(srdf.findall("disable_collisions")):
+            if (pair.get("link1") not in links or pair.get("link2") not in links
+                    or pair.get("reason") == "Never"):
+                srdf.remove(pair)
+        srdf_bytes = ET.tostring(srdf, encoding="utf-8", xml_declaration=True)
+    params_bytes = params_path.read_bytes()
+    return {
+        "version": version,
+        "params_path": os.fspath(params_path),
+        "model_parameters": {
+            "robot_description": urdf_bytes.decode("utf-8"),
+            "robot_description_semantic": srdf_bytes.decode("utf-8"),
+            "expanded_urdf_sha256": _sha256(urdf_bytes),
+            "srdf_sha256": _sha256(srdf_bytes),
+            "reachability_parameters_sha256": _sha256(params_bytes),
+        },
+        "remappings": ([
+            ("/tf", "/om6dof_dd_gng/v2/tf"),
+            ("/tf_static", "/om6dof_dd_gng/v2/tf_static"),
+            ("/robot_description", "/om6dof_dd_gng/v2/robot_description"),
+        ] + [(f"/om6dof_topo_gng/{name}", f"/om6dof_topo_gng_v2/{name}")
+             for name in GRAPH_ENDPOINTS] if version == "v2" else []),
+    }

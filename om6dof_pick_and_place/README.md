@@ -1,5 +1,39 @@
 # om6dof_pick_and_place
 
+## Verifikasi titik tengah depth memakai URDF V2
+
+Alat read-only ini menandai pusat RGB, mengambil median depth pada patch
+pusat, lalu menampilkan koordinat kamera dan koordinat `world` dari TF URDF
+nominal. Alat ini tidak menjalankan controller atau mengirim gerakan robot.
+
+Hentikan semua node DD-GNG/AprilTag lain yang mengambil RealSense, lalu jalankan:
+
+```bash
+source /opt/ros/humble/setup.bash
+source /home/kublab/ros2_ws/install/setup.bash
+ros2 launch om6dof_pick_and_place center_depth_urdf_check.launch.py
+```
+
+Launch ini menerapkan koreksi diagnostik eksplisit `world_z_offset:=-0.0185`
+berdasarkan pengukuran penggaris satu titik. Window dan status tetap memuat
+`raw_world_xyz_m` agar nilai URDF asli dapat dibandingkan dengan
+`world_xyz_m` yang sudah dikoreksi. Koreksi ini hanya milik verifier dan tidak
+mengubah URDF atau perencanaan/eksekusi robot. Nilai nol dapat dipakai untuk
+melihat transformasi murni:
+
+```bash
+ros2 launch om6dof_pick_and_place center_depth_urdf_check.launch.py \
+  world_z_offset:=0.0
+```
+
+Hasil juga diterbitkan pada `/om6dof/center_depth/camera_point`,
+`/om6dof/center_depth/world_point_raw`,
+`/om6dof/center_depth/world_point`, `/om6dof/center_depth/markers`,
+`/om6dof/center_depth/status`, dan `/om6dof/center_depth/debug_image`.
+Koordinat global hanya diterbitkan ketika TF
+`world <- d435_color_optical_frame` tersedia dan tidak stale. Tekan `q`,
+Escape, atau Ctrl-C untuk berhenti.
+
 > **Control-profile compatibility:** pick-and-place requires MoveIt and the
 > normal position-control hardware profile. It cannot share U2D2 or arm command
 > interfaces with the isolated Mode 0 leader stack. Return to normal mode using
@@ -276,8 +310,10 @@ ros2 launch om6dof_pick_and_place pick_place.launch.py \
 card in the Kublab web monitor. It consumes the selected YOLO target from
 `/om6dof_perception/target_point`, the 3D bounding box from
 `/om6dof_perception/status`, and the current arm joints. The wrist-camera
-point is transformed into the arm `world` frame with FK and the calibrated
-camera extrinsic in [`config/tag_pick.yaml`](config/tag_pick.yaml).
+point is transformed into the arm `world` frame with V2 FK and the dedicated
+D435 colour-optical transform in [`config/tag_pick.yaml`](config/tag_pick.yaml).
+That transform currently comes from nominal CAD/URDF geometry; validate it
+with a physical hand-eye measurement before precision pickup.
 
 Before using **Pickup object**, start perception, set a target such as
 `bottle`, turn F3 remote arm control OFF, and clear the complete arm workspace.
@@ -366,6 +402,53 @@ Direct-pick services:
 | `/direct_search_stop` | Cancel the search sweep. |
 | `/direct_search_status` | Search angle/state and consecutive-frame count. |
 | `/direct_reachable` | Report front-pick IK reachability for the live target. |
+
+---
+
+## Semantic DD-GNG graph pickup
+
+`graph_pick_node` turns the V2 semantic/reachability output into a guarded
+pickup trajectory without changing either GNG implementation. It binds the
+target selected in the YOLO GUI to its same-class, edge-connected environment
+component, then accepts only the ordinary reachability GNG path whose start
+matches current joints and whose `exact_collision_valid` flag is true. The
+goal's tool axis must also point toward the selected semantic node.
+
+Planning and execution are separate. The default launch is preview-only and
+never writes an arm or gripper command:
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch om6dof_pick_and_place graph_pick.launch.py
+ros2 service call /plan_graph_pick std_srvs/srv/Trigger
+ros2 service call /graph_pick_status std_srvs/srv/Trigger
+```
+
+The frozen joint trajectory and EoE path are published on:
+
+- `/om6dof_topo_gng_v2/graph_pick/trajectory_preview`
+- `/om6dof_topo_gng_v2/graph_pick/path_preview`
+- `/om6dof_topo_gng_v2/graph_pick/target`
+- `/om6dof_topo_gng_v2/graph_pick/markers`
+- `/om6dof_topo_gng_v2/graph_pick/status`
+
+Physical execution requires both an execution-enabled launch and a later,
+explicit service call:
+
+```bash
+ros2 launch om6dof_pick_and_place graph_pick.launch.py execution_enabled:=true
+ros2 service call /plan_graph_pick std_srvs/srv/Trigger
+# Inspect the path and status first. This service sends the frozen graph path.
+ros2 service call /execute_graph_pick std_srvs/srv/Trigger
+```
+
+Execution opens the gripper, follows the exact graph-node joint trajectory,
+and closes on the semantic target. Automatic reverse traversal while carrying
+the object is disabled until a payload-aware collision model is available.
+The executor also refuses stale perception, stale joints, unverified camera
+calibration, an invalid/self-colliding reachability plan, a changed path, a
+small disconnected label fragment, or a misaligned gripper approach.
 
 ---
 

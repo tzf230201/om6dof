@@ -1,0 +1,7 @@
+{
+  "om6dof_controller/setup.py": "5a63c64c829d9e1d9e10a4b3622932ece1352fb9d3c2ec88b616a3ab8a1edce3",
+  "om6dof_controller/package.xml": "06272fa42ad8845c051126e6e483e9d2bb598ea32c9585aef25de469c4a40f1c",
+  "om6dof_teleop/om6dof_teleop/teleop_node.py": "aece24bffa0717ce928c17d08ee749dd3e9a6e264f5fd7e36291126490b100fc",
+  "om6dof_teleop/package.xml": "234402c6af4f39165f88bdbcdf137bd048d5aeba559edee9039e7f3b5351f780",
+  "om6dof_teleop/setup.py": "0fcd9a8b2cb94b6a245d81955e4488352c0652b943ab8f40f6ede2e043c160c8"
+}

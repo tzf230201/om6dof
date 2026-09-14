@@ -89,8 +89,16 @@
            starts at the non-singular `rest` pose instead of q=0 (straight up,
            which is a wrist singularity where Servo emergency-stops). On real
            hardware the dxl interface reads encoders and ignores these. -->
+      <!-- Two additive position command channels per arm joint.
+           `position`        : autonomous motion (MoveIt -> arm_controller).
+           `position_offset` : the human operator (om6dof_controller ->
+                               forward_offset_controller).
+           DynamixelHardware::write() sends their sum to the motor, so both
+           controllers stay active at once instead of taking turns over one
+           shared interface. The gripper keeps a single channel. -->
       <joint name="${prefix}joint1">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
@@ -99,6 +107,7 @@
       </joint>
       <joint name="${prefix}joint2">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <state_interface name="position">
           <param name="initial_value">-0.6806</param>
         </state_interface>
@@ -107,6 +116,7 @@
       </joint>
       <joint name="${prefix}joint3">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <state_interface name="position">
           <param name="initial_value">1.3613</param>
         </state_interface>
@@ -115,6 +125,7 @@
       </joint>
       <joint name="${prefix}joint4">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
@@ -123,6 +134,7 @@
       </joint>
       <joint name="${prefix}joint5">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <state_interface name="position">
           <param name="initial_value">0.8901</param>
         </state_interface>
@@ -131,6 +143,7 @@
       </joint>
       <joint name="${prefix}joint6">
         <command_interface name="position"/>
+        <command_interface name="position_offset"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>

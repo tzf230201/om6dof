@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -52,6 +53,8 @@
 #include "shape_msgs/msg/solid_primitive.hpp"
 
 #include "om6dof_dd_gng/msg/environment_graph.hpp"
+#include "om6dof_dd_gng/workspace_samples.hpp"
+#include "om6dof_dd_gng/semantic_target_selection.hpp"
 #include "om6dof_dd_gng/msg/reachability_graph.hpp"
 #include "om6dof_dd_gng/msg/reachability_plan.hpp"
 #include "om6dof_dd_gng/msg/reachability_query.hpp"
@@ -205,9 +208,13 @@ public:
     const auto period = std::chrono::milliseconds(
       std::max(100, static_cast<int>(planning_period_sec_ * 1000.0)));
     maintenance_timer_ = create_wall_timer(period, [this]() {
-      if (!initialized_ && !initialization_failed_) {
-        initializeModelAndGraph();
-      } else if (dirty_) {
+      if (!initialized_) {
+        if (!initialization_failed_) {
+          initializeModelAndGraph();
+        }
+        return;
+      }
+      if (dirty_) {
         updatePlanAndMarkers();
       }
     });
@@ -251,6 +258,8 @@ private:
     declare_parameter<bool>("strict_self_collision", true);
 
     declare_parameter<double>("target_intersection_radius", 0.05);
+    declare_parameter<std::string>("target_node_selection", "all");
+    declare_parameter<int>("target_component_center_candidates", 1);
     declare_parameter<double>("obstacle_clearance", 0.035);
     declare_parameter<double>("target_exclusion_radius", 0.055);
     declare_parameter<int>("start_connect_candidates", 20);
@@ -260,6 +269,10 @@ private:
     declare_parameter<double>("body_collision_step", 0.08);
     declare_parameter<int>("body_collision_first_edge", 1);
     declare_parameter<bool>("exact_collision_enabled", true);
+    declare_parameter<bool>("include_target_in_collision", false);
+    declare_parameter<bool>("target_refinement_enabled", false);
+    declare_parameter<std::string>("workspace_samples_file", "");
+    declare_parameter<std::string>("workspace_samples_sha256", "");
     declare_parameter<double>("exact_collision_step", 0.05);
     declare_parameter<double>("exact_environment_point_radius", 0.012);
     declare_parameter<double>("exact_environment_edge_radius", 0.006);
@@ -341,6 +354,20 @@ private:
     edge_validation_step_ = get_parameter("edge_validation_step").as_double();
     strict_self_collision_ = get_parameter("strict_self_collision").as_bool();
     target_intersection_radius_ = get_parameter("target_intersection_radius").as_double();
+    target_node_selection_ = get_parameter("target_node_selection").as_string();
+    if (target_node_selection_ != "all" && target_node_selection_ != "component_center" &&
+      target_node_selection_ != "component_center_neighborhood")
+    {
+      throw std::invalid_argument(
+              "target_node_selection must be all, component_center, or component_center_neighborhood");
+    }
+    const auto target_component_center_candidates =
+      get_parameter("target_component_center_candidates").as_int();
+    if (target_component_center_candidates <= 0) {
+      throw std::runtime_error("target_component_center_candidates must be positive");
+    }
+    target_component_center_candidates_ = static_cast<std::size_t>(
+      target_component_center_candidates);
     obstacle_clearance_ = get_parameter("obstacle_clearance").as_double();
     target_exclusion_radius_ = get_parameter("target_exclusion_radius").as_double();
     start_connect_candidates_ = static_cast<int>(get_parameter("start_connect_candidates").as_int());
@@ -352,6 +379,8 @@ private:
     body_collision_first_edge_ = static_cast<int>(
       get_parameter("body_collision_first_edge").as_int());
     exact_collision_enabled_ = get_parameter("exact_collision_enabled").as_bool();
+    include_target_in_collision_ = get_parameter("include_target_in_collision").as_bool();
+    target_refinement_enabled_ = get_parameter("target_refinement_enabled").as_bool();
     exact_collision_step_ = get_parameter("exact_collision_step").as_double();
     exact_environment_point_radius_ =
       get_parameter("exact_environment_point_radius").as_double();
@@ -382,10 +411,10 @@ private:
     scene_validation_service_name_ = get_parameter("scene_validation_service").as_string();
 
     if (graph_method_ != "halton_prm" && graph_method_ != "gng" &&
-      graph_method_ != "guarded_gng")
+      graph_method_ != "guarded_gng" && graph_method_ != "workspace_samples")
     {
       throw std::runtime_error(
-              "graph_method must be 'halton_prm', 'gng', or 'guarded_gng'");
+              "graph_method must be halton_prm, gng, guarded_gng, or workspace_samples");
     }
     if (!validSha256Hex(expanded_urdf_sha256_) || !validSha256Hex(srdf_sha256_) ||
       !validSha256Hex(reachability_parameters_sha256_))
@@ -526,6 +555,37 @@ private:
         strict_collision_matrix_->setEntry(link->getName(), parent->getName(), true);
       }
     }
+
+    // A collisionless kinematic frame can sit between two physically adjacent
+    // bodies.  In V2, for example, link7 -> end_effector_link (collisionless)
+    // -> gripper_*_link makes the wrist and each finger grandparent/child in
+    // the URDF even though their meshes form one mounted assembly.  Preserve
+    // the strict policy by importing only SRDF pairs explicitly classified as
+    // "Adjacent"; deliberately continue to ignore the broad "Never" pairs.
+    std::size_t semantic_adjacent_pairs = 0U;
+    const srdf::ModelConstSharedPtr & srdf = robot_model_->getSRDF();
+    if (srdf) {
+      for (const srdf::Model::CollisionPair & pair : srdf->getDisabledCollisionPairs()) {
+        if (pair.reason_ != "Adjacent") {
+          continue;
+        }
+        if (!robot_model_->hasLinkModel(pair.link1_) ||
+          !robot_model_->hasLinkModel(pair.link2_))
+        {
+          RCLCPP_WARN(
+            get_logger(), "Ignoring SRDF Adjacent pair with unknown link: %s <-> %s",
+            pair.link1_.c_str(), pair.link2_.c_str());
+          continue;
+        }
+        strict_collision_matrix_->setEntry(pair.link1_, pair.link2_, true);
+        ++semantic_adjacent_pairs;
+      }
+    }
+    RCLCPP_INFO(
+      get_logger(),
+      "Strict self-collision matrix admits direct parent-child pairs and %zu SRDF Adjacent pairs; "
+      "SRDF Never pairs remain collision-checked",
+      semantic_adjacent_pairs);
   }
 
   bool stateIsValid(const std::vector<double> & joints) const
@@ -691,6 +751,8 @@ private:
     edge_index_by_key_.clear();
     node_body_sweeps_.clear();
     edge_body_sweeps_.clear();
+    refinement_node_count_ = 0;
+    refinement_sample_sequence_ = 0;
     exact_blocked_edges_.clear();
     last_anchor_node_count_ = 0U;
     last_prototype_budget_ = 0U;
@@ -701,6 +763,7 @@ private:
     last_candidate_attempts_ = 0U;
     last_requested_guard_node_count_ = 0U;
 
+    if (graph_method_ != "workspace_samples") {
     moveit::core::RobotState seed_state(robot_model_);
     seed_state.setToDefaultValues();
     std::vector<double> seed;
@@ -716,10 +779,13 @@ private:
     if (const auto measured = currentJoints()) {
       appendNodeIfValid(*measured);
     }
+    }
     last_anchor_node_count_ = nodes_.size();
 
     int attempts = 0;
-    if (graph_method_ == "gng") {
+    if (graph_method_ == "workspace_samples") {
+      attempts = sampleWorkspaceNodes();
+    } else if (graph_method_ == "gng") {
       attempts = sampleGngNodes(0.0, false);
     } else if (graph_method_ == "guarded_gng") {
       attempts = sampleGngNodes(gng_guard_fraction_, true);
@@ -739,19 +805,19 @@ private:
     if (edges_.empty()) {
       return false;
     }
-    cacheBodySweeps();
+    if (graph_method_ != "workspace_samples") {cacheBodySweeps();}
     exact_blocked_edges_.assign(edges_.size(), false);
     RCLCPP_INFO(
       get_logger(),
       "Built method=%s with %zu/%d nodes (%zu anchors, %zu prototypes, %zu/%zu guards, "
-      "%zu fill samples) after %d candidate attempts; retained %zu validated edges in %zu "
+      "%zu fill samples) after %d candidate attempts; retained %zu %s edges in %zu "
       "components and cached %zu full-body edge sweeps",
       graph_method_.c_str(), nodes_.size(), sample_count_, last_anchor_node_count_,
       last_prototype_node_count_, last_guard_node_count_, last_requested_guard_node_count_,
       last_fill_sample_node_count_, attempts, edges_.size(),
-      connectedComponentCount(), edge_body_sweeps_.size());
-    const bool valid_cache = node_body_sweeps_.size() == nodes_.size() &&
-      edge_body_sweeps_.size() == edges_.size();
+      graph_method_ == "workspace_samples" ? "candidate" : "validated", connectedComponentCount(), edge_body_sweeps_.size());
+    const bool valid_cache = graph_method_ == "workspace_samples" ||
+      (node_body_sweeps_.size() == nodes_.size() && edge_body_sweeps_.size() == edges_.size());
     last_build_time_ms_ = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - build_started).count();
     if (valid_cache) {
@@ -880,8 +946,56 @@ private:
     return final_attempts;
   }
 
+  int sampleWorkspaceNodes()
+  {
+    if (!exact_collision_enabled_ || !include_target_in_collision_) {
+      throw std::runtime_error("workspace_samples requires exact collision including target geometry");
+    }
+    const std::vector<std::string> expected{"joint1", "joint2", "joint3", "joint4", "joint5", "joint6"};
+    if (joint_names_ != expected) {
+      throw std::runtime_error("workspace CSV joint order does not match active robot group");
+    }
+    const auto path = get_parameter("workspace_samples_file").as_string();
+    std::ifstream file(path);
+    if (!file) {throw std::runtime_error("cannot open workspace_samples_file: " + path);}
+    const auto samples = reach::readWorkspaceSamples(file);
+    std::set<std::vector<double>> seen;
+    std::size_t rejected = 0;
+    double maximum_error = 0.0;
+    for (const auto & sample : samples) {
+      auto node = nodeFromJoints(static_cast<std::uint32_t>(nodes_.size()), sample.joints);
+      const double error = reach::distance(node.position, sample.requested_position);
+      maximum_error = std::max(maximum_error, error);
+      // Scanner tolerance is 1 mm; reject a different kinematic model rather
+      // than placing old XYZ onto the current robot's joint configurations.
+      if (!std::isfinite(error) || error > 0.005) {
+        throw std::runtime_error("workspace FK/model mismatch exceeds 5 mm");
+      }
+      if (!stateIsValid(sample.joints) || !seen.insert(sample.joints).second) {
+        ++rejected;
+        continue;
+      }
+      nodes_.push_back(std::move(node));
+    }
+    last_fill_sample_node_count_ = nodes_.size();
+    RCLCPP_INFO(get_logger(),
+      "Workspace CSV: %zu witnesses, %zu accepted, %zu collision/bounds/duplicate rejected; "
+      "max FK error=%.6f m; SHA256=%s. Edges are candidates until path collision validation.",
+      samples.size(), nodes_.size(), rejected, maximum_error,
+      get_parameter("workspace_samples_sha256").as_string().c_str());
+    return static_cast<int>(samples.size());
+  }
+
   void connectRoadmapEdges()
   {
+    if (graph_method_ == "workspace_samples") {
+      edges_ = reach::workspaceCandidateEdges(nodes_, joint_ranges_,
+        max_cartesian_edge_length_, max_normalized_joint_distance_, neighbors_);
+      for (std::size_t i = 0; i < edges_.size(); ++i) {
+        edge_index_by_key_[edgeKey(edges_[i].a, edges_[i].b)] = i;
+      }
+      return;
+    }
     std::set<std::uint64_t> seen_edges;
     for (std::size_t i = 0; i < nodes_.size(); ++i) {
       std::vector<std::pair<double, std::size_t>> candidates;
@@ -1122,6 +1236,12 @@ private:
   std::vector<bool> fullBodyBlockedEdges(const std::vector<bool> & blocked_nodes) const
   {
     std::vector<bool> blocked(edges_.size(), false);
+    if (graph_method_ == "workspace_samples") {
+      for (std::size_t i = 0; i < edges_.size(); ++i) {
+        blocked[i] = blocked_nodes[edges_[i].a] || blocked_nodes[edges_[i].b];
+      }
+      return blocked;
+    }
     for (std::size_t i = 0U; i < edge_body_sweeps_.size(); ++i) {
       const reach::Edge & edge = edges_[i];
       blocked[i] =
@@ -1254,6 +1374,42 @@ private:
       }
     }
 
+    // Keep a complete scene for move-to-target planning. Semantic target status
+    // must not exempt the object or its surrounding geometry from FCL checks.
+    complete_environment_points_.clear();
+    complete_environment_segments_.clear();
+    for (const auto & node : message.nodes) {
+      complete_environment_points_.push_back({node.position.x, node.position.y, node.position.z});
+    }
+    for (const auto & edge : message.edges) {
+      const auto a = node_by_id.find(edge.source_id);
+      const auto b = node_by_id.find(edge.target_id);
+      if (a != node_by_id.end() && b != node_by_id.end()) {
+        complete_environment_segments_.push_back({a->second.first, b->second.first});
+      }
+    }
+    // Explicit atomic queries retain the caller's exact requested node. Live
+    // experiment planning can instead target the middle of each object surface.
+    // Filter only goals, after building the complete collision geometry above.
+    if (!strict && (target_node_selection_ == "component_center" ||
+      target_node_selection_ == "component_center_neighborhood"))
+    {
+      std::vector<reach::LabeledTarget> labeled;
+      std::vector<std::pair<std::uint32_t, std::uint32_t>> component_edges;
+      for (const auto & node : message.nodes) {
+        if (node.class_id >= 0) {
+          labeled.push_back({{node.id, {node.position.x, node.position.y, node.position.z}},
+              node.class_id});
+        }
+      }
+      for (const auto & edge : message.edges) {
+        component_edges.emplace_back(edge.source_id, edge.target_id);
+      }
+      targets = target_node_selection_ == "component_center" ?
+        reach::componentCenterTargets(labeled, component_edges) :
+        reach::componentCenterNeighborhoodTargets(
+          labeled, component_edges, target_component_center_candidates_);
+    }
     targets_ = std::move(targets);
     obstacle_points_ = std::move(obstacle_points);
     obstacle_segments_ = std::move(obstacle_segments);
@@ -1429,14 +1585,18 @@ private:
       planning_scene_->processCollisionObjectMsg(remove);
     }
 
+    const auto & scene_points = include_target_in_collision_ ?
+      complete_environment_points_ : obstacle_points_;
+    const auto & scene_segments = include_target_in_collision_ ?
+      complete_environment_segments_ : obstacle_segments_;
     moveit_msgs::msg::CollisionObject environment;
     environment.header.frame_id = world_frame_;
     environment.id = kEnvironmentCollisionObjectId;
     environment.operation = moveit_msgs::msg::CollisionObject::ADD;
-    environment.primitives.reserve(obstacle_points_.size() + obstacle_segments_.size());
+    environment.primitives.reserve(scene_points.size() + scene_segments.size());
     environment.primitive_poses.reserve(environment.primitives.capacity());
 
-    for (const reach::Point3 & point : obstacle_points_) {
+    for (const reach::Point3 & point : scene_points) {
       shape_msgs::msg::SolidPrimitive sphere;
       sphere.type = shape_msgs::msg::SolidPrimitive::SPHERE;
       sphere.dimensions.resize(1U);
@@ -1448,7 +1608,7 @@ private:
       environment.primitives.push_back(std::move(sphere));
       environment.primitive_poses.push_back(pose);
     }
-    for (const reach::Segment & segment : obstacle_segments_) {
+    for (const reach::Segment & segment : scene_segments) {
       const Eigen::Vector3d a(segment.a.x, segment.a.y, segment.a.z);
       const Eigen::Vector3d b(segment.b.x, segment.b.y, segment.b.z);
       const Eigen::Vector3d direction = b - a;
@@ -1613,14 +1773,18 @@ private:
           last_plan_.success = false;
           return;
         }
-        if (!exactTransitionIsValid(nodes_[a].joints, nodes_[b].joints)) {
+        const bool capsule_valid = graph_method_ != "workspace_samples" ||
+          !bodySweepBlocked(bodySweepForTransition(nodes_[a].joints, nodes_[b].joints));
+        if (!capsule_valid || !exactTransitionIsValid(nodes_[a].joints, nodes_[b].joints)) {
           failed_edge = found->second;
           break;
         }
       }
       if (failed_edge == reach::kInvalidIndex) {
         last_exact_collision_valid_ = true;
-        plan_reason_ = "path_ready_exact_validated_preview_only";
+        plan_reason_ = include_target_in_collision_ ?
+          "path_ready_exact_validated_target_protected_preview_only" :
+          "path_ready_exact_validated_preview_only";
         return;
       }
 
@@ -1633,6 +1797,88 @@ private:
     }
     last_plan_.success = false;
     plan_reason_ = "exact_collision_replan_exhausted";
+  }
+
+  bool refineTargetRoadmap()
+  {
+    if (graph_method_ == "workspace_samples" || !target_refinement_enabled_ || !include_target_in_collision_ ||
+      !exact_collision_enabled_ || targets_.empty() || nodes_.empty() ||
+      refinement_node_count_ >= 128U)
+    {
+      return false;
+    }
+    const auto began = std::chrono::steady_clock::now();
+    std::vector<std::pair<double, std::size_t>> seeds;
+    for (std::size_t i = 0; i < nodes_.size(); ++i) {
+      double d = std::numeric_limits<double>::infinity();
+      for (const auto & target : targets_) {
+        d = std::min(d, reach::distance(nodes_[i].position, target.position));
+      }
+      seeds.emplace_back(d, i);
+    }
+    std::sort(seeds.begin(), seeds.end());
+    seeds.resize(std::min<std::size_t>(16, seeds.size()));
+    const std::array<unsigned int, 6> bases{2, 3, 5, 7, 11, 13};
+    if (joint_names_.size() != bases.size()) {return false;}
+    std::size_t added = 0;
+    for (int attempt = 0; attempt < 256 && refinement_node_count_ < 128U; ++attempt) {
+      if (std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count() > 0.15) {
+        break;
+      }
+      const auto sequence = refinement_sample_sequence_++;
+      const auto seed_index = seeds[sequence % seeds.size()].second;
+      auto joints = nodes_[seed_index].joints;
+      for (std::size_t j = 0; j < joints.size(); ++j) {
+        const double u = reach::haltonRadicalInverse(
+          sequence / seeds.size() + 1, bases[j], reach::haltonDigitPermutation(bases[j], 0, j));
+        joints[j] = std::clamp(joints[j] + (2.0 * u - 1.0) * 0.45,
+          lower_bounds_[j], lower_bounds_[j] + joint_ranges_[j]);
+      }
+      auto candidate = nodeFromJoints(static_cast<std::uint32_t>(nodes_.size()), joints);
+      double distance = std::numeric_limits<double>::infinity();
+      for (const auto & target : targets_) {
+        distance = std::min(distance, reach::distance(candidate.position, target.position));
+      }
+      if (distance > target_intersection_radius_ * 1.5 || !stateIsValid(joints)) {continue;}
+      auto sweep = bodySweepForState(joints);
+      if (bodySweepBlocked(sweep) || !exactStateIsValid(joints)) {continue;}
+      const auto ranked = reach::rankNodesByJointDistance(nodes_, joints, joint_ranges_, blocked_nodes_);
+      std::vector<std::pair<std::size_t, BodySweep>> connections;
+      for (std::size_t rank = 0; rank < std::min<std::size_t>(24, ranked.size()); ++rank) {
+        const auto index = ranked[rank];
+        const double d = reach::normalizedJointDistance(nodes_[index].joints, joints, joint_ranges_);
+        if (d < 1.0e-6 || d > max_normalized_joint_distance_ ||
+          reach::distance(nodes_[index].position, candidate.position) > max_cartesian_edge_length_ ||
+          !edgeStateIsValid(nodes_[index].joints, joints)) {continue;}
+        auto edge_sweep = bodySweepForTransition(nodes_[index].joints, joints);
+        if (bodySweepBlocked(edge_sweep) || !exactTransitionIsValid(nodes_[index].joints, joints)) {
+          continue;
+        }
+        connections.emplace_back(index, std::move(edge_sweep));
+        if (connections.size() >= 3U) {break;}
+      }
+      if (connections.empty()) {continue;}
+      const auto new_index = nodes_.size();
+      nodes_.push_back(std::move(candidate));
+      node_body_sweeps_.push_back(std::move(sweep));
+      blocked_nodes_.push_back(false);
+      for (auto & connection : connections) {
+        edge_index_by_key_[edgeKey(connection.first, new_index)] = edges_.size();
+        edges_.push_back({connection.first, new_index,
+          reach::jointPathCost(nodes_[connection.first].joints, joints)});
+        edge_body_sweeps_.push_back(std::move(connection.second));
+        exact_blocked_edges_.push_back(false);
+        blocked_edges_.push_back(false);
+      }
+      ++added;
+      ++refinement_node_count_;
+    }
+    if (added != 0) {
+      ++graph_revision_;
+      intersection_nodes_ = reach::targetIntersectionMask(nodes_, targets_, target_intersection_radius_);
+      publishGraphData();
+    }
+    return added != 0;
   }
 
   void updatePlanAndMarkers()
@@ -1652,6 +1898,18 @@ private:
     intersection_nodes_ = reach::targetIntersectionMask(
       nodes_, targets_, target_intersection_radius_);
 
+    // Reject colliding goal states before Dijkstra. Otherwise lazy edge checks
+    // repeatedly route to the same colliding endpoint through another edge.
+    if (include_target_in_collision_ && exact_collision_enabled_) {
+      for (std::size_t i = 0; i < nodes_.size(); ++i) {
+        if (intersection_nodes_[i] && !blocked_nodes_[i] &&
+          ((graph_method_ == "workspace_samples" && bodySweepBlocked(bodySweepForState(nodes_[i].joints))) ||
+          !exactStateIsValid(nodes_[i].joints)))
+        {
+          blocked_nodes_[i] = true;
+        }
+      }
+    }
     last_plan_ = reach::PlanResult{};
     plan_reason_.clear();
     const auto measured = currentJoints();
@@ -1663,6 +1921,8 @@ private:
       plan_reason_ = "current_joint_state_invalid_or_self_colliding";
     } else if (bodySweepBlocked(bodySweepForState(*measured))) {
       plan_reason_ = "current_full_body_intersects_environment";
+    } else if (include_target_in_collision_ && !exactStateIsValid(*measured)) {
+      plan_reason_ = "current_robot_mesh_intersects_environment_or_target";
     } else {
       const auto start = validatedStartNode(*measured, blocked_nodes_);
       if (!start) {
@@ -1677,6 +1937,9 @@ private:
         last_start_connection_cost_ = reach::jointPathCost(
           *measured, nodes_[*start].joints);
         planWithExactValidation(*start);
+        if (!last_plan_.success && refineTargetRoadmap()) {
+          planWithExactValidation(*start);
+        }
       }
     }
 
@@ -1692,7 +1955,7 @@ private:
     om6dof_dd_gng::msg::ReachabilityGraph message;
     message.header.stamp = now();
     message.header.frame_id = world_frame_;
-    message.graph_method = graph_method_;
+    message.graph_method = refinement_node_count_ ? graph_method_ + "+local_prm" : graph_method_;
     message.graph_revision = graph_revision_;
     message.expanded_urdf_sha256 = expanded_urdf_sha256_;
     message.srdf_sha256 = srdf_sha256_;
@@ -1746,7 +2009,7 @@ private:
     om6dof_dd_gng::msg::ReachabilityPlan message;
     message.header.stamp = now();
     message.header.frame_id = world_frame_;
-    message.graph_method = graph_method_;
+    message.graph_method = refinement_node_count_ ? graph_method_ + "+local_prm" : graph_method_;
     message.graph_revision = graph_revision_;
     message.query_id = active_query_id_;
     message.scene_id = active_scene_id_;
@@ -1779,7 +2042,9 @@ private:
 
     double elapsed = 0.0;
     std::vector<double> previous;
-    if (measured) {
+    const bool can_publish_measured_pose = measured && initialized_ && robot_model_ &&
+      joint_model_group_ != nullptr && measured->size() == joint_names_.size();
+    if (can_publish_measured_pose) {
       previous = *measured;
       trajectory_msgs::msg::JointTrajectoryPoint point;
       point.positions = previous;
@@ -1857,7 +2122,8 @@ private:
 
     visualization_msgs::msg::Marker edge_marker;
     edge_marker.header = node_marker.header;
-    edge_marker.ns = "reachability_edges";
+    edge_marker.ns = graph_method_ == "workspace_samples" ?
+      "workspace_candidate_edges" : "reachability_edges";
     edge_marker.id = 1;
     edge_marker.type = visualization_msgs::msg::Marker::LINE_LIST;
     edge_marker.action = visualization_msgs::msg::Marker::ADD;
@@ -2136,10 +2402,18 @@ private:
   int body_collision_first_edge_ = 1;
   std::unordered_map<std::string, double> body_radii_;
   bool exact_collision_enabled_ = true;
+  bool include_target_in_collision_ = false;
+  bool target_refinement_enabled_ = false;
+  std::size_t refinement_node_count_ = 0;
+  std::uint64_t refinement_sample_sequence_ = 0;
+  std::vector<reach::Point3> complete_environment_points_;
+  std::vector<reach::Segment> complete_environment_segments_;
   double exact_collision_step_ = 0.05;
   double exact_environment_point_radius_ = 0.012;
   double exact_environment_edge_radius_ = 0.006;
   int exact_max_replans_ = 20;
+  std::string target_node_selection_ = "all";
+  std::size_t target_component_center_candidates_ = 1U;
   std::vector<std::string> exact_environment_ignored_links_{"link1"};
   double node_marker_scale_ = 0.012;
   double edge_marker_width_ = 0.002;

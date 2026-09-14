@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="13" failures="0" disabled="0" errors="0" time="0" timestamp="2026-09-11T17:44:56" name="AllTests">
+  <testsuite name="ReachabilityGeometry" tests="2" failures="0" disabled="0" errors="0" time="0" timestamp="2026-09-11T17:44:56">
+    <testcase name="PointAndSegmentDistancesAreFinite" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGeometry" />
+    <testcase name="CapsuleChecksPointsAndObstacleEdges" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGeometry" />
+  </testsuite>
+  <testsuite name="ReachabilityGng" tests="5" failures="0" disabled="0" errors="0" time="0" timestamp="2026-09-11T17:44:56">
+    <testcase name="IsDeterministicFiniteAndHonorsNodeBudget" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGng" />
+    <testcase name="RejectsInconsistentTrainingSamples" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGng" />
+    <testcase name="GuardIndicesAreDeterministicStratifiedAndUnique" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGng" />
+    <testcase name="GuardIndicesClampToAvailableSamples" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGng" />
+    <testcase name="NodeBudgetExcludesFixedAnchors" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGng" />
+  </testsuite>
+  <testsuite name="ReachabilitySampling" tests="1" failures="0" disabled="0" errors="0" time="0" timestamp="2026-09-11T17:44:56">
+    <testcase name="DigitScrambledHaltonIsDeterministicAndBijective" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilitySampling" />
+  </testsuite>
+  <testsuite name="ReachabilityGraph" tests="5" failures="0" disabled="0" errors="0" time="0" timestamp="2026-09-11T17:44:56">
+    <testcase name="JointRankingUsesNormalizedJointSpace" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGraph" />
+    <testcase name="ObstacleBlocksNodeAndCrossingEdge" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGraph" />
+    <testcase name="DijkstraChoosesClosestReachableIntersection" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGraph" />
+    <testcase name="BlockedRouteAndOutOfRangeTargetFailCleanly" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGraph" />
+    <testcase name="IntersectionRadiusIncludesBoundary" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:56" classname="om6dof_dd_gng.ReachabilityGraph" />
+  </testsuite>
+</testsuites>

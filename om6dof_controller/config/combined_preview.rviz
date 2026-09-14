@@ -1,0 +1,172 @@
+Panels:
+- Class: rviz_common/Displays
+  Name: Displays
+Visualization Manager:
+  Class: ''
+  Global Options:
+    Fixed Frame: world
+    Frame Rate: 30
+  Displays:
+  - Class: rviz_default_plugins/Grid
+    Name: Grid
+    Enabled: true
+    Cell Size: 0.1
+    Plane: XY
+  - Alpha: 1
+    Class: rviz_default_plugins/RobotModel
+    Collision Enabled: false
+    Description File: ''
+    Description Source: Topic
+    Description Topic:
+      Depth: 5
+      Durability Policy: Transient Local
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /om6dof_dd_gng/v2/robot_description
+    Enabled: true
+    Links:
+      All Links Enabled: true
+      Expand Joint Details: false
+      Expand Link Details: false
+      Expand Tree: false
+      Link Tree Style: Links in Alphabetic Order
+      d435_depth_optical_frame:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+      d435_link:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+      d405_payload_link:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      end_effector_link:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      gripper_left_link:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      gripper_right_link:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      link1:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      link2:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      link3:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      link4:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      link5:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      link6:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      link7:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+        Value: true
+      world:
+        Alpha: 1
+        Show Axes: false
+        Show Trail: false
+    Mass Properties:
+      Inertia: false
+      Mass: false
+    Name: RobotModel
+    TF Prefix: ''
+    Update Interval: 0
+    Value: true
+    Visual Enabled: true
+  - Class: rviz_default_plugins/MarkerArray
+    Enabled: true
+    Name: environment_graph
+    Namespaces:
+      environment_graph_edges: true
+      environment_graph_nodes: true
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /om6dof_topo_gng_v2/environment_graph
+    Value: true
+  - Class: rviz_default_plugins/MarkerArray
+    Enabled: true
+    Name: yolo_object_clusters
+    Namespaces:
+      yolo_object_centroids: true
+      yolo_object_labels: true
+      yolo_object_members: true
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /om6dof_topo_gng_v2/object_clusters_markers
+    Value: true
+  - Class: rviz_default_plugins/MarkerArray
+    Enabled: true
+    Name: reachability_graph
+    Namespaces:
+      reachability_edges: true
+      reachability_goal: true
+      reachability_nodes: true
+      reachability_path: false
+      reachability_start: true
+    Topic:
+      Depth: 1
+      Durability Policy: Transient Local
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /om6dof_topo_gng_v2/reachability_graph
+    Value: true
+  - Class: rviz_default_plugins/MarkerArray
+    Name: Nominal green - combined magenta (PREVIEW ONLY)
+    Enabled: true
+    Topic:
+      Value: /om6dof/combined_preview/markers
+      Reliability Policy: Reliable
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 5
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1.5
+      Focal Point:
+        X: 0.3
+        Y: 0
+        Z: 0.15
+      Pitch: 0.5
+      Yaw: 0.8
+Window Geometry:
+  Width: 1000
+  Height: 700

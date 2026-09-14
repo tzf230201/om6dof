@@ -86,6 +86,17 @@ def optical_point_to_world(p_opt, p_we, R_we, t_ec, R_eo):
     return R_we @ t_ec + p_we + (R_we @ R_eo) @ p_opt
 
 
+# Perception and this picker now share the explicit V2/D435 contract.  Keep
+# the model/frame guard: silently accepting a D405 point here would apply the
+# wrong wrist extrinsic to a physical pick target.
+PERCEPTION_CAMERA_FRAME = "d435_color_optical_frame"
+PERCEPTION_METADATA = {
+    "model_version": "v2",
+    "camera_frame": PERCEPTION_CAMERA_FRAME,
+}
+PERCEPTION_CAMERA_MODELS = frozenset(("D435", "D435i"))
+
+
 def stable_point_median(samples, max_spread: float):
     """Median point if all samples form a sufficiently tight 3D cluster."""
     if not samples:
@@ -198,6 +209,9 @@ class DirectPickNode(Node):
 
         # ---- kinematics (forward only) ----
         self.declare_parameter("ik_urdf_pkg", "om6dof_description")
+        self.declare_parameter(
+            "ik_xacro_rel", "urdf/om6dof_v2.urdf.xacro"
+        )
         self.declare_parameter("ik_base_link", "world")
         self.declare_parameter("ik_tip_link", "end_effector_link")
         self.declare_parameter("arm_joint_names",
@@ -208,7 +222,7 @@ class DirectPickNode(Node):
             base_link=str(self.get_parameter("ik_base_link").value),
             tip_link=str(self.get_parameter("ik_tip_link").value),
             urdf_pkg=str(self.get_parameter("ik_urdf_pkg").value),
-            xacro_rel="urdf/om6dof.urdf.xacro",
+            xacro_rel=str(self.get_parameter("ik_xacro_rel").value),
         )
         self.arm_joints = [str(x) for x in
                            self.get_parameter("arm_joint_names").value]
@@ -216,6 +230,15 @@ class DirectPickNode(Node):
         # ---- camera extrinsic (parent = end_effector_link) ----
         self.declare_parameter("camera_xyz", [-0.08247, 0.0, -0.0096])
         self.declare_parameter("camera_rpy", [0.0, -1.1345, 0.0])
+        # V2 CAD/nominal end_effector_link -> D435 colour-optical transform.
+        # It is separate from the legacy AprilTag/body-frame calibration above.
+        self.declare_parameter(
+            "perception_camera_xyz",
+            [-0.05265408936, 0.03250000257, -0.05924999951],
+        )
+        self.declare_parameter(
+            "perception_camera_optical_rpy", [0.0, 0.0, -1.57079632679]
+        )
         self.declare_parameter("object_center_from_tag", [0.0, 0.0, -0.015])
         self.declare_parameter("object_source", "apriltag")
         self.declare_parameter("tag_topic", "/apriltag/pose")
@@ -232,6 +255,14 @@ class DirectPickNode(Node):
         self._R_eo = rpy_to_matrix(
             *[float(v) for v in self.get_parameter("camera_rpy").value]) \
             @ R_BODY_OPTICAL
+        self._perception_t_ec = np.array([
+            float(v) for v in
+            self.get_parameter("perception_camera_xyz").value
+        ])
+        self._perception_R_eo = rpy_to_matrix(*[
+            float(v) for v in
+            self.get_parameter("perception_camera_optical_rpy").value
+        ])
 
         # ---- front-pick geometry ----
         self.declare_parameter("front_standoff", 0.05)   # advance ~5 cm
@@ -281,7 +312,7 @@ class DirectPickNode(Node):
         self.declare_parameter("tracking_joint5_min", -1.80)
         self.declare_parameter("tracking_joint5_max", 1.80)
         # Search-only scan: low/floor view first, then medium and high.  The
-        # D405 mount looks lower as joint5 increases. Joint1 positive is left.
+        # The V2 D435 mount looks lower as joint5 increases. Joint1 positive is left.
         self.declare_parameter("search_required_frames", 10)
         self.declare_parameter("search_pan_positions", [0.0, 0.70, -0.70])
         self.declare_parameter("search_tilt_positions", [1.45, 0.90, 0.35])
@@ -339,6 +370,10 @@ class DirectPickNode(Node):
         self._samples: deque = deque(maxlen=60)     # (t, p_opt, q_opt)
         self._perception_samples: deque = deque(maxlen=60)  # (t, p_opt)
         self._perception_bbox_optical = None  # (time, center, size)
+        self._perception_guard_lock = threading.RLock()
+        self._perception_input_error = ""
+        self._perception_frame_seen = False
+        self._perception_status_compatible = True  # frame guard covers unlabelled status
         self.object_source = str(
             self.get_parameter("object_source").value
         ).strip().lower()
@@ -459,17 +494,93 @@ class DirectPickNode(Node):
         self._samples.append((time.monotonic(), p, q))
 
     def _on_perception_target(self, msg: PointStamped) -> None:
-        p = np.array([msg.point.x, msg.point.y, msg.point.z], dtype=float)
-        if np.all(np.isfinite(p)) and p[2] > 0.0:
+        with self._perception_guard_lock:
+            if msg.header.frame_id != PERCEPTION_CAMERA_FRAME:
+                self._reject_perception_input(
+                    f"camera frame {msg.header.frame_id!r}; this V2/D435 "
+                    f"backend requires {PERCEPTION_CAMERA_FRAME!r}")
+                return
+            if not self._perception_status_compatible:
+                return
+            p = np.array([msg.point.x, msg.point.y, msg.point.z], dtype=float)
+            if not np.all(np.isfinite(p)) or p[2] <= 0.0:
+                self._reject_perception_input("invalid optical target point")
+                return
+            self._perception_frame_seen = True
+            self._perception_input_error = ""
             self._perception_samples.append((time.monotonic(), p))
+
+    def _reject_perception_input(self, reason: str) -> None:
+        """Invalidate V2 target state, including poses cached before a switch.
+
+        Called under the guard lock. Cancellation uses the client's existing
+        stop latch; receiving compatible data never resumes a cancelled run.
+        """
+        self._perception_input_error = reason
+        self._perception_frame_seen = False
+        self._perception_samples.clear()
+        self._perception_bbox_optical = None
+        with self._search_state_lock:
+            self._search_detection_streak = 0
+        if self.object_source == "perception":
+            self._last_obj = None
+            self._last_obj_t = 0.0
+            if self._pickup_mode or self._tracking_mode or self._search_mode:
+                self._cancel.set()
+                self.client.cancel_current_goal()
+                self._status_line = f"perception stopped: {reason}"
+        self.get_logger().warn(
+            f"perception input rejected: {reason}", throttle_duration_sec=2.0)
 
     def _on_joints(self, msg: JointState) -> None:
         self._joints = dict(zip(msg.name, msg.position))
 
+    def _latest_perception_sample(self):
+        with self._perception_guard_lock:
+            if self._perception_input_error or not self._perception_samples:
+                return None
+            return self._perception_samples[-1]
+
+    def _perception_motion_blocked(self) -> bool:
+        return (self.object_source == "perception"
+                and (self._pickup_mode or self._tracking_mode or self._search_mode)
+                and bool(self._perception_input_error))
+
     def _on_perception_status(self, msg: String) -> None:
         """Use perception's per-frame status for a strict detection streak."""
+        with self._perception_guard_lock:
+            self._on_perception_status_locked(msg)
+
+    def _on_perception_status_locked(self, msg: String) -> None:
         try:
             payload = json.loads(msg.data)
+            if not isinstance(payload, dict):
+                raise ValueError("status must be an object")
+            for key, expected in PERCEPTION_METADATA.items():
+                if key in payload and payload[key] != expected:
+                    self._perception_status_compatible = False
+                    self._reject_perception_input(
+                        f"{key}={payload[key]!r}; V2/D435 requires {expected!r}")
+                    return
+            camera_model = payload.get("camera_model")
+            if (camera_model is not None
+                    and camera_model not in PERCEPTION_CAMERA_MODELS):
+                self._perception_status_compatible = False
+                self._reject_perception_input(
+                    f"camera_model={camera_model!r}; V2 requires one of "
+                    f"{sorted(PERCEPTION_CAMERA_MODELS)!r}")
+                return
+            # An unlabelled publisher remains supported initially because the
+            # PointStamped frame is independently guarded above.
+            # Once another model was seen, require complete V2 metadata to recover;
+            # unlabelled status must not undo a latched model mismatch.
+            if all(payload.get(key) == value
+                   for key, value in PERCEPTION_METADATA.items()) and \
+                    camera_model in PERCEPTION_CAMERA_MODELS:
+                self._perception_status_compatible = True
+            if (not self._perception_status_compatible
+                    or not self._perception_frame_seen):
+                return
             target = payload.get("target") or {}
             description = str(
                 target.get("desc") or target.get("class") or "object")
@@ -541,6 +652,12 @@ class DirectPickNode(Node):
 
     def _perception_object_world(self, allow_stale: bool = False):
         """Transform a stable YOLO/depth target from optical to arm world."""
+        with self._perception_guard_lock:
+            if self._perception_input_error:
+                return None
+            return self._perception_object_world_locked(allow_stale)
+
+    def _perception_object_world_locked(self, allow_stale: bool):
         now = time.monotonic()
         max_age = float(self.get_parameter("max_sample_age").value)
         samples = [
@@ -557,7 +674,8 @@ class DirectPickNode(Node):
             if p_opt is not None:
                 p_we, R_we = self.ik.fk_pose(q)
                 obj_w = optical_point_to_world(
-                    p_opt, p_we, R_we, self._t_ec, self._R_eo
+                    p_opt, p_we, R_we,
+                    self._perception_t_ec, self._perception_R_eo
                 )
                 self._last_obj = (obj_w.copy(), obj_w, np.eye(3))
                 self._last_obj_t = now
@@ -579,6 +697,12 @@ class DirectPickNode(Node):
 
     def _perception_bbox_top_world(self):
         """Latest YOLO 3D-box upper surface in arm/world coordinates."""
+        with self._perception_guard_lock:
+            if self._perception_input_error:
+                return None
+            return self._perception_bbox_top_world_locked()
+
+    def _perception_bbox_top_world_locked(self):
         bbox = self._perception_bbox_optical
         q = self._arm_q()
         if bbox is None or q is None:
@@ -589,7 +713,8 @@ class DirectPickNode(Node):
             return None
         p_we, R_we = self.ik.fk_pose(q)
         return axis_aligned_bbox_top_world(
-            center, size, p_we, R_we, self._t_ec, self._R_eo)
+            center, size, p_we, R_we,
+            self._perception_t_ec, self._perception_R_eo)
 
     def _approach_geom(self):
         """Effective (standoff, up) — from approach_offset if set, else the
@@ -805,7 +930,7 @@ class DirectPickNode(Node):
                    position_tolerance=None,
                    orientation_tolerance=None) -> bool:
         """Plan and execute one Cartesian target through MoveGroup."""
-        if self._cancel.is_set():
+        if self._cancel.is_set() or self._perception_motion_blocked():
             return False
         if not self.client.wait_for_move_server(timeout_sec=5.0):
             self.get_logger().error(
@@ -835,7 +960,7 @@ class DirectPickNode(Node):
 
     def _send_position(self, pos: np.ndarray, label: str) -> bool:
         """Plan position only; orientation is deliberately unconstrained."""
-        if self._cancel.is_set():
+        if self._cancel.is_set() or self._perception_motion_blocked():
             return False
         if not self.client.wait_for_move_server(timeout_sec=5.0):
             return False
@@ -979,7 +1104,7 @@ class DirectPickNode(Node):
 
     def _send_joint_pose(self, pose, label: str) -> bool:
         """Plan and execute a six-joint target through MoveGroup."""
-        if self._cancel.is_set():
+        if self._cancel.is_set() or self._perception_motion_blocked():
             return False
         if not self.client.wait_for_move_server(timeout_sec=5.0):
             return False
@@ -991,6 +1116,8 @@ class DirectPickNode(Node):
 
     def _gripper(self, which: str, label: str = "") -> bool:
         """Open/close through the always-active GripperActionController."""
+        if self._cancel.is_set() or self._perception_motion_blocked():
+            return False
         which = which.strip().lower()
         self._status_line = f"gripper {label or which.upper()}"
         self.get_logger().info(self._status_line)
@@ -1038,8 +1165,7 @@ class DirectPickNode(Node):
         last_error_y = None
         while rclpy.ok() and not self._cancel.is_set() \
                 and time.monotonic() < deadline:
-            latest = self._perception_samples[-1] \
-                if self._perception_samples else None
+            latest = self._latest_perception_sample()
             q = self._arm_q()
             if latest is None or time.monotonic() - latest[0] > target_timeout \
                     or q is None:
@@ -1383,8 +1509,7 @@ class DirectPickNode(Node):
         try:
             while rclpy.ok() and not self._cancel.is_set():
                 now = time.monotonic()
-                latest = self._perception_samples[-1] \
-                    if self._perception_samples else None
+                latest = self._latest_perception_sample()
                 q = self._arm_q()
                 if latest is None or now - latest[0] > timeout:
                     self._status_line = "tracking pan-tilt — object lost, holding"
@@ -1452,7 +1577,8 @@ class DirectPickNode(Node):
             # latest measured position. No search motion is issued when lost.
             q = self._arm_q()
             if q is not None:
-                self._publish_arm_trajectory(np.asarray(q, dtype=float), 0.10)
+                self._publish_arm_trajectory(
+                    np.asarray(q, dtype=float), 0.10, hold_current=True)
             self._status_line = "tracking pan-tilt stopped"
             self._tracking_status_pub.publish(String(data="inactive: stopped"))
             self.get_logger().info(self._status_line)
@@ -1564,7 +1690,8 @@ class DirectPickNode(Node):
         finally:
             current = self._arm_q()
             if current is not None:
-                self._publish_arm_trajectory(np.asarray(current), 0.10)
+                self._publish_arm_trajectory(
+                    np.asarray(current), 0.10, hold_current=True)
             if final_result is None:
                 final_result = "stopped: search ended"
             self._set_search_status(final_result)
@@ -1574,8 +1701,16 @@ class DirectPickNode(Node):
                 self._search_mode = False
 
     def _publish_arm_trajectory(self, positions: np.ndarray,
-                                duration_s: Optional[float] = None) -> None:
+                                duration_s: Optional[float] = None,
+                                *, hold_current: bool = False) -> None:
         """Publish a full six-joint target while the trajectory controller owns the arm."""
+        with self._perception_guard_lock:
+            if (not hold_current and self.object_source == "perception"
+                    and (self._perception_input_error or self._cancel.is_set())):
+                return
+            self._publish_arm_trajectory_unchecked(positions, duration_s)
+
+    def _publish_arm_trajectory_unchecked(self, positions, duration_s) -> None:
         msg = JointTrajectory()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.joint_names = list(self.arm_joints)
@@ -1618,6 +1753,9 @@ class DirectPickNode(Node):
                 self.get_logger().warn(
                     "current MoveGroup goal is still finishing; new command rejected")
                 return False
+        if not self.client.begin_sequence():
+            self.get_logger().warn("previous action cancellation is still pending")
+            return False
         self._cancel.clear()
         return True
 
@@ -1639,7 +1777,8 @@ class DirectPickNode(Node):
         if not self._preempt():
             return False
         with self._run_lock:
-            if self._busy:
+            if (self._busy or (self.object_source == "perception"
+                               and self._perception_input_error)):
                 return False
             self._busy = True
             self._pickup_mode = True
@@ -1652,6 +1791,9 @@ class DirectPickNode(Node):
 
     # ---------------- services ----------------
     def _pick_preflight(self):
+        if (getattr(self, "object_source", "apriltag") == "perception"
+                and self._perception_input_error):
+            return False, self._perception_input_error
         with self._run_lock:
             if self._busy and not getattr(self, "_tracking_mode", False):
                 return False, "pickup sequence already running"
@@ -1659,8 +1801,7 @@ class DirectPickNode(Node):
             "pickup_tracking_enabled").value) \
             and getattr(self, "object_source", "apriltag") == "perception"
         if tracked_pick:
-            latest = self._perception_samples[-1] \
-                if self._perception_samples else None
+            latest = self._latest_perception_sample()
             max_age = float(self.get_parameter(
                 "tracking_target_timeout_s").value)
             if latest is None or time.monotonic() - latest[0] > max_age:
@@ -1738,10 +1879,18 @@ class DirectPickNode(Node):
             res.success = False
             res.message = "tracking requires object_source=perception"
             return res
+        if self._perception_input_error:
+            res.success = False
+            res.message = f"tracking rejected: {self._perception_input_error}"
+            return res
         with self._run_lock:
             if self._busy:
                 res.success = False
                 res.message = "arm busy; stop pickup/tracking first"
+                return res
+            if not self.client.begin_sequence():
+                res.success = False
+                res.message = "tracking rejected: previous action is still stopping"
                 return res
             self._busy = True
             self._pickup_mode = False
@@ -1759,6 +1908,10 @@ class DirectPickNode(Node):
             res.success = False
             res.message = "search requires object_source=perception"
             return res
+        if self._perception_input_error:
+            res.success = False
+            res.message = f"search rejected: {self._perception_input_error}"
+            return res
         if self._arm_q() is None:
             res.success = False
             res.message = "search rejected: joint state unavailable"
@@ -1767,6 +1920,10 @@ class DirectPickNode(Node):
             if self._busy:
                 res.success = False
                 res.message = "arm busy; stop pickup/tracking/search first"
+                return res
+            if not self.client.begin_sequence():
+                res.success = False
+                res.message = "search rejected: previous action is still stopping"
                 return res
             self._busy = True
             self._pickup_mode = False

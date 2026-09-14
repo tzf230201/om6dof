@@ -1,0 +1,17 @@
+# Example schema only. This file is deliberately rejected: its serial is empty
+# and it is not a measurement. Generate the real artifact with
+# `ros2 run om6dof_pick_and_place ddgng_hand_eye_calibrate`.
+schema: om6dof.hand_eye.v1
+camera:
+  model: D435i
+  serial: ""
+transform:
+  parent_frame: end_effector_link
+  child_frame: d435_color_optical_frame
+  xyz: [0.0, 0.0, 0.0]
+  quaternion_xyzw: [0.0, 0.0, 0.0, 1.0]
+validation:
+  method: opencv_calibrateHandEye_eye_in_hand
+  samples: 0
+  translation_rmse_m: 1.0
+  rotation_rmse_rad: 1.0

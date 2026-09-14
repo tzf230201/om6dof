@@ -1,0 +1,5 @@
+Loading official BOXER + DINO. Manual prompt labels: ['bottle']
+Loading checkpoint from "/home/kublab/ros2_ws/src/.boxer_runtime/boxer/ckpts/boxernet_hw960in2x6d768-c88128f8.ckpt"
+==> Loaded checkpoint: 320/320 tensors, 85.81M/85.81M params (100.0%)
+BOXER ready: cpu | CPU mode is an initial compatibility test, not real-time.
+{"saved": "/tmp/boxer_smoke_outputs/capture_1789329881021247808", "seconds": 12.67724495999937, "boxes": [["bottle", 0.9135608673095703, 0]], "overlap_points": 0}

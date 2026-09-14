@@ -1,0 +1,57 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: boxer_local
+    Background Color: 40; 40; 40
+    Frame Rate: 5
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 0.1
+    - Class: rviz_default_plugins/MarkerArray
+      Name: BOXER 3D boxes
+      Enabled: true
+      Topic:
+        Value: /boxer/boxes
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Observed depth
+      Enabled: true
+      Topic:
+        Value: /boxer/points
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: FlatColor
+      Color: 140; 140; 140
+      Position Transformer: XYZ
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Points inside BOXER boxes
+      Enabled: true
+      Topic:
+        Value: /boxer/cut_points
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        Depth: 1
+      Style: Points
+      Size (Pixels): 4
+      Color Transformer: RGB8
+      Position Transformer: XYZ
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1.3
+      Focal Point: {X: 0.0, Y: 0.5, Z: 0.0}
+      Pitch: 0.5
+      Yaw: 0.8
+Window Geometry:
+  Width: 1100
+  Height: 800

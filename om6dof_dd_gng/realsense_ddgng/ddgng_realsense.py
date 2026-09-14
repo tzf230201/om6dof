@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""DD-GNG live on the RealSense D435i, overlaid on the RGB view.
+"""Versioned DD-GNG camera-space graph, overlaid on the RGB view.
 
 Pipeline per frame:
-    RealSense depth (aligned to colour)
-      -> sub-sampled grid of valid pixels deprojected to 3D points (metres)
+    V1: aligned depth with the original pinhole preprocessing
+    V2: native depth vertices registered into RGB using device extrinsics
+      -> sub-sampled valid colour-camera XYZ points (metres)
       -> fed to the original DD-GNG core (libddgng.so, from gng.cpp)
       -> node positions + edges read back
       -> nodes projected back to pixels and drawn on the colour image.
+
+This graph is camera-relative, not world-fixed; no robot FK is used.
 
 The GNG algorithm is the unmodified simulation code (Fritzke 1995 parameters);
 only the input (real depth instead of a simulated ray scan) and the output
@@ -14,15 +17,22 @@ only the input (real depth instead of a simulated ray scan) and the output
 
 Run inside the venv that has pyrealsense2 + cv2:
     DISPLAY=:1002 LD_LIBRARY_PATH=build_om6dof ~/ggcnn_env/bin/python ddgng_realsense.py
+For V2 + the installed D435i add --model-version v2; a serial is optional
+when exactly one D435i is connected.
 """
 import ctypes
 import argparse
+import json
 import os
 import time
 
 import cv2
 import numpy as np
 import pyrealsense2 as rs
+
+from camera_input import (
+    RealSenseInput, add_camera_arguments, project_camera_points, sample_camera_points,
+)
 
 # --- tunables (pre-processing only; never touch the GNG parameters) ----------
 W, H, FPS = 640, 480, 30
@@ -34,16 +44,32 @@ MAX_EDGES = 8000
 
 
 def load_lib():
+    candidates = []
+    # With --symlink-install CPython can import this helper from the source
+    # directory even when the entry script lives in install/. Prefer the
+    # active ROS overlay's core instead of a stale source-tree build.
+    try:
+        from ament_index_python.packages import get_package_prefix, PackageNotFoundError
+    except ImportError:
+        pass  # Standalone plain-CMake deployment, without a ROS environment.
+    else:
+        try:
+            prefix = get_package_prefix("om6dof_dd_gng")
+            candidates.append(os.path.join(prefix, "lib", "om6dof_dd_gng", "libddgng.so"))
+        except PackageNotFoundError:
+            pass
     here = os.path.dirname(os.path.abspath(__file__))
-    for cand in (os.path.join(here, "build_om6dof", "libddgng.so"),
-                 os.path.join(here, "build", "libddgng.so"),
-                 os.path.join(here, "libddgng.so"),
-                 "libddgng.so"):
+    candidates.extend((os.path.join(here, "libddgng.so"),
+                       os.path.join(here, "build_om6dof", "libddgng.so"),
+                       os.path.join(here, "build", "libddgng.so"),
+                       "libddgng.so"))
+    for cand in candidates:
         if os.path.exists(cand):
             lib = ctypes.CDLL(cand)
             break
     else:
-        raise FileNotFoundError("libddgng.so not found - build it with cmake first")
+        raise FileNotFoundError("libddgng.so not found - build/source om6dof_dd_gng with colcon, "
+                                "or build realsense_ddgng with CMake")
 
     d, dp, ip, i, dbl = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_double),
                          ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_double)
@@ -54,11 +80,14 @@ def load_lib():
     lib.ddgng_get_nodes.restype = i
     lib.ddgng_get_edges.argtypes = [d, ip, i]
     lib.ddgng_get_edges.restype = i
+    lib.ddgng_destroy.argtypes = [d]
+    lib.ddgng_destroy.restype = None
     return lib
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="OM6DOF DD-GNG RealSense")
+    add_camera_arguments(parser)
     parser.add_argument(
         "--headless", action="store_true",
         help="disable the local OpenCV window (for systemd/web monitor)",
@@ -73,7 +102,7 @@ def parse_args():
              "this JPEG untouched, so it sets the preview's bandwidth: 80 "
              "costs about 52 kB per 640x480 frame, 50 about 25 kB",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main():
@@ -98,26 +127,7 @@ def main():
             f"DD-GNG web stream: {args.ros_topic}"
         )
 
-    # --- RealSense pipeline: depth + colour, depth aligned to colour ----------
-    pipe = rs.pipeline()
-    cfg = rs.config()
-    cfg.enable_stream(rs.stream.depth, W, H, rs.format.z16, FPS)
-    cfg.enable_stream(rs.stream.color, W, H, rs.format.bgr8, FPS)
-    profile = pipe.start(cfg)
-    align = rs.align(rs.stream.color)
-    depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
-
-    # Colour intrinsics (used for both deprojection and re-projection so the
-    # overlay stays self-consistent even though we use a plain pinhole model).
-    ci = profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
-    fx, fy, ppx, ppy = ci.fx, ci.fy, ci.ppx, ci.ppy
-
-    # Pre-built sub-sample grid of pixel coordinates.
-    us = np.arange(0, W, PIXEL_STEP)
-    vs = np.arange(0, H, PIXEL_STEP)
-    uu, vv = np.meshgrid(us, vs)            # (gh, gw)
-    uu = uu.ravel().astype(np.float64)
-    vv = vv.ravel().astype(np.float64)
+    camera = RealSenseInput(rs, args, W, H)
 
     node_buf = np.zeros((MAX_NODES, 3), dtype=np.float64)
     edge_buf = np.zeros((MAX_EDGES, 2), dtype=np.int32)
@@ -132,27 +142,18 @@ def main():
     t_prev = time.time()
     fps = 0.0
     try:
+        camera.start()
+        print('[ddgng] camera-space graph (no robot FK): ' + json.dumps(camera.metadata))
         while True:
-            frames = align.process(pipe.wait_for_frames())
-            df = frames.get_depth_frame()
-            cf = frames.get_color_frame()
-            if not df or not cf:
-                continue
-
-            color = np.asanyarray(cf.get_data())
-            depth = np.asanyarray(df.get_data())            # uint16, z16
+            frame = camera.read()
+            color = frame.color
 
             # --- deproject sub-sampled valid pixels to 3D points (metres) ----
-            z = depth[vs][:, us].ravel().astype(np.float64) * depth_scale
-            m = (z > Z_MIN) & (z < Z_MAX)
-            zf = z[m]
-            xf = (uu[m] - ppx) / fx * zf
-            yf = (vv[m] - ppy) / fy * zf
-            pts = np.ascontiguousarray(np.stack([xf, yf, zf], axis=1))
+            pts = sample_camera_points(frame, PIXEL_STEP, Z_MIN, Z_MAX)
             n = pts.shape[0]
 
             if n > 0:
-                cx, cy, cz = float(xf.mean()), float(yf.mean()), float(zf.mean())
+                cx, cy, cz = (float(value) for value in pts.mean(axis=0))
                 lib.ddgng_feed(
                     net, pts.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                     n, cx, cy, cz, GNG_ITERS)
@@ -163,16 +164,14 @@ def main():
             kedge = lib.ddgng_get_edges(
                 net, edge_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_int)), MAX_EDGES)
 
-            # Project nodes (pinhole) -> pixels; guard against z<=0.
-            nz = node_buf[:mnode, 2].copy()
-            nz[nz <= 1e-6] = 1e-6
-            px = (node_buf[:mnode, 0] / nz * fx + ppx)
-            py = (node_buf[:mnode, 1] / nz * fy + ppy)
-            uv = np.stack([px, py], axis=1).astype(np.int32)
+            uv = project_camera_points(
+                node_buf[:mnode], frame.intrinsics,
+                sdk=rs if camera.contract.version == 'v2' else None)
 
             # edges (green) first, then nodes (red) on top
             for a, b in edge_buf[:kedge]:
-                if a < mnode and b < mnode:
+                if (0 <= a < mnode and 0 <= b < mnode and
+                        node_buf[a, 2] > 1e-6 and node_buf[b, 2] > 1e-6):
                     cv2.line(color, tuple(uv[a]), tuple(uv[b]), (0, 255, 0), 1, cv2.LINE_AA)
             for (x, y) in uv:
                 if 0 <= x < W and 0 <= y < H:
@@ -182,7 +181,8 @@ def main():
             now = time.time()
             fps = 0.9 * fps + 0.1 * (1.0 / max(now - t_prev, 1e-3))
             t_prev = now
-            cv2.putText(color, f"nodes={mnode} edges={kedge} pts={n} fps={fps:4.1f}",
+            cv2.putText(color, f"{camera.contract.version.upper()} {camera.contract.camera_model} camera | "
+                        f"nodes={mnode} edges={kedge} pts={n} fps={fps:4.1f}",
                         (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
 
             if ros_publisher is not None:
@@ -193,7 +193,7 @@ def main():
                 if ok:
                     msg = CompressedImage()
                     msg.header.stamp = ros_node.get_clock().now().to_msg()
-                    msg.header.frame_id = "camera_color_optical_frame"
+                    msg.header.frame_id = camera.contract.optical_frame
                     msg.format = "jpeg"
                     msg.data = jpeg.tobytes()
                     ros_publisher.publish(msg)
@@ -204,7 +204,7 @@ def main():
                 if key in (27, ord('q')):
                     break
     finally:
-        pipe.stop()
+        camera.close()
         lib.ddgng_destroy(net)
         if not args.headless:
             cv2.destroyAllWindows()

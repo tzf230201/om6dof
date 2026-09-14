@@ -1,0 +1,33 @@
+# Native DBL-GNG learns only after depth has been converted to XYZ in world.
+# Shared world-memory sampling is supplied by this package, not the native core.
+# Surface-support filtering defaults to disabled so RViz displays the native graph.
+# All lengths are metres; no world axis is mirrored.
+/om6dof_f_gng/realsense_depth:
+  ros__parameters:
+    fps: 15
+    stride: 2
+    min_depth: 0.15
+    max_depth: 3.0
+    serial: ""
+    camera_frame: d435_depth_optical_frame
+    depth_filter: supported
+
+/om6dof_f_gng/dbl_gng:
+  ros__parameters:
+    algorithm: dblgng
+    world_frame: world
+    camera_frame: d435_depth_optical_frame
+    min_depth: 0.15
+    max_depth: 3.0
+    max_nodes: 768
+    memory_mode: world
+    memory_capacity: 16000
+    replay_budget: 4000
+    input_budget: 12000
+    voxel_size: 0.01
+    edge_support_radius: 0.0
+    dbl_edge_cut_period_frames: 10
+    epochs_per_frame: 1
+    tf_timeout: 0.5
+    max_pose_age: 0.5
+    require_joint_states: true

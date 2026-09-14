@@ -109,11 +109,21 @@ def generate_launch_description():
             "--inactive",
         ],
     )
+    # Active from boot and stays active: it claims position_offset, which the
+    # hardware adds to position, so it never contends with arm_controller.
+    # The operator's channel is therefore live for as long as the stack is.
+    forward_offset_spawner = Node(
+        package="controller_manager", executable="spawner",
+        arguments=[
+            "forward_offset_controller",
+            "--controller-manager", "/controller_manager",
+        ],
+    )
     start_motion_controllers = RegisterEventHandler(
         OnProcessExit(
             target_action=joint_state_spawner,
             on_exit=[arm_spawner, gripper_spawner, forward_position_spawner,
-                     forward_effort_spawner],
+                     forward_offset_spawner, forward_effort_spawner],
         )
     )
     stop_launch_if_hardware_exits = RegisterEventHandler(

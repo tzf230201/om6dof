@@ -1,0 +1,8 @@
+{
+  "om6dof/om6dof_boxer/scripts/boxer_preview.py": "3bf03f643f2b2a97fa78eac688c20670ed19e3598c9ad4dadc1d8e618c30d0f0",
+  "om6dof/om6dof_boxer/scripts/boxer_adapter.py": "6230c18357169a6a41964cc70c3afb4d5cd9a1e222855cbb28b2e294205ab9ec",
+  "om6dof/om6dof_boxer/launch/boxer_only.launch.py": "01ebcd07baa97f48212d1490d501d7431693d621e288fcbc465630bbfdf8b0f4",
+  "om6dof/om6dof_boxer/package.xml": "b8a96a13ced12db41da7de94cfe645b257a63eea95171b01293295bbc3ef51fb",
+  "om6dof/om6dof_boxer/README.md": "7b50f5a541ee4330016ea9b44212687d6f49c37fca28e6c91f6a1d67de9db345",
+  "om6dof/om6dof_boxer/test/test_geometry.py": "56aeae48ec7c9b81435602fca58d74f5c4483178e2490c96c28fe4e3ef77853d"
+}

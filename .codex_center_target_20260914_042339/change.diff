@@ -1,0 +1,249 @@
+--- before/reachability_graph_node.cpp
++++ om6dof/om6dof_dd_gng/src/reachability_graph_node.cpp
+@@ -54,6 +54,7 @@
+ 
+ #include "om6dof_dd_gng/msg/environment_graph.hpp"
+ #include "om6dof_dd_gng/workspace_samples.hpp"
++#include "om6dof_dd_gng/semantic_target_selection.hpp"
+ #include "om6dof_dd_gng/msg/reachability_graph.hpp"
+ #include "om6dof_dd_gng/msg/reachability_plan.hpp"
+ #include "om6dof_dd_gng/msg/reachability_query.hpp"
+@@ -257,6 +258,7 @@
+     declare_parameter<bool>("strict_self_collision", true);
+ 
+     declare_parameter<double>("target_intersection_radius", 0.05);
++    declare_parameter<std::string>("target_node_selection", "all");
+     declare_parameter<double>("obstacle_clearance", 0.035);
+     declare_parameter<double>("target_exclusion_radius", 0.055);
+     declare_parameter<int>("start_connect_candidates", 20);
+@@ -351,6 +353,10 @@
+     edge_validation_step_ = get_parameter("edge_validation_step").as_double();
+     strict_self_collision_ = get_parameter("strict_self_collision").as_bool();
+     target_intersection_radius_ = get_parameter("target_intersection_radius").as_double();
++    target_node_selection_ = get_parameter("target_node_selection").as_string();
++    if (target_node_selection_ != "all" && target_node_selection_ != "component_center") {
++      throw std::invalid_argument("target_node_selection must be all or component_center");
++    }
+     obstacle_clearance_ = get_parameter("obstacle_clearance").as_double();
+     target_exclusion_radius_ = get_parameter("target_exclusion_radius").as_double();
+     start_connect_candidates_ = static_cast<int>(get_parameter("start_connect_candidates").as_int());
+@@ -1370,6 +1376,23 @@
+       if (a != node_by_id.end() && b != node_by_id.end()) {
+         complete_environment_segments_.push_back({a->second.first, b->second.first});
+       }
++    }
++    // Explicit atomic queries retain the caller's exact requested node. Live
++    // experiment planning can instead target the middle of each object surface.
++    // Filter only goals, after building the complete collision geometry above.
++    if (!strict && target_node_selection_ == "component_center") {
++      std::vector<reach::LabeledTarget> labeled;
++      std::vector<std::pair<std::uint32_t, std::uint32_t>> component_edges;
++      for (const auto & node : message.nodes) {
++        if (node.class_id >= 0) {
++          labeled.push_back({{node.id, {node.position.x, node.position.y, node.position.z}},
++              node.class_id});
++        }
++      }
++      for (const auto & edge : message.edges) {
++        component_edges.emplace_back(edge.source_id, edge.target_id);
++      }
++      targets = reach::componentCenterTargets(labeled, component_edges);
+     }
+     targets_ = std::move(targets);
+     obstacle_points_ = std::move(obstacle_points);
+@@ -2373,6 +2396,7 @@
+   double exact_environment_point_radius_ = 0.012;
+   double exact_environment_edge_radius_ = 0.006;
+   int exact_max_replans_ = 20;
++  std::string target_node_selection_ = "all";
+   std::vector<std::string> exact_environment_ignored_links_{"link1"};
+   double node_marker_scale_ = 0.012;
+   double edge_marker_width_ = 0.002;
+--- before/CMakeLists.txt
++++ om6dof/om6dof_dd_gng/CMakeLists.txt
+@@ -265,6 +265,9 @@
+   ament_add_pytest_test(test_dd_gng_yolo realsense_ddgng/test/test_dd_gng_yolo.py TIMEOUT 30)
+   ament_add_gtest(test_workspace_samples test/test_workspace_samples.cpp)
+   target_include_directories(test_workspace_samples PRIVATE include)
++  ament_add_gtest(test_semantic_target_selection test/test_semantic_target_selection.cpp)
++  target_include_directories(test_semantic_target_selection PRIVATE include)
++  target_compile_features(test_semantic_target_selection PRIVATE cxx_std_17)
+   ament_add_pytest_test(test_experiment_launch test/test_experiment_launch.py TIMEOUT 30)
+ 
+   ament_add_gtest(test_reachability_graph
+--- before/ddgng_experiment_reachability.launch.py
++++ om6dof/om6dof_dd_gng/launch/ddgng_experiment_reachability.launch.py
+@@ -70,6 +70,7 @@
+         'gng_debug_publish_training_samples': False,
+         'exact_collision_enabled': True,
+         'include_target_in_collision': True,
++        'target_node_selection': 'component_center',
+     })
+     config = directory / 'experiment_topology.yaml'
+     config.write_text(yaml.safe_dump(document, sort_keys=False))
+--- before/test_experiment_launch.py
++++ om6dof/om6dof_dd_gng/test/test_experiment_launch.py
+@@ -32,6 +32,7 @@
+     assert p['sample_count'] == 1
+     assert p['exact_collision_enabled'] and p['include_target_in_collision']
+     assert not p['target_refinement_enabled']
++    assert p['target_node_selection'] == 'component_center'
+     assert p['workspace_samples_sha256'] == hashlib.sha256(data).hexdigest()
+     dataset.write_text('changed after launch')
+     assert Path(p['workspace_samples_file']).read_bytes() == data
+--- before/experiment_workspace_roadmap.md
++++ om6dof/om6dof_dd_gng/docs/experiment_workspace_roadmap.md
+@@ -24,6 +24,18 @@
+ Choose the object, Set planning target, then Preview EoE path in RViz. The default
+ coordinator task is move_to_target: a measured-start connector followed by robot
+ graph edges, ending near a target environment node. It does not operate the gripper.
++This separate launch sets `target_node_selection=component_center`: among observed
++nodes in each same-class edge-connected object component, select the node nearest
++the component's 3D bounding-box center. This avoids favoring the bottle's top just
++because a robot node lies closest to it. Bounding-box center avoids weighting the
++selection toward densely sampled regions; the chosen target remains an actual
++surface node, not an invented point inside the object. Separate components are not
++averaged together. If the central target has no validated intersection, planning
++fails rather than silently returning to the top. The existing intersection tolerance
++still applies to the robot endpoint. All object geometry remains in collision checks.
++This changes the approach destination; it does not validate grasp orientation,
++finger clearance or automatically close the gripper. Explicit atomic query targets
++and the other launches retain their existing selection behavior.
+ Execution remains opt-in with `execution_enabled:=true` plus the explicit GUI button
+ and existing validation gates. Launching with true alone does not send motion.
+ 
+@@ -75,6 +87,15 @@
+ 
+ ## Green-only validation on the saved bottle scene
+ 
++With `component_center`, the 170-node observed bottle component selects existing
++node 50943 at Z=0.176913 m (component Z extent 0.133037–0.211438 m). An isolated
++diagnostic replay with `exact_max_replans=200` returned
++`target_intersection_exact_blocked_or_disconnected` after 159 rejected candidates
++and 9,676 exact state checks (approximately 776 ms). This is not a validated
++trajectory to the middle. The higher budget was a replay-only override; launch
++search limits were not changed. No fallback to the top is performed. The following
++older results used all semantic target nodes before center selection was added.
++
+ All 3,198 green witnesses passed current-model node validation. The roadmap had
+ 18,554 candidate edges in one connected component; every node's joint configuration
+ was verified against a green source row. Maximum FK discrepancy was 1 mm.
+--- /dev/null
++++ om6dof/om6dof_dd_gng/include/om6dof_dd_gng/semantic_target_selection.hpp
+@@ -0,0 +1,71 @@
++#pragma once
++
++#include <algorithm>
++#include <map>
++#include <utility>
++#include <vector>
++#include "om6dof_dd_gng/reachability_graph.hpp"
++
++namespace om6dof_dd_gng::reachability
++{
++struct LabeledTarget
++{
++  Target target;
++  int class_id;
++};
++
++// Select an observed surface node nearest the bounding-box center of each
++// same-class connected component. Never synthesize an interior grasp point or
++// average disconnected objects together. Geometry/collision data stay intact.
++inline std::vector<Target> componentCenterTargets(
++  const std::vector<LabeledTarget> & nodes,
++  const std::vector<std::pair<std::uint32_t, std::uint32_t>> & edges)
++{
++  std::map<std::uint32_t, std::size_t> indices;
++  for (std::size_t i = 0; i < nodes.size(); ++i) {
++    indices.emplace(nodes[i].target.environment_node_id, i);
++  }
++  std::vector<std::vector<std::size_t>> adjacency(nodes.size());
++  for (const auto & edge : edges) {
++    const auto a = indices.find(edge.first), b = indices.find(edge.second);
++    if (a != indices.end() && b != indices.end() &&
++      nodes[a->second].class_id == nodes[b->second].class_id)
++    {
++      adjacency[a->second].push_back(b->second);
++      adjacency[b->second].push_back(a->second);
++    }
++  }
++  std::vector<bool> visited(nodes.size(), false);
++  std::vector<Target> selected;
++  for (std::size_t root = 0; root < nodes.size(); ++root) {
++    if (visited[root] || nodes[root].class_id < 0) {continue;}
++    std::vector<std::size_t> component{root};
++    visited[root] = true;
++    auto minimum = nodes[root].target.position, maximum = minimum;
++    for (std::size_t cursor = 0; cursor < component.size(); ++cursor) {
++      const auto i = component[cursor];
++      const auto & p = nodes[i].target.position;
++      minimum.x = std::min(minimum.x, p.x); maximum.x = std::max(maximum.x, p.x);
++      minimum.y = std::min(minimum.y, p.y); maximum.y = std::max(maximum.y, p.y);
++      minimum.z = std::min(minimum.z, p.z); maximum.z = std::max(maximum.z, p.z);
++      for (const auto next : adjacency[i]) {
++        if (!visited[next]) {visited[next] = true; component.push_back(next);}
++      }
++    }
++    const Point3 center{(minimum.x + maximum.x) * 0.5,
++      (minimum.y + maximum.y) * 0.5, (minimum.z + maximum.z) * 0.5};
++    const auto best = std::min_element(component.begin(), component.end(),
++      [&](std::size_t a, std::size_t b) {
++        const auto da = distance(nodes[a].target.position, center);
++        const auto db = distance(nodes[b].target.position, center);
++        return da < db || (da == db &&
++          nodes[a].target.environment_node_id < nodes[b].target.environment_node_id);
++      });
++    selected.push_back(nodes[*best].target);
++  }
++  std::sort(selected.begin(), selected.end(), [](const Target & a, const Target & b) {
++    return a.environment_node_id < b.environment_node_id;
++  });
++  return selected;
++}
++}  // namespace om6dof_dd_gng::reachability
+--- /dev/null
++++ om6dof/om6dof_dd_gng/test/test_semantic_target_selection.cpp
+@@ -0,0 +1,42 @@
++#include <gtest/gtest.h>
++#include "om6dof_dd_gng/semantic_target_selection.hpp"
++
++namespace reach = om6dof_dd_gng::reachability;
++
++TEST(SemanticTargetSelection, UsesObservedMiddleNodeDespiteDenseTop)
++{
++  std::vector<reach::LabeledTarget> nodes{
++    {{10, {.1, .0, .0}}, 39}, {{20, {.1, .0, .1}}, 39},
++    {{30, {.1, .0, .2}}, 39}, {{31, {.1, .0, .19}}, 39},
++    {{32, {.1, .0, .18}}, 39}};
++  const auto selected = reach::componentCenterTargets(nodes,
++    {{10, 20}, {20, 30}, {30, 31}, {31, 32}});
++  ASSERT_EQ(selected.size(), 1U);
++  EXPECT_EQ(selected[0].environment_node_id, 20U);
++  EXPECT_DOUBLE_EQ(selected[0].position.z, .1);
++  EXPECT_DOUBLE_EQ(selected[0].position.x, .1);  // actual surface, not interior
++}
++
++TEST(SemanticTargetSelection, KeepsDisconnectedObjectsAndDifferentClassesSeparate)
++{
++  std::vector<reach::LabeledTarget> nodes{
++    {{1, {0, 0, 0}}, 39}, {{2, {0, 0, .1}}, 39}, {{3, {0, 0, .2}}, 39},
++    {{4, {1, 0, 0}}, 39}, {{5, {1, 0, .1}}, 39}, {{6, {1, 0, .2}}, 39},
++    {{7, {0, 0, 1}}, 41}, {{8, {0, 0, 2}}, -1}};
++  const auto selected = reach::componentCenterTargets(nodes,
++    {{1, 2}, {2, 3}, {4, 5}, {5, 6}, {3, 7}, {7, 8}, {7, 999}});
++  ASSERT_EQ(selected.size(), 3U);
++  EXPECT_EQ(selected[0].environment_node_id, 2U);
++  EXPECT_EQ(selected[1].environment_node_id, 5U);
++  EXPECT_EQ(selected[2].environment_node_id, 7U);
++}
++
++TEST(SemanticTargetSelection, TiesAreIndependentOfInputOrderAndEmptyIsValid)
++{
++  std::vector<reach::LabeledTarget> nodes{
++    {{8, {0, 0, .2}}, 39}, {{2, {0, 0, 0}}, 39}};
++  EXPECT_EQ(reach::componentCenterTargets(nodes, {{8, 2}})[0].environment_node_id, 2U);
++  std::reverse(nodes.begin(), nodes.end());
++  EXPECT_EQ(reach::componentCenterTargets(nodes, {{8, 2}})[0].environment_node_id, 2U);
++  EXPECT_TRUE(reach::componentCenterTargets({}, {}).empty());
++}

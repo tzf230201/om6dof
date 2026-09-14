@@ -189,6 +189,11 @@ coord_debug:
 # stay in sync.
 direct_pick:
   ros__parameters:
+    ik_xacro_rel: "urdf/om6dof_v2.urdf.xacro"
+    # V2 end_effector_link -> D435 colour optical frame, resolved from
+    # om6dof_v2.urdf.xacro. Separate from the legacy D405 AprilTag extrinsic.
+    perception_camera_xyz: [-0.05265408936, 0.03250000257, -0.05924999951]
+    perception_camera_optical_rpy: [0.0, 0.0, -1.57079632679]
     camera_xyz: [-0.08247, 0.00000, -0.00960]
     camera_rpy: [0.00000, -1.13450, 0.00000]
     object_center_from_tag: [0.00000, 0.00000, -0.01500]
@@ -270,6 +275,7 @@ direct_pick:
 
 calib_gui:
   ros__parameters:
+    ik_xacro_rel: "urdf/om6dof_v2.urdf.xacro"
     port: 8081
     camera_parent_frame: "end_effector_link"
     camera_xyz: [-0.08247, 0.00000, -0.00960]

@@ -1,0 +1,170 @@
+{
+  "recorded_at_utc": "2026-09-11T04:26:17.084642+00:00",
+  "tests": {
+    "colcon": "30 tests, 0 errors, 0 failures, 0 skipped",
+    "native_comparison": "Exact native-core equivalence for DD/DBL and existing F-GNG, world transforms, memory modes, dropout and filters",
+    "ros_pipeline": "All three backends: exact TF and handedness, depth encodings and endian, dropout, baseline attention absence, reset",
+    "launch": "Six tests for DD/DBL launch arguments and profiles"
+  },
+  "live": {
+    "ddgng": {
+      "algorithm": "ddgng",
+      "elapsed_s": 18.051001439991524,
+      "counts": {
+        "depth": 202,
+        "points": 137,
+        "graph": 184,
+        "focus": 185,
+        "status": 197
+      },
+      "graph_hz_with_startup": 10.193340275977864,
+      "graph_hz_after_first": 12.877133321322122,
+      "max_edge_m": 2.9102486260067932,
+      "mapper_ms_mean": 8.798520907216494,
+      "mapper_ms_p95": 12.759449599999998,
+      "latest": {
+        "status": {
+          "level": 0,
+          "message": "Mapping with acquisition-time TF",
+          "values": {
+            "algorithm": "ddgng",
+            "memory_mode": "world",
+            "native_input": "3D world-coordinate XYZ point cloud",
+            "observation_preprocessing": "depth backprojection, acquisition-time TF, world voxels and uniform replay",
+            "attention_enabled": "0",
+            "dd_updates": "500",
+            "dd_updates_applied": "1",
+            "epochs_per_frame": "1",
+            "node_id_semantics": "persistent native IDs",
+            "world_frame": "world",
+            "camera_frame": "d435_depth_optical_frame",
+            "mapped_frames": "194",
+            "frames_processed": "194",
+            "dropped_frames": "8",
+            "last_reason": "next depth frame",
+            "pending_frames": "1",
+            "nodes": "768",
+            "edges": "1681",
+            "memory_points": "16000",
+            "input_pixels": "76800",
+            "valid_points": "53707",
+            "inserted_points": "5075",
+            "replay_points": "4000",
+            "input_budget": "12000",
+            "replay_budget": "4000",
+            "update_ms": "10.375104",
+            "raw_edges": "1681",
+            "rejected_edges": "0",
+            "rejected_unsupported_edges": "0",
+            "depth_age_s": "0.278475008",
+            "joint_age_s": "0.035144608"
+          }
+        },
+        "depth": {
+          "width": 320,
+          "height": 240,
+          "encoding": "32FC1",
+          "frame": "d435_depth_optical_frame"
+        },
+        "cloud_points": 53707,
+        "edges": 1681,
+        "nodes": 768
+      },
+      "interpretation": "Actual camera and acquisition-time robot TF. Sequential sessions have different observations; these are runtime checks, not an accuracy or equal-work benchmark."
+    },
+    "dblgng": {
+      "algorithm": "dblgng",
+      "elapsed_s": 18.027977824007394,
+      "counts": {
+        "depth": 207,
+        "points": 155,
+        "graph": 196,
+        "focus": 196,
+        "status": 207
+      },
+      "graph_hz_with_startup": 10.871990298268054,
+      "graph_hz_after_first": 12.787083184923773,
+      "max_edge_m": 1.8533161867633643,
+      "mapper_ms_mean": 20.847980019512196,
+      "mapper_ms_p95": 29.322470399999983,
+      "latest": {
+        "status": {
+          "level": 0,
+          "message": "Mapping with acquisition-time TF",
+          "values": {
+            "algorithm": "dblgng",
+            "memory_mode": "world",
+            "native_input": "3D world-coordinate XYZ point cloud",
+            "observation_preprocessing": "depth backprojection, acquisition-time TF, world voxels and uniform replay",
+            "attention_enabled": "0",
+            "dd_updates": "500",
+            "dd_updates_applied": "0",
+            "epochs_per_frame": "1",
+            "node_id_semantics": "snapshot indices",
+            "world_frame": "world",
+            "camera_frame": "d435_depth_optical_frame",
+            "mapped_frames": "205",
+            "frames_processed": "205",
+            "dropped_frames": "0",
+            "last_reason": "next depth frame",
+            "pending_frames": "1",
+            "nodes": "768",
+            "edges": "1524",
+            "memory_points": "16000",
+            "input_pixels": "76800",
+            "valid_points": "53366",
+            "inserted_points": "5025",
+            "replay_points": "4000",
+            "input_budget": "12000",
+            "replay_budget": "4000",
+            "update_ms": "18.149952",
+            "raw_edges": "1524",
+            "rejected_edges": "0",
+            "rejected_unsupported_edges": "0",
+            "depth_age_s": "0.234021824",
+            "joint_age_s": "0.035887776"
+          }
+        },
+        "depth": {
+          "width": 320,
+          "height": 240,
+          "encoding": "32FC1",
+          "frame": "d435_depth_optical_frame"
+        },
+        "edges": 1524,
+        "nodes": 768,
+        "cloud_points": 53879
+      },
+      "interpretation": "Actual camera and acquisition-time robot TF. Sequential sessions have different observations; these are runtime checks, not an accuracy or equal-work benchmark."
+    }
+  },
+  "visual_check": "Both RViz sessions displayed robot/world axes, current depth cloud and respective native graph; Global Status Ok. DBL-GNG left running.",
+  "sources_sha256": {
+    "config/dbl_gng.yaml": "2648dd23867115e8061b601727c789b8b650cd93eeb5528b522e80af2e693197",
+    "config/dd_gng.yaml": "812e6c4871edc057be61c1ae314521df2a1852309a95f6f0d1824fb52933bdd7",
+    "config/f_gng.yaml": "d7758a0bfd4abb113afb4f04cf044ae15999ea4e07be37220d91d3d4b9fb8f5d",
+    "include/om6dof_f_gng/core/bio_focus.hpp": "67894f985ebb4eedb5c8022ccb983c8063eb6105791e766186e02b33c90ce23f",
+    "include/om6dof_f_gng/core/bio_mapper.hpp": "9ad5898b6cc6edde52f2af27fdad459bf9d271fa6364aed6ca5c6364c93ac4ff",
+    "include/om6dof_f_gng/core/comparison_mapper.hpp": "a6722ab265845c3142f8c55c5e757bd7a24760877890ee9860dba6f331f8aaa4",
+    "include/om6dof_f_gng/core/dblgng_core.hpp": "7879274d72f6c86abeb180aa569a1fb1f86c227df5ebedc157d758a96bdd3bfc",
+    "include/om6dof_f_gng/core/ddgng_core.hpp": "d8aa355e02f28c89b1d7235a4d2256fa4a3bc833d75717f4e75307237c81f9d9",
+    "include/om6dof_f_gng/core/fgng_core.hpp": "2e02b3ab768af860987c7925ce439bccadc8454674ddd99bfcf5528d127188ee",
+    "include/om6dof_f_gng/core/world_fgng.hpp": "c869df4b2d4e57fa2ace4503f7b2129bc8898b5f6328aac18b61b4680bbd2666",
+    "launch/dbl_gng.launch.py": "49c589b52bb923510d2768f12628cc933e702b7c7a5fe705c1831df005593a6b",
+    "launch/dd_gng.launch.py": "12e05ec3932adb58ced6e5c4dc82e9b40def639a73a1c2c1f2af610bf58f554f",
+    "launch/f_gng.launch.py": "5311e735cca4cce08921348d82557104390f8cf9f92cb04a3165cacb5a66bbde",
+    "om6dof_f_gng/__init__.py": "54f4f24d86d1c637e18a03791852f8ee8280791efcc3988514f0cc90a7fe48dd",
+    "om6dof_f_gng/realsense_depth_node.py": "fe0ec6ca32d8f06500b69224652ba63d9e779f46c2636bbae4a75ce909d9823a",
+    "om6dof_f_gng/realsense_source.py": "b7ce4ac6017f1aa1a083856639ae34c023066d5662166f1c0739737ad24914a2",
+    "rviz/dbl_gng.rviz": "c13a44916107cee0d929bc4d7f1a24f7aee45530411fddaf8fcd2fd984a97c97",
+    "rviz/dd_gng.rviz": "647d6812329b9bb8e03e9455c1c3a73a2979cba2027a6223b0978259e6f3e09c",
+    "rviz/f_gng.rviz": "e8080da025f7817d1326678a9c88d32ce39d20a79fba9c6153f0e7535eb78485",
+    "src/f_gng_node.cpp": "6baa2a1c04db17b8acdd9da226c4c4a4109c3131811acdb237375ddb6317b0da",
+    "tests/comparison_mapper_selftest.cpp": "519a2db9021f435cb92f3b527d7d3b7d25f90dab130b51262cebdfa32d9cd1f9",
+    "tests/focus_selftest.cpp": "56327bbb7e2e9d1fd64f236261ca878281a3a9acfe49e7b39fafe0a846f4f1e4",
+    "tests/mapper_selftest.cpp": "85b14a26279abbf536de84ce8f088e16468f93263d59f063472d1ffe65ccbfbc",
+    "tests/test_baseline_launch.py": "d052b6a0098692e9fa7537837d647751c6683fdf4850ce1cab81b2c2b044ca71",
+    "tests/test_realsense_depth.py": "091320bf527ff72e68fb5313ffbfeeabdf5fdbb1a2c507e0f497256daa8ed5a1",
+    "tests/test_ros_pipeline.py": "4cb1d2663148f0e6a7f9ce3dca2437eeb139684fc49936b964ec749c02d4e96e"
+  }
+}

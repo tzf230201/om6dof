@@ -24,6 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "teleop_node = om6dof_teleop.teleop_node:main",
+            "combined_preview_gamepad = om6dof_teleop.combined_preview_gamepad:main",
         ],
     },
 )

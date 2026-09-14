@@ -52,11 +52,6 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(PathJoinSubstitution([
             FindPackageShare("om6dof_controller"), "launch", "controller.launch.py",
         ])),
-        launch_arguments={
-            "remote_enabled_on_start": LaunchConfiguration(
-                "remote_enabled_on_start"
-            ),
-        }.items(),
     )
     teleop = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([
@@ -82,16 +77,15 @@ def generate_launch_description():
                               default_value=current_control_default()),
         DeclareLaunchArgument("joint_velocity", default_value="0.5"),
         DeclareLaunchArgument(
-            "input_source", default_value="go2w",
+            "input_source", default_value="gamepad",
             choices=["go2w", "keyboard", "gamepad", "airbus", "web"],
             description="Human input source for om6dof_teleop.",
         ),
         DeclareLaunchArgument(
             "start_go2w_teleop",
             default_value="true",
-            description="Start the selected human-input adapter.",
+            description="Start the selected human-input adapter (including Logitech gamepad).",
         ),
-        DeclareLaunchArgument("remote_enabled_on_start", default_value="false"),
         hardware,
         controller,
         teleop,

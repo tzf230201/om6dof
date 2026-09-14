@@ -1,0 +1,12 @@
+{
+  "downloaded_at": "2026-09-14T05:07:03.183269",
+  "source_url": "https://github.com/facebookresearch/boxer",
+  "archive_url": "https://codeload.github.com/facebookresearch/boxer/tar.gz/refs/heads/main",
+  "checkpoint_base_url": "https://huggingface.co/facebook/boxer/resolve/main",
+  "runtime": "Python 3.10 isolated venv, torch 2.6.0+cpu",
+  "sha256": {
+    "/tmp/meta_boxer_main.tar.gz": "cb466dd29a36090e0a9076d844079f556f8a8bb0583189613215161e6813a2a2",
+    ".boxer_runtime/boxer/ckpts/boxernet_hw960in2x6d768-c88128f8.ckpt": "d5a30b348a8f5b0e5990ff3aa0e8f473ce77d860da22586322e7f47abc83ca6f",
+    ".boxer_runtime/boxer/ckpts/dinov3_vits16plus_pretrain_lvd1689m-4057cbaa.pth": "4057cbaaad8c16657adb09d6815f28d4164eeba30532fde23f0d17313124caea"
+  }
+}

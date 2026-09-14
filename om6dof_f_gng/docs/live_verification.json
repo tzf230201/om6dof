@@ -1,0 +1,105 @@
+{
+  "counts": {
+    "depth": 160,
+    "points": 109,
+    "graph": 147,
+    "focus": 146,
+    "status": 156
+  },
+  "elapsed_seconds": 15.012661343993386,
+  "observed_graph_hz": 9.791734898410612,
+  "world_frames": [
+    "world"
+  ],
+  "max_edge_m": 0.14979454624007907,
+  "cloud_bounds": {
+    "min": [
+      0.2492436170578003,
+      -1.970491647720337,
+      -1.1486504077911377
+    ],
+    "max": [
+      2.6542160511016846,
+      1.1318061351776123,
+      0.7274852991104126
+    ],
+    "count": 55962
+  },
+  "latest": {
+    "status": {
+      "level": 0,
+      "message": "Mapping with acquisition-time TF",
+      "values": {
+        "world_frame": "world",
+        "camera_frame": "d435_depth_optical_frame",
+        "mapped_frames": "153",
+        "frames_processed": "153",
+        "dropped_frames": "6",
+        "last_reason": "next depth frame",
+        "pending_frames": "1",
+        "nodes": "768",
+        "edges": "1523",
+        "memory_points": "15395",
+        "valid_points": "55962",
+        "update_ms": "26.08416",
+        "rejected_edges": "13",
+        "rejected_unsupported_edges": "1",
+        "focus_mode": "auto",
+        "focus_state": "ACCOMMODATING",
+        "focus_target_valid": "1",
+        "active_distance_m": "0.407671272755",
+        "depth_age_s": "0.288929344",
+        "joint_age_s": "0.06003104"
+      }
+    },
+    "depth": {
+      "width": 320,
+      "height": 240,
+      "encoding": "32FC1",
+      "frame_id": "d435_depth_optical_frame"
+    },
+    "graph": {
+      "edges": 3042,
+      "nodes": 768
+    },
+    "focus": [
+      "camera",
+      "gaze",
+      "accommodation",
+      "world_target"
+    ]
+  },
+  "mapper_update_ms_mean": 21.62557699346405,
+  "mapper_update_ms_p95": 30.2612224,
+  "depth_age_s_max": 0.479450848,
+  "recorded_at_utc": "2026-09-11T03:50:11.702126+00:00",
+  "camera": "Intel RealSense D435I, 640x480@15, stride2, supported-depth filter",
+  "pose_source": "Existing robot TF at acquisition timestamp, world <- d435_depth_optical_frame",
+  "interpretation": "Measured running system; source and mapped counts include startup discovery. Geometry was not compared with independent ground truth. Camera mount is nominal CAD.",
+  "rviz_global_status": "Ok, verified in screenshot",
+  "rviz_points_qos": "Publisher BEST_EFFORT and RViz subscription BEST_EFFORT verified after configuration loaded; initial configuration emitted transient QoS warnings.",
+  "sources_sha256": {
+    "config/f_gng.yaml": "d7758a0bfd4abb113afb4f04cf044ae15999ea4e07be37220d91d3d4b9fb8f5d",
+    "include/om6dof_f_gng/core/bio_focus.hpp": "67894f985ebb4eedb5c8022ccb983c8063eb6105791e766186e02b33c90ce23f",
+    "include/om6dof_f_gng/core/bio_mapper.hpp": "9ad5898b6cc6edde52f2af27fdad459bf9d271fa6364aed6ca5c6364c93ac4ff",
+    "include/om6dof_f_gng/core/dblgng_core.hpp": "7879274d72f6c86abeb180aa569a1fb1f86c227df5ebedc157d758a96bdd3bfc",
+    "include/om6dof_f_gng/core/fgng_core.hpp": "2e02b3ab768af860987c7925ce439bccadc8454674ddd99bfcf5528d127188ee",
+    "include/om6dof_f_gng/core/world_fgng.hpp": "c869df4b2d4e57fa2ace4503f7b2129bc8898b5f6328aac18b61b4680bbd2666",
+    "launch/f_gng.launch.py": "5311e735cca4cce08921348d82557104390f8cf9f92cb04a3165cacb5a66bbde",
+    "om6dof_f_gng/__init__.py": "54f4f24d86d1c637e18a03791852f8ee8280791efcc3988514f0cc90a7fe48dd",
+    "om6dof_f_gng/realsense_depth_node.py": "fe0ec6ca32d8f06500b69224652ba63d9e779f46c2636bbae4a75ce909d9823a",
+    "om6dof_f_gng/realsense_source.py": "b7ce4ac6017f1aa1a083856639ae34c023066d5662166f1c0739737ad24914a2",
+    "rviz/f_gng.rviz": "e8080da025f7817d1326678a9c88d32ce39d20a79fba9c6153f0e7535eb78485",
+    "src/f_gng_node.cpp": "69d762bb31769f813a82d23a2388ee880e416e51902524ece746e1586a49cfc8",
+    "tests/focus_selftest.cpp": "56327bbb7e2e9d1fd64f236261ca878281a3a9acfe49e7b39fafe0a846f4f1e4",
+    "tests/mapper_selftest.cpp": "85b14a26279abbf536de84ce8f088e16468f93263d59f063472d1ffe65ccbfbc",
+    "tests/test_realsense_depth.py": "091320bf527ff72e68fb5313ffbfeeabdf5fdbb1a2c507e0f497256daa8ed5a1",
+    "tests/test_ros_pipeline.py": "b0f8a1e7e0dcae53cb3e420c459c36ab944c59597b651459e84d6d810e62c1ad"
+  },
+  "test_suites": {
+    "f_gng_focus": "passed",
+    "f_gng_mapper": "passed",
+    "realsense_depth": "15 passed",
+    "ros_pipeline": "passed; no skipped integration cases"
+  }
+}

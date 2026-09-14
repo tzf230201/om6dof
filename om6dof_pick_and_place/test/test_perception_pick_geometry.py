@@ -1,7 +1,17 @@
+import json
+import threading
+import time
+from collections import deque
+from types import SimpleNamespace
+from unittest.mock import Mock
+
 import numpy as np
+import pytest
 
 from om6dof_pick_and_place.direct_pick_node import (
     DirectPickNode,
+    PERCEPTION_CAMERA_FRAME,
+    PERCEPTION_METADATA,
     approach_standoff_distances,
     axis_aligned_bbox_top_world,
     consecutive_detection_streak,
@@ -174,3 +184,195 @@ def test_pick_preflight_rejects_unreachable_target():
 
     assert ready is False
     assert "outside arm workspace" in message
+
+
+def _guarded_picker():
+    """Exercise callbacks without creating a ROS node, clients, or hardware."""
+    node = object.__new__(DirectPickNode)
+    node._perception_guard_lock = threading.RLock()
+    node._search_state_lock = threading.Lock()
+    node._run_lock = threading.Lock()
+    node._perception_input_error = ""
+    node._perception_frame_seen = False
+    node._perception_status_compatible = True
+    node._perception_samples = deque(maxlen=60)
+    node._perception_bbox_optical = None
+    node._last_obj = None
+    node._last_obj_t = 0.0
+    node._search_detection_streak = 0
+    node._search_target_description = "object"
+    node._pickup_mode = False
+    node._tracking_mode = False
+    node._search_mode = False
+    node._busy = False
+    node._worker_thread = None
+    node._cancel = threading.Event()
+    node.object_source = "perception"
+    node.client = Mock()
+    node.client.begin_sequence.return_value = True
+    node.get_logger = lambda: Mock()
+    return node
+
+
+def _target(frame=PERCEPTION_CAMERA_FRAME):
+    return SimpleNamespace(
+        header=SimpleNamespace(frame_id=frame),
+        point=SimpleNamespace(x=0.1, y=0.0, z=0.3),
+    )
+
+
+def _status(**metadata):
+    return SimpleNamespace(data=json.dumps({
+        **metadata,
+        "target": {
+            "state": "tracking", "class": "bottle", "point": [0.1, 0.0, 0.3],
+            "bbox3d": {"center": [0.1, 0.0, 0.3], "size": [0.1, 0.1, 0.1]},
+        },
+    }))
+
+
+@pytest.mark.parametrize("frame", ["camera_color_optical_frame", "world", ""])
+def test_wrong_camera_frame_clears_cached_geometry_and_rejects_pick(frame):
+    node = _guarded_picker()
+    node._on_perception_target(_target())
+    node._perception_bbox_optical = (time.monotonic(), np.zeros(3), np.ones(3))
+    node._last_obj = (np.zeros(3), np.ones(3), np.eye(3))
+    node._last_obj_t = time.monotonic()
+    node._search_detection_streak = 4
+
+    node._on_perception_target(_target(frame))
+
+    assert not node._perception_samples
+    assert node._perception_bbox_optical is None
+    assert node._last_obj is None
+    assert node._last_obj_t == 0.0
+    assert node._search_detection_streak == 0
+    assert node._perception_object_world(allow_stale=True) is None
+    assert node._perception_bbox_top_world() is None
+    ready, reason = node._pick_preflight()
+    assert ready is False
+    assert "camera frame" in reason
+
+
+def test_correct_v2_frame_and_unlabelled_status_are_supported_initially():
+    node = _guarded_picker()
+    node._search_mode = True
+    node._on_perception_target(_target())
+    node._on_perception_status(_status())
+
+    assert len(node._perception_samples) == 1
+    assert node._perception_input_error == ""
+    assert node._perception_bbox_optical is not None
+    assert node._search_detection_streak == 1
+
+
+@pytest.mark.parametrize("camera_model", ["D435", "D435i"])
+def test_both_supported_v2_camera_models_restore_compatible_status(camera_model):
+    node = _guarded_picker()
+    node._perception_status_compatible = False
+    node._perception_input_error = "previous mismatch"
+    node._on_perception_status(_status(
+        **PERCEPTION_METADATA, camera_model=camera_model))
+    assert node._perception_status_compatible
+
+
+@pytest.mark.parametrize("key,value", [
+    ("model_version", "v1"), ("camera_model", "D405"),
+    ("camera_frame", "camera_color_optical_frame"),
+    ("model_version", "unknown"),
+])
+def test_status_model_mismatch_latches_until_complete_v2_metadata_and_new_point(
+        key, value):
+    node = _guarded_picker()
+    node._on_perception_target(_target())
+    node._on_perception_status(_status(**{key: value}))
+    assert not node._perception_status_compatible
+    assert not node._perception_samples
+
+    # A seemingly compatible header (or old unlabelled status) cannot undo
+    # evidence that the producer is publishing a different robot/camera model.
+    node._on_perception_status(_status())
+    node._on_perception_target(_target())
+    assert not node._perception_samples
+    assert node._perception_input_error
+
+    node._on_perception_status(_status(
+        **PERCEPTION_METADATA, camera_model="D435i"))
+    assert node._perception_status_compatible
+    assert node._perception_input_error  # no usable new frame yet
+    assert node._perception_bbox_optical is None
+    node._on_perception_target(_target())
+    node._on_perception_status(_status(
+        **PERCEPTION_METADATA, camera_model="D435i"))
+    assert len(node._perception_samples) == 1
+    assert node._perception_input_error == ""
+    assert node._perception_bbox_optical is not None
+
+
+def test_correct_frame_recovers_after_bad_frame_without_resurrecting_cache():
+    node = _guarded_picker()
+    node._on_perception_target(_target(""))
+    node._on_perception_target(_target())
+    assert node._perception_input_error == ""
+    assert len(node._perception_samples) == 1
+    assert node._last_obj is None
+
+
+@pytest.mark.parametrize("mode", ["_pickup_mode", "_tracking_mode", "_search_mode"])
+def test_model_mismatch_cancels_active_perception_run_without_auto_resume(mode):
+    node = _guarded_picker()
+    setattr(node, mode, True)
+    node._busy = True
+    node._on_perception_status(_status(model_version="v1"))
+
+    assert node._cancel.is_set()
+    node.client.cancel_current_goal.assert_called_once_with()
+    node._on_perception_status(_status(
+        **PERCEPTION_METADATA, camera_model="D435"))
+    node._on_perception_target(_target())
+    assert node._perception_input_error == ""
+    assert node._cancel.is_set()  # a new explicit run is still required
+
+
+def test_bad_perception_input_does_not_cancel_apriltag_sequence():
+    node = _guarded_picker()
+    node.object_source = "apriltag"
+    node._pickup_mode = True
+    cached = (np.zeros(3), np.ones(3), np.eye(3))
+    node._last_obj = cached
+    node._on_perception_target(_target("camera_color_optical_frame"))
+    assert node._last_obj is cached
+    assert not node._cancel.is_set()
+    node.client.cancel_current_goal.assert_not_called()
+
+
+def test_rejected_input_blocks_tracking_and_search_service_starts():
+    node = _guarded_picker()
+    node._on_perception_status(_status(camera_model="D405"))
+    for callback in (node._on_track, node._on_search):
+        response = SimpleNamespace(success=None, message="")
+        callback(None, response)
+        assert response.success is False
+        assert "rejected" in response.message
+    assert not node._busy
+
+
+def test_rejected_input_blocks_next_trajectory_but_allows_explicit_hold():
+    node = _guarded_picker()
+    node._publish_arm_trajectory_unchecked = Mock()
+    node._on_perception_target(_target("camera_color_optical_frame"))
+    node._publish_arm_trajectory(np.zeros(6))
+    node._publish_arm_trajectory_unchecked.assert_not_called()
+    node._publish_arm_trajectory(np.zeros(6), 0.1, hold_current=True)
+    node._publish_arm_trajectory_unchecked.assert_called_once()
+
+
+def test_new_explicit_run_waits_for_client_cancellation_to_finish():
+    node = _guarded_picker()
+    node._cancel.set()
+    node.client.begin_sequence.return_value = False
+    assert node._preempt() is False
+    assert node._cancel.is_set()
+    node.client.begin_sequence.return_value = True
+    assert node._preempt() is True
+    assert not node._cancel.is_set()

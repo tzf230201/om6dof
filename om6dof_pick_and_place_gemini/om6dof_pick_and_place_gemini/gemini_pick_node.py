@@ -292,7 +292,7 @@ class GeminiPickNode(Node):
         self.ik = IKSolver(base_link=self._param("ik_base_link"),
                            tip_link=self._param("ik_tip_link"),
                            urdf_pkg=self._param("ik_urdf_pkg"),
-                           xacro_rel="urdf/om6dof.urdf.xacro")
+                           xacro_rel=self._param("ik_xacro_rel"))
         self.moveit = MoveItClient(
             self, ee_link=self._param("ik_tip_link"),
             reference_frame=self.base_frame, arm_joint_names=self.arm_joints,
@@ -409,7 +409,7 @@ class GeminiPickNode(Node):
                                "/camera/aligned_depth_to_color/image_raw")
         self.declare_parameter("camera_info_topic", "/camera/color/camera_info")
 
-        # Live TF (published by robot_state_publisher from om6dof.urdf.xacro,
+        # Live TF (published by robot_state_publisher from om6dof_v2.urdf.xacro,
         # which encodes this mount's true, mesh-measured extrinsic) is the
         # primary source for the camera pose — see _camera_pose(). camera_xyz /
         # camera_rpy below are the FALLBACK only, used if that frame is not in
@@ -558,6 +558,9 @@ class GeminiPickNode(Node):
         self.declare_parameter("ik_base_link", "world")
         self.declare_parameter("ik_tip_link", "end_effector_link")
         self.declare_parameter("ik_urdf_pkg", "om6dof_description")
+        self.declare_parameter(
+            "ik_xacro_rel", "urdf/om6dof_v2.urdf.xacro"
+        )
         self.declare_parameter("joint_state_topic", "/joint_states")
         self.declare_parameter(
             "operation_mode_state_topic", "/om6dof/operation_mode/state")
@@ -1066,7 +1069,7 @@ class GeminiPickNode(Node):
         """Camera optical frame in ``base_frame``: (position, rotation, source).
 
         Primary source is live TF — ``camera_optical_frame`` as published by
-        robot_state_publisher from ``om6dof.urdf.xacro``, which encodes this
+        robot_state_publisher from ``om6dof_v2.urdf.xacro``, which encodes this
         mount's true extrinsic (measured off the fused bracket+D405 mesh, not a
         borrowed convention). Falls back to FK of ``joints`` composed with the
         ``camera_xyz``/``camera_rpy`` parameters only if that frame is not in

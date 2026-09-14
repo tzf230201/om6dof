@@ -1,0 +1,193 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 0
+    Name: Displays
+    Property Tree Widget:
+      Expanded: []
+      Splitter Ratio: 0.5
+    Tree Height: 640
+  - Class: rviz_common/Views
+    Expanded: []
+    Name: Views
+    Splitter Ratio: 0.5
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.25
+      Cell Size: 0.1
+      Class: rviz_default_plugins/Grid
+      Color: 113; 132; 151
+      Enabled: true
+      Line Style:
+        Line Width: 0.01
+        Value: Lines
+      Name: Grid (10 cm)
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 40
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.3
+      Name: World axes (X red, Y green, Z blue)
+      Radius: 0.008
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Alpha: 0.85
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
+      Description Source: Topic
+      Description Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: OM6DOF V2
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
+      Visual Enabled: true
+    - Alpha: 0.3
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 115; 176; 194
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Measured depth points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.004
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /om6dof_f_gng/points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: F-GNG topology
+      Namespaces: {}
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /om6dof_f_gng/graph
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Camera and fixation
+      Namespaces: {}
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /om6dof_f_gng/focus
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Enabled: false
+      Frame Timeout: 2
+      Frames:
+        All Enabled: false
+        d435_depth_optical_frame:
+          Value: true
+        world:
+          Value: true
+      Marker Scale: 0.2
+      Name: TF (optional)
+      Show Arrows: false
+      Show Axes: true
+      Show Names: true
+      Update Interval: 0
+      Value: false
+  Enabled: true
+  Global Options:
+    Background Color: 20; 26; 35
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/PublishPoint
+      Single click: true
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /clicked_point
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.2
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 0.6
+        Y: 0
+        Z: 0.2
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.03
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 0.5
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 2.55
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 950
+  Hide Left Dock: false
+  Hide Right Dock: false
+  Width: 1600
+  X: 80
+  Y: 40

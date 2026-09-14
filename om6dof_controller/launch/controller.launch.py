@@ -1,12 +1,11 @@
 """Start the high-level OM6DOF command converter for existing hardware."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.actions import EmitEvent, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -23,12 +22,6 @@ def generate_launch_description():
                 "config",
                 "controller.yaml",
             ]),
-            {
-                "remote_enabled_on_start": ParameterValue(
-                    LaunchConfiguration("remote_enabled_on_start"),
-                    value_type=bool,
-                )
-            },
         ],
     )
 
@@ -46,11 +39,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument(
-            "remote_enabled_on_start",
-            default_value="false",
-            description="Take remote ownership and enter READY after startup.",
-        ),
         stop_launch_if_controller_exits,
         controller,
     ])

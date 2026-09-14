@@ -125,13 +125,18 @@ class CalibGui(Node):
         self.declare_parameter("arm_joint_names",
                                ["joint1", "joint2", "joint3",
                                 "joint4", "joint5", "joint6"])
+        self.declare_parameter(
+            "ik_xacro_rel", "urdf/om6dof_v2.urdf.xacro"
+        )
         self._arm_joints = [str(x) for x in
                             self.get_parameter("arm_joint_names").value]
         self._latest_q = None
         self._ik = None
         try:
             from om6dof_controller.ik_solver import IKSolver
-            self._ik = IKSolver()
+            self._ik = IKSolver(
+                xacro_rel=str(self.get_parameter("ik_xacro_rel").value)
+            )
             self.create_subscription(
                 JointState, "/joint_states", self._on_joints, 10)
             self.get_logger().info("self-FK enabled (fallback when no TF)")

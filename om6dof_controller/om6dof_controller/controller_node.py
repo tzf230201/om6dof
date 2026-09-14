@@ -1,29 +1,39 @@
-"""OM6DOF command converter and ros2_control ownership supervisor.
+"""OM6DOF operator channel: converts human jog input into an additive offset.
 
-The public streaming interface is deliberately small:
+Two command channels reach every arm joint, and the hardware adds them before
+the motor write (see DynamixelHardware::write):
 
-* ``/om6dof/operation_mode`` selects JOINT, CARTESIAN, or CYLINDRICAL.
-* ``/om6dof/control_cmd`` carries six velocity values whose units follow the
-  selected mode.
+  * ``position``        - autonomous motion. Owned by ``arm_controller``
+    (MoveIt, graph_pick, and the absolute poses this node requests as
+    FollowJointTrajectory goals).
+  * ``position_offset`` - the human operator. Owned by this node alone.
 
-This node is the only publisher of final arm positions. It reads feedback,
-performs local velocity IK, enforces safety limits, and atomically switches
-the six hardware interfaces between MoveIt's trajectory controller and the
-remote forward-position controller.
+This node therefore **never publishes an absolute joint position**. It only
+ever writes the offset channel, so teleop has a dedicated path that cannot
+collide with, duplicate, or preempt the autonomous one. Both controllers stay
+active permanently; there is no ownership, no controller switching, and no
+arbitration anywhere in the stack.
+
+Absolute motions this node still offers (READY, STARTUP, REST, and absolute
+web targets) are sent to ``arm_controller`` as trajectory goals, because they
+belong on the autonomous channel by definition. The trajectory controller does
+the time profiling, so this node carries no position servo of its own.
 """
 
 from __future__ import annotations
 
-import math
 import json
+import math
 import threading
 import time
 from typing import List, Optional, Sequence
 
 import numpy as np
 import rclpy
-from control_msgs.action import GripperCommand
-from controller_manager_msgs.srv import ListControllers, SwitchController
+from action_msgs.msg import GoalStatus, GoalStatusArray
+from builtin_interfaces.msg import Duration as DurationMsg
+from control_msgs.action import FollowJointTrajectory, GripperCommand
+from control_msgs.msg import JointTrajectoryControllerState
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import (
@@ -34,10 +44,10 @@ from rclpy.qos import (
 )
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool, Float64MultiArray, String
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 from .control_math import (
     COORDINATE_MODES,
-    CYLINDRICAL_MODES,
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
     MODE_CYLINDRICAL,
@@ -48,22 +58,16 @@ from .control_math import (
     MODE_SEMI_CYLINDRICAL,
     MODE_STARTUP,
     MOTION_MODES,
-    SEMI_PITCH_LIMIT,
     clamp_positions,
     cartesian_rpy_to_tip_rotation,
     tip_rotation_to_cartesian_rpy,
-    integrate_cylindrical_position,
     limit_norm,
     normalize_operation_mode,
-    rotation_error,
-    rotation_from_rotvec,
     rotation_from_zyx,
     rotation_to_zyx,
-    semi_cylindrical_rotation,
     step_toward,
     validated_control_command,
     validated_joint_positions,
-    wrap_angle,
 )
 from .target_planner import (
     plan_pose, path_is_clear, pose_error, POSITION_TOLERANCE,
@@ -71,7 +75,8 @@ from .target_planner import (
 )
 
 
-DEFAULT_READY_JOINT_POSITIONS = (0.0, -0.6806, 1.3613, 0.0, 0.8901, 0.0)
+DEFAULT_READY_JOINT_POSITIONS_DEG = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+DEFAULT_TRANSITION_JOINT_POSITIONS_DEG = (0.0, 0.0, -90.0, 0.0, 0.0, 0.0)
 DEFAULT_JOINT_LOWER = (
     -math.pi * 0.9,
     -math.pi * 0.65,
@@ -91,16 +96,13 @@ DEFAULT_JOINT_UPPER = (
 
 
 class OM6DOFController(Node):
-    """Convert canonical six-axis jog commands into safe joint positions."""
+    """Turn canonical six-axis jog commands into a bounded joint offset."""
 
-    # Class-level default so the attribute exists on every instance,
+    # Class-level defaults so the attributes exist on every instance,
     # including the bare nodes the tests construct without __init__.
     last_coordinate_mode = MODE_CARTESIAN
-    # Absolute wrist angles for MODE_SEMI_CYLINDRICAL. Yaw is stored as an
-    # offset from theta, so sweeping the cylinder carries it along.
-    semi_roll = 0.0
-    semi_pitch = 0.0
-    semi_yaw_offset = 0.0
+    semi_pitch_nudge = 0.0
+    semi_yaw_nudge = 0.0
 
     def __init__(self) -> None:
         super().__init__("om6dof_controller")
@@ -109,11 +111,16 @@ class OM6DOFController(Node):
             "joint_names", [f"joint{index}" for index in range(1, 7)]
         )
         self.declare_parameter("arm_controller", "arm_controller")
+        # The operator channel. Claims joint*/position_offset, which the
+        # hardware adds to joint*/position; it is never an absolute pose.
         self.declare_parameter(
-            "remote_controller", "forward_position_controller"
+            "offset_command_topic", "/forward_offset_controller/commands"
         )
         self.declare_parameter(
-            "forward_command_topic", "/forward_position_controller/commands"
+            "arm_action", "/arm_controller/follow_joint_trajectory"
+        )
+        self.declare_parameter(
+            "arm_state_topic", "/arm_controller/controller_state"
         )
         self.declare_parameter("joint_state_topic", "/joint_states")
         self.declare_parameter(
@@ -124,7 +131,9 @@ class OM6DOFController(Node):
         self.declare_parameter("target_status_topic", "/om6dof/target_status")
         self.declare_parameter("gripper_command_topic", "/om6dof/gripper_cmd")
         self.declare_parameter("gripper_state_topic", "/om6dof/gripper_state")
-        self.declare_parameter("gripper_action", "/gripper_controller/gripper_cmd")
+        self.declare_parameter(
+            "gripper_action", "/gripper_controller/gripper_cmd"
+        )
         self.declare_parameter("gripper_open_target", 0.019)
         self.declare_parameter("gripper_close_target", -0.010)
         self.declare_parameter(
@@ -133,14 +142,6 @@ class OM6DOFController(Node):
         self.declare_parameter(
             "remote_enabled_state_topic", "/om6dof/remote_enabled/state"
         )
-        self.declare_parameter(
-            "switch_controller_service", "/controller_manager/switch_controller"
-        )
-        self.declare_parameter(
-            "list_controllers_service", "/controller_manager/list_controllers"
-        )
-        self.declare_parameter("switch_timeout_seconds", 2.0)
-        self.declare_parameter("remote_enabled_on_start", False)
 
         self.declare_parameter("publish_rate_hz", 50.0)
         self.declare_parameter("joint_state_timeout_seconds", 1.0)
@@ -152,31 +153,28 @@ class OM6DOFController(Node):
         # instead of following it all the way down.
         self.declare_parameter("float_follow_velocity", 0.35)
         self.declare_parameter("joint_limit_margin", 0.02)
-        self.declare_parameter("ready_pose", list(DEFAULT_READY_JOINT_POSITIONS))
-        self.declare_parameter("pose_target_velocity", 0.5)
-        self.declare_parameter("pose_target_tolerance", 0.01)
-        self.declare_parameter("pose_target_timeout_seconds", 20.0)
+        self.declare_parameter(
+            "ready_pose_degrees", list(DEFAULT_READY_JOINT_POSITIONS_DEG)
+        )
+        self.declare_parameter(
+            "transition_pose_degrees",
+            list(DEFAULT_TRANSITION_JOINT_POSITIONS_DEG),
+        )
         self.declare_parameter("pose_profile_duration_seconds", 4.0)
-        self.declare_parameter("pose_profile_accel_seconds", 2.0)
-        # Absolute web targets use their own duration. Its acceleration and
-        # deceleration each take exactly half the requested reach time.
         self.declare_parameter("target_reach_duration_seconds", 5.0)
 
         self.declare_parameter("ik_enabled", True)
         self.declare_parameter("ik_base_link", "world")
         self.declare_parameter("ik_tip_link", "end_effector_link")
         self.declare_parameter("ik_urdf_pkg", "om6dof_description")
+        self.declare_parameter("ik_xacro_rel", "urdf/om6dof_v2.urdf.xacro")
         self.declare_parameter("ik_damping", 0.05)
         self.declare_parameter("max_cartesian_linear_velocity", 0.17)
         self.declare_parameter("max_cartesian_angular_velocity", 1.95)
         self.declare_parameter("max_cylindrical_theta_velocity", 1.10)
         self.declare_parameter("cylindrical_origin_xy", [0.012, 0.0])
         self.declare_parameter("cylindrical_min_radius", 0.03)
-        self.declare_parameter("ik_position_gain", 4.0)
-        self.declare_parameter("ik_rotation_gain", 3.0)
         self.declare_parameter("ik_tool_frame_rotation", True)
-        self.declare_parameter("ik_max_target_lead", 0.04)
-        self.declare_parameter("ik_max_joint_following_error", 0.30)
         self.declare_parameter("ik_manipulability_warning_threshold", 1.0e-6)
         self.declare_parameter("ik_self_collision", True)
         self.declare_parameter("ik_collision_radius", 0.025)
@@ -187,9 +185,6 @@ class OM6DOFController(Node):
         if len(self.joint_names) != 6:
             raise RuntimeError("joint_names must contain the six arm joints")
         self.arm_controller = str(self.get_parameter("arm_controller").value)
-        self.remote_controller = str(
-            self.get_parameter("remote_controller").value
-        )
         self.rate = float(self.get_parameter("publish_rate_hz").value)
         self.joint_state_timeout = float(
             self.get_parameter("joint_state_timeout_seconds").value
@@ -220,35 +215,33 @@ class OM6DOFController(Node):
         if (
             not math.isfinite(margin)
             or margin < 0.0
-            or any(
-                lo + margin >= hi - margin
-                for lo, hi in zip(lower, upper)
-            )
+            or any(lo + margin >= hi - margin for lo, hi in zip(lower, upper))
         ):
             raise RuntimeError("joint_limit_margin is incompatible with limits")
         self.joint_lower = [value + margin for value in lower]
         self.joint_upper = [value - margin for value in upper]
         self.ready_pose = clamp_positions(
-            validated_joint_positions(
-                self.get_parameter("ready_pose").value, "ready_pose"
-            ),
+            [
+                math.radians(value) for value in validated_joint_positions(
+                    self.get_parameter("ready_pose_degrees").value,
+                    "ready_pose_degrees",
+                )
+            ],
             self.joint_lower,
             self.joint_upper,
         )
-        self.pose_target_velocity = float(
-            self.get_parameter("pose_target_velocity").value
-        )
-        self.pose_target_tolerance = float(
-            self.get_parameter("pose_target_tolerance").value
-        )
-        self.pose_target_timeout = float(
-            self.get_parameter("pose_target_timeout_seconds").value
+        self.transition_pose = clamp_positions(
+            [
+                math.radians(value) for value in validated_joint_positions(
+                    self.get_parameter("transition_pose_degrees").value,
+                    "transition_pose_degrees",
+                )
+            ],
+            self.joint_lower,
+            self.joint_upper,
         )
         self.pose_profile_duration = float(
             self.get_parameter("pose_profile_duration_seconds").value
-        )
-        self.pose_profile_accel = float(
-            self.get_parameter("pose_profile_accel_seconds").value
         )
         self.target_reach_duration = float(
             self.get_parameter("target_reach_duration_seconds").value
@@ -269,20 +262,8 @@ class OM6DOFController(Node):
         self.cylindrical_min_radius = float(
             self.get_parameter("cylindrical_min_radius").value
         )
-        self.ik_position_gain = float(
-            self.get_parameter("ik_position_gain").value
-        )
-        self.ik_rotation_gain = float(
-            self.get_parameter("ik_rotation_gain").value
-        )
         self.ik_tool_frame_rotation = bool(
             self.get_parameter("ik_tool_frame_rotation").value
-        )
-        self.ik_max_target_lead = float(
-            self.get_parameter("ik_max_target_lead").value
-        )
-        self.ik_max_joint_following_error = float(
-            self.get_parameter("ik_max_joint_following_error").value
         )
         self.ik_manipulability_warning_threshold = float(
             self.get_parameter("ik_manipulability_warning_threshold").value
@@ -293,42 +274,25 @@ class OM6DOFController(Node):
         self.ik_collision_radius = float(
             self.get_parameter("ik_collision_radius").value
         )
-        coordinate_scalars = np.asarray([
+        scalars = np.asarray([
             self.max_cartesian_linear_velocity,
             self.max_cartesian_angular_velocity,
             self.max_cylindrical_theta_velocity,
             self.cylindrical_min_radius,
-            self.ik_position_gain,
-            self.ik_rotation_gain,
-            self.ik_max_target_lead,
-            self.ik_max_joint_following_error,
             self.ik_manipulability_warning_threshold,
             self.ik_collision_radius,
-            self.pose_target_velocity,
-            self.pose_target_tolerance,
-            self.pose_target_timeout,
             self.pose_profile_duration,
-            self.pose_profile_accel,
             self.target_reach_duration,
         ])
         if (
-            not np.all(np.isfinite(coordinate_scalars))
+            not np.all(np.isfinite(scalars))
             or self.max_cartesian_linear_velocity <= 0.0
             or self.max_cartesian_angular_velocity <= 0.0
             or self.max_cylindrical_theta_velocity <= 0.0
             or self.cylindrical_min_radius < 0.0
-            or self.ik_position_gain < 0.0
-            or self.ik_rotation_gain < 0.0
-            or self.ik_max_target_lead <= 0.0
-            or self.ik_max_joint_following_error <= 0.0
             or self.ik_manipulability_warning_threshold < 0.0
             or self.ik_collision_radius <= 0.0
-            or self.pose_target_velocity <= 0.0
-            or self.pose_target_tolerance <= 0.0
-            or self.pose_target_timeout <= 0.0
             or self.pose_profile_duration <= 0.0
-            or self.pose_profile_accel <= 0.0
-            or self.pose_profile_accel > self.pose_profile_duration / 2.0
             or self.target_reach_duration <= 0.0
             or self.cylindrical_origin_xy.shape != (2,)
             or not np.all(np.isfinite(self.cylindrical_origin_xy))
@@ -336,43 +300,27 @@ class OM6DOFController(Node):
             raise RuntimeError("invalid pose/Cartesian/cylindrical parameters")
 
         self.lock = threading.RLock()
-        self.motion_mode = MODE_AUTONOMOUS
-        self.remote_enabled = False
-        self.arm_controller_active = False
-        self.remote_controller_active = False
-        self.switch_in_progress = False
-        self.switch_target: Optional[bool] = None
-        self.pending_manual_mode = MODE_JOINT
-        # Remember the last coordinate-space mode so REST -> READY can hand
-        # control back to the same interface that was active before resting.
+        self.motion_mode = MODE_JOINT
         self.last_coordinate_mode = MODE_CARTESIAN
-        self.remote_enabled_on_start = bool(
-            self.get_parameter("remote_enabled_on_start").value
-        )
-        self.startup_switch_attempted = False
-        self.controller_list_future = None
-        self.next_controller_poll = 0.0
+
+        # The one thing this node owns and publishes.
+        self.offset = np.zeros(6)
+        self.offset_blocked = False
 
         self.joint_positions: dict[str, float] = {}
         self.last_joint_state = 0.0
         self.startup_pose: Optional[list[float]] = None
-        self.command_positions: Optional[list[float]] = None
         self.control_velocity = np.zeros(6)
         self.last_control_cmd = 0.0
         self.last_tick = time.monotonic()
 
-        self.pose_target: Optional[list[float]] = None
-        self.held_target_positions: Optional[list[float]] = None
-        self.pose_phase_targets: list[list[float]] = []
-        self.pose_phase_index = 0
-        self.pose_phase_start: Optional[list[float]] = None
-        self.pose_phase_started_at = 0.0
-        self.active_pose_profile_duration = self.pose_profile_duration
-        self.active_pose_profile_accel = self.pose_profile_accel
-        self.pose_operation: Optional[str] = None
-        self.pose_target_until = 0.0
-        self.post_pose_mode = MODE_JOINT
-        self.return_autonomous_after_pose = False
+        # Autonomous reference, straight from the trajectory controller. Only
+        # FLOAT needs it: to make the total command track the measured arm the
+        # offset has to cancel whatever arm_controller is holding.
+        self.arm_reference: Optional[list[float]] = None
+        self.seen_goal_ids: set[bytes] = set()
+
+        self.f1_destination = MODE_READY
         self.target_active = False
         self.target_mode = ""
         self.target_goal: Optional[list[float]] = None
@@ -382,14 +330,8 @@ class OM6DOFController(Node):
         self.target_status_state = "idle"
         self.target_status_message = "no target yet"
         self.last_target_status_publish = 0.0
-        self.ready_pending_on_enable = False
-        self.ready_pending_mode = MODE_JOINT
 
         self.ik = None
-        self.ik_target_pos: Optional[np.ndarray] = None
-        self.ik_target_rotation: Optional[np.ndarray] = None
-        self.cylindrical_theta_hint: Optional[float] = None
-        self.ik_collision_blocked = False
 
         state_qos = QoSProfile(
             depth=1,
@@ -410,9 +352,9 @@ class OM6DOFController(Node):
             history=HistoryPolicy.KEEP_LAST,
         )
 
-        self.command_pub = self.create_publisher(
+        self.offset_pub = self.create_publisher(
             Float64MultiArray,
-            str(self.get_parameter("forward_command_topic").value),
+            str(self.get_parameter("offset_command_topic").value),
             10,
         )
         self.operation_state_pub = self.create_publisher(
@@ -465,18 +407,28 @@ class OM6DOFController(Node):
             self._on_gripper_command,
             10,
         )
+        self.create_subscription(
+            JointTrajectoryControllerState,
+            str(self.get_parameter("arm_state_topic").value),
+            self._on_arm_state,
+            10,
+        )
+        # Every autonomous goal -- ours, MoveIt's, graph_pick's -- shows up
+        # here. A new one means the planner just replanned from the measured
+        # pose, which already contains the operator's offset, so keeping that
+        # offset would apply it twice. Rebase to zero instead.
+        arm_action = str(self.get_parameter("arm_action").value)
+        self.create_subscription(
+            GoalStatusArray,
+            arm_action.rstrip("/") + "/_action/status",
+            self._on_arm_goal_status,
+            10,
+        )
+
+        self.arm_client = ActionClient(self, FollowJointTrajectory, arm_action)
         self.gripper_client = ActionClient(
-            self,
-            GripperCommand,
+            self, GripperCommand,
             str(self.get_parameter("gripper_action").value),
-        )
-        self.switch_client = self.create_client(
-            SwitchController,
-            str(self.get_parameter("switch_controller_service").value),
-        )
-        self.list_client = self.create_client(
-            ListControllers,
-            str(self.get_parameter("list_controllers_service").value),
         )
 
         self._initialize_ik()
@@ -484,107 +436,23 @@ class OM6DOFController(Node):
         self._publish_state()
         self._publish_target_status_locked("idle", "no target yet")
         self.get_logger().info(
-            "controller ready: /om6dof/operation_mode + /om6dof/control_cmd "
-            "-> forward_position_controller"
+            "controller ready: /om6dof/control_cmd -> "
+            f"{self.offset_pub.topic_name} (additive operator channel); "
+            "absolute poses go to arm_controller as trajectory goals"
         )
 
+    # ---------------------------------------------------------------- state
+
     def _reported_mode_locked(self) -> str:
-        if self.pose_operation is not None:
-            return self.pose_operation
-        return self.motion_mode if self.remote_enabled else MODE_AUTONOMOUS
+        return self.motion_mode
 
     def _publish_state(self) -> None:
         self.operation_state_pub.publish(
             String(data=self._reported_mode_locked())
         )
-        self.remote_state_pub.publish(Bool(data=bool(self.remote_enabled)))
-
-    def _target_current_locked(self) -> dict[str, list[float]]:
-        """Return current arm pose in controller SI units for target feedback."""
-        joint = self._joint_vector_locked()
-        if joint is None:
-            return {}
-        current = {"joint": [float(value) for value in joint]}
-        if self.ik is None:
-            return current
-        try:
-            position, rotation = self.ik.fk_pose(np.asarray(joint, dtype=float))
-            roll, pitch, yaw = rotation_to_zyx(rotation)
-            xyzrpy = [float(value) for value in position] + list(
-                tip_rotation_to_cartesian_rpy(rotation)
-            )
-            current["cartesian"] = xyzrpy
-            dx = float(position[0] - self.cylindrical_origin_xy[0])
-            dy = float(position[1] - self.cylindrical_origin_xy[1])
-            current["cylindrical"] = [
-                math.hypot(dx, dy), math.atan2(dy, dx), float(position[2]),
-                roll, pitch, yaw,
-            ]
-        except Exception as exc:
-            self.get_logger().warn(
-                f"target feedback FK unavailable: {exc}",
-                throttle_duration_sec=5.0,
-            )
-        return current
-
-    def _publish_target_status_locked(self, state: str, message: str) -> None:
-        current = self._target_current_locked()
-        errors = {}
-        command_joints = getattr(self, 'target_command_joints', None)
-        if command_joints is not None and 'joint' in current:
-            errors['joint_max_deg'] = math.degrees(max(
-                abs(a - b) for a, b in zip(command_joints, current['joint'])
-            ))
-        if self.target_goal is not None and self.target_mode in ('CARTESIAN', 'CYLINDRICAL') and self.ik is not None:
-            try:
-                goal = self.target_goal
-                if self.target_mode == 'CARTESIAN':
-                    position = np.asarray(goal[:3])
-                    rotation = cartesian_rpy_to_tip_rotation(*goal[3:])
-                else:
-                    position = np.array([
-                        self.cylindrical_origin_xy[0] + goal[0] * math.cos(goal[1]),
-                        self.cylindrical_origin_xy[1] + goal[0] * math.sin(goal[1]), goal[2],
-                    ])
-                    rotation = rotation_from_zyx(*goal[3:])
-                if 'joint' in current:
-                    ep, er = pose_error(self.ik, current['joint'], position, rotation)
-                    errors.update(position_mm=1000.0 * ep, orientation_deg=math.degrees(er))
-            except Exception as exc:
-                self.get_logger().warn(f'Target error feedback unavailable: {exc}', throttle_duration_sec=5.0)
-        if self.held_target_positions is not None and state in ('holding', 'reached', 'approximate'):
-            joints_reached = errors.get('joint_max_deg', math.inf) <= math.degrees(JOINT_TOLERANCE)
-            pose_reached = self.target_mode == 'JOINT' or (
-                errors.get('position_mm', math.inf) <= POSITION_TOLERANCE * 1000
-                and errors.get('orientation_deg', math.inf) <= math.degrees(ORIENTATION_TOLERANCE)
-            )
-            if joints_reached and pose_reached:
-                state, message = 'reached', 'Target reached within feedback tolerance; final goal held.'
-            elif joints_reached and self.target_approximate:
-                state, message = 'approximate', 'Approximate IK goal reached; requested pose differs.'
-            else:
-                state, message = 'holding', 'Profile complete; servo is still pursuing the final goal.'
-            if 'position_mm' in errors:
-                message += f" Error: {errors['position_mm']:.2f} mm / {errors['orientation_deg']:.2f} deg."
-        self.target_status_state = state
-        self.target_status_message = message
-        self.last_target_status_publish = time.monotonic()
-        payload = {
-            "state": state,
-            "active": bool(self.target_active),
-            "mode": self.target_mode,
-            "request_id": self.target_request_id,
-            "goal": self.target_goal,
-            "approximate": bool(self.target_approximate),
-            "current": current,
-            "command_joints": command_joints,
-            "errors": errors,
-            "feedback_fresh": self._joint_state_fresh_locked(time.monotonic()),
-            "message": message,
-        }
-        self.target_status_pub.publish(String(data=json.dumps(
-            payload, separators=(",", ":"), allow_nan=False
-        )))
+        # There is no ownership any more: the operator channel is live for as
+        # long as this node is. Kept so existing dashboards keep parsing.
+        self.remote_state_pub.publish(Bool(data=True))
 
     def _initialize_ik(self) -> None:
         if not bool(self.get_parameter("ik_enabled").value):
@@ -600,9 +468,8 @@ class OM6DOFController(Node):
                 tip_link=str(self.get_parameter("ik_tip_link").value),
                 urdf_pkg=str(self.get_parameter("ik_urdf_pkg").value),
                 damping=float(self.get_parameter("ik_damping").value),
+                xacro_rel=str(self.get_parameter("ik_xacro_rel").value),
             )
-            # Search inside the same effective limits used for commands;
-            # otherwise post-IK clamping invalidates a supposedly exact pose.
             self.ik.q_min = np.asarray(self.joint_lower)
             self.ik.q_max = np.asarray(self.joint_upper)
             self.get_logger().info(
@@ -624,6 +491,7 @@ class OM6DOFController(Node):
                 base_link=str(self.get_parameter("ik_base_link").value),
                 tip_link=str(self.get_parameter("ik_tip_link").value),
                 urdf_pkg=str(self.get_parameter("ik_urdf_pkg").value),
+                xacro_rel=str(self.get_parameter("ik_xacro_rel").value),
             )
         except Exception as exc:
             raise RuntimeError(
@@ -664,9 +532,8 @@ class OM6DOFController(Node):
             self.joint_positions = positions
             now = time.monotonic()
             self.last_joint_state = now
-            vector = [positions[name] for name in self.joint_names]
             if self.startup_pose is None:
-                self.startup_pose = list(vector)
+                self.startup_pose = [positions[n] for n in self.joint_names]
             # Keep the web form's "Use current position" feedback fresh
             # without making this status topic another high-rate joint stream.
             if now - self.last_target_status_publish >= 0.2:
@@ -674,42 +541,48 @@ class OM6DOFController(Node):
                     self.target_status_state, self.target_status_message
                 )
 
-    def _clear_stream_command_locked(self) -> None:
-        self.control_velocity = np.zeros(6)
-        self.last_control_cmd = 0.0
-        self.held_target_positions = None
-
-    def _cancel_target_locked(self, message: str) -> None:
-        if not getattr(self, 'target_active', False) and self.held_target_positions is None:
+    def _on_arm_state(self, msg: JointTrajectoryControllerState) -> None:
+        point = msg.reference if msg.reference.positions else msg.desired
+        if not point.positions:
             return
-        self.target_active = False
-        self._release_target_hold_locked()
-        if self.pose_operation == 'TARGET':
-            self.pose_target = None
-            self.pose_operation = None
-            self.pose_phase_targets = []
-            self.pose_phase_start = None
-            feedback = self._joint_vector_locked()
-            if feedback is not None:
-                self.command_positions = clamp_positions(feedback, self.joint_lower, self.joint_upper)
-        self._clear_stream_command_locked()
-        self._publish_target_status_locked('stopped', message)
-
-    def _release_target_hold_locked(self) -> None:
-        """Start a new manual command from feedback, not an unreached goal."""
-        if self.held_target_positions is None:
+        index = {name: i for i, name in enumerate(msg.joint_names)}
+        values = []
+        for name in self.joint_names:
+            i = index.get(name)
+            if i is None or i >= len(point.positions):
+                return
+            values.append(float(point.positions[i]))
+        if not all(math.isfinite(value) for value in values):
             return
-        self.held_target_positions = None
-        feedback = self._joint_vector_locked()
-        if feedback is not None:
-            self.command_positions = clamp_positions(
-                feedback, self.joint_lower, self.joint_upper
-            )
-            if self.motion_mode in COORDINATE_MODES:
-                self._seed_ik_anchor_locked(self.command_positions)
+        with self.lock:
+            self.arm_reference = values
+
+    def _on_arm_goal_status(self, msg: GoalStatusArray) -> None:
+        rebase = False
+        with self.lock:
+            for status in msg.status_list:
+                if status.status not in (
+                    GoalStatus.STATUS_ACCEPTED, GoalStatus.STATUS_EXECUTING
+                ):
+                    continue
+                key = bytes(status.goal_info.goal_id.uuid)
+                if key in self.seen_goal_ids:
+                    continue
+                self.seen_goal_ids.add(key)
+                rebase = True
+            if len(self.seen_goal_ids) > 256:
+                self.seen_goal_ids.clear()
+            if rebase and np.any(np.abs(self.offset) > 1.0e-9):
+                self.offset = np.zeros(6)
+                self.get_logger().info(
+                    "manual offset rebased to zero: a new autonomous "
+                    "trajectory planned from the current measured pose"
+                )
+
+    # -------------------------------------------------------------- offsets
 
     def _float_follow_velocity(self) -> float:
-        """How fast the lead-through command may chase the arm.
+        """How fast the lead-through offset may chase the arm.
 
         Read live rather than cached at startup: finding a value that feels
         light without following a sag means trying a few while holding the
@@ -721,222 +594,251 @@ class OM6DOFController(Node):
             return 0.35
         if not math.isfinite(value) or value <= 0.0:
             return 0.35
-        # Capped at the joint ceiling; past that the command is no longer the
-        # thing limiting the arm anyway.
         return min(value, self.max_joint_velocity)
 
-    def _seed_ik_anchor_locked(
-        self, joint_positions: Optional[Sequence[float]] = None
-    ) -> bool:
+    def _cartesian_twist_locked(
+        self, feedback: Sequence[float], velocity: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Map the six jog channels onto a base-frame twist for the tip."""
+        if self.motion_mode == MODE_CARTESIAN:
+            linear = limit_norm(velocity[:3], self.max_cartesian_linear_velocity)
+        else:
+            # Cylindrical channels are (radial, theta rate, vertical) around
+            # the configured column, resolved at wherever the tip actually is.
+            position, _ = self.ik.fk_pose(np.asarray(feedback, dtype=float))
+            dx = float(position[0] - self.cylindrical_origin_xy[0])
+            dy = float(position[1] - self.cylindrical_origin_xy[1])
+            radius = math.hypot(dx, dy)
+            if radius < max(self.cylindrical_min_radius, 1.0e-6):
+                # On the column the tangential direction is undefined; radial
+                # and vertical still are, so keep those rather than refuse.
+                radial = np.zeros(3)
+                tangential = np.zeros(3)
+            else:
+                radial = np.array([dx / radius, dy / radius, 0.0])
+                tangential = np.array([-dy / radius, dx / radius, 0.0])
+            radial_speed = max(
+                -self.max_cartesian_linear_velocity,
+                min(self.max_cartesian_linear_velocity, float(velocity[0])),
+            )
+            theta_rate = max(
+                -self.max_cylindrical_theta_velocity,
+                min(self.max_cylindrical_theta_velocity, float(velocity[1])),
+            )
+            vertical = max(
+                -self.max_cartesian_linear_velocity,
+                min(self.max_cartesian_linear_velocity, float(velocity[2])),
+            )
+            linear = (
+                radial * radial_speed
+                + tangential * (theta_rate * radius)
+                + np.array([0.0, 0.0, vertical])
+            )
+            linear = limit_norm(linear, self.max_cartesian_linear_velocity)
+
+        if self.motion_mode == MODE_SEMI_CYLINDRICAL:
+            # Only roll steers the wrist here; pitch and yaw are direct joint
+            # nudges applied by the caller, so leaving them on the twist as
+            # well would have IK and the nudge pulling the same joints apart.
+            angular = limit_norm(
+                np.array([float(velocity[3]), 0.0, 0.0]),
+                self.max_cartesian_angular_velocity,
+            )
+        else:
+            angular = limit_norm(
+                velocity[3:], self.max_cartesian_angular_velocity
+            )
+        if (
+            self.ik_tool_frame_rotation
+            and float(np.linalg.norm(angular)) > 1.0e-9
+        ):
+            angular = self.ik.ee_to_base_angular(
+                np.asarray(feedback, dtype=float), angular
+            )
+        return linear, angular
+
+    def _offset_delta_locked(
+        self, feedback: Sequence[float], velocity: np.ndarray, dt: float
+    ) -> np.ndarray:
+        """Joint-space increment the operator is asking for this tick."""
+        if self.motion_mode == MODE_JOINT:
+            return np.clip(
+                velocity, -self.max_joint_velocity, self.max_joint_velocity
+            ) * dt
         if self.ik is None:
-            return False
-        values = joint_positions
-        if values is None:
-            values = self._joint_vector_locked()
-        if values is None or len(values) != 6:
-            return False
-        q = np.asarray(values, dtype=float)
+            return np.zeros(6)
         try:
-            position, rotation = self.ik.fk_pose(q)
+            linear, angular = self._cartesian_twist_locked(feedback, velocity)
+            q = np.asarray(feedback, dtype=float)
+            joint_velocity = np.zeros(6)
+            if float(np.linalg.norm(np.concatenate([linear, angular]))) > 1.0e-9:
+                joint_velocity = self.ik.velocity_ik_priority(q, linear, angular)
+                if not np.all(np.isfinite(joint_velocity)):
+                    raise ValueError("IK produced non-finite joint velocity")
+                peak = float(np.max(np.abs(joint_velocity)))
+                if peak > self.max_joint_velocity:
+                    joint_velocity = joint_velocity * (
+                        self.max_joint_velocity / peak
+                    )
+            delta = joint_velocity * dt
+            if self.motion_mode == MODE_SEMI_CYLINDRICAL:
+                # Pitch and yaw offset joint 5 and joint 6 directly: the tilt
+                # and twist an operator reaches for when the coordinate frame
+                # makes them awkward.
+                limit = self.max_joint_velocity
+                delta[4] += max(-limit, min(limit, float(velocity[4]))) * dt
+                delta[5] += max(-limit, min(limit, float(velocity[5]))) * dt
+            return delta
         except Exception as exc:
             self.get_logger().error(
-                f"failed to seed coordinate target: {exc}",
+                f"coordinate jog failed; holding offset: {exc}",
                 throttle_duration_sec=2.0,
             )
-            return False
-        self.ik_target_pos = np.asarray(position, dtype=float).copy()
-        self.ik_target_rotation = np.asarray(rotation, dtype=float).copy()
-        try:
-            score = float(self.ik.manipulability(q))
-        except Exception:
-            score = math.inf
-        if (
-            math.isfinite(score)
-            and score < self.ik_manipulability_warning_threshold
-        ):
-            self.get_logger().warn(
-                f"coordinate control is near a singular pose "
-                f"(manipulability={score:.3e}); request READY first",
-                throttle_duration_sec=5.0,
-            )
-        dx = float(self.ik_target_pos[0] - self.cylindrical_origin_xy[0])
-        dy = float(self.ik_target_pos[1] - self.cylindrical_origin_xy[1])
-        radius = math.hypot(dx, dy)
-        self.cylindrical_theta_hint = (
-            math.atan2(dy, dx) if radius >= self.cylindrical_min_radius
-            else float(values[0])
+            return np.zeros(6)
+
+    def _autonomous_reference_locked(
+        self, feedback: Sequence[float]
+    ) -> np.ndarray:
+        """The pose arm_controller is commanding -- what the offset adds to.
+
+        The motors are driven `reference + offset`, so every limit belongs on
+        that sum. The measured pose is NOT a substitute: it already contains
+        the offset, so using it would count the operator's contribution twice
+        and halve the travel they actually get.
+        """
+        if self.arm_reference is not None:
+            return np.asarray(self.arm_reference, dtype=float)
+        # No controller_state stream to read it from. Backing our own offset
+        # out of the measurement would be exact only while the arm is keeping
+        # up -- if it is blocked, that estimate drifts and the offset could
+        # grow without ever tripping the limit. Fall back to the measurement
+        # itself: it double-counts the offset and so clamps early, costing
+        # travel, which is the safe direction to be wrong in.
+        self.get_logger().warn(
+            "no arm_controller state; limiting jog against the measured pose",
+            throttle_duration_sec=10.0,
         )
-        seed_roll, seed_pitch, seed_yaw = rotation_to_zyx(
-            self.ik_target_rotation
+        return np.asarray(feedback, dtype=float)
+
+    def _apply_offset_locked(
+        self, feedback: Sequence[float], delta: np.ndarray
+    ) -> None:
+        """Accept `delta` only if the resulting total pose is safe."""
+        if not np.any(np.abs(delta) > 0.0):
+            return
+        candidate = self.offset + delta
+        # No separate ceiling on the offset itself: the only limit that means
+        # anything is the URDF joint range applied to the sum the motors
+        # actually see, which is reference + offset.
+        reference = self._autonomous_reference_locked(feedback)
+        total = np.asarray(
+            clamp_positions(
+                reference + candidate, self.joint_lower, self.joint_upper,
+            ),
+            dtype=float,
         )
-        self.semi_roll = seed_roll
-        # Clamped here too, not just while driving: seeding straight from a
-        # near-vertical wrist would otherwise store a pitch past the limit and
-        # sit in the singular configuration the limit exists to avoid. The
-        # cost is a small corrective move on entry from such a pose, which is
-        # the lesser evil.
-        self.semi_pitch = max(
-            -SEMI_PITCH_LIMIT, min(SEMI_PITCH_LIMIT, seed_pitch)
-        )
-        self.semi_yaw_offset = wrap_angle(
-            seed_yaw - self.cylindrical_theta_hint
-        )
-        self.ik_collision_blocked = False
-        return True
+        candidate = total - reference
+        if self.ik is not None and self.ik_self_collision:
+            try:
+                if self.ik.self_collides(total, self.ik_collision_radius):
+                    # Only refuse a jog that *enters* the boundary. This model
+                    # is conservative enough to flag poses the arm rests in
+                    # perfectly safely, and refusing from inside one would trap
+                    # the operator there with no way to jog back out.
+                    entering = not self.ik.self_collides(
+                        np.asarray(feedback, dtype=float),
+                        self.ik_collision_radius,
+                    )
+                    if entering:
+                        if not self.offset_blocked:
+                            self.get_logger().warn(
+                                "manual jog blocked by self-collision boundary"
+                            )
+                        self.offset_blocked = True
+                        return
+            except Exception as exc:
+                self.get_logger().error(
+                    f"self-collision check failed; holding offset: {exc}",
+                    throttle_duration_sec=5.0,
+                )
+                return
+        self.offset_blocked = False
+        self.offset = candidate
+
+    # ----------------------------------------------------------- operations
 
     def _set_motion_mode_locked(self, mode: str, source: str) -> bool:
-        if mode not in MOTION_MODES:
+        # FLOAT is a jog mode for this node even though control_math keeps it
+        # out of MOTION_MODES (it is not a frame you jog *in*).
+        if mode not in MOTION_MODES and mode != MODE_FLOAT:
             return False
-        if mode != MODE_JOINT and self.ik is None:
+        if mode in COORDINATE_MODES and self.ik is None:
             self.get_logger().warn(
                 f"{source} request rejected: IK is unavailable"
             )
             return False
-        self._cancel_target_locked('Target cancelled by mode selection.')
-        self._release_target_hold_locked()
-        if mode == self.motion_mode and self.pose_target is None:
-            self._publish_state()
-            return True
         self.motion_mode = mode
         if mode in COORDINATE_MODES:
             self.last_coordinate_mode = mode
-        self.pose_target = None
-        self.pose_operation = None
-        self._clear_stream_command_locked()
-        self.ik_target_pos = None
-        self.ik_target_rotation = None
-        if mode != MODE_JOINT:
-            self._seed_ik_anchor_locked(
-                self.command_positions or self._joint_vector_locked()
-            )
+        self.control_velocity = np.zeros(6)
+        self.last_control_cmd = 0.0
         self._publish_state()
         self.get_logger().info(f"operation mode -> {mode} ({source})")
         return True
 
-    def _schedule_pose_locked(
+    def _trajectory_goal(
+        self, waypoints: Sequence[Sequence[float]], duration: float
+    ) -> FollowJointTrajectory.Goal:
+        """One goal for arm_controller; it owns the time profiling."""
+        trajectory = JointTrajectory()
+        trajectory.joint_names = list(self.joint_names)
+        elapsed = 0.0
+        for waypoint in waypoints:
+            elapsed += duration
+            point = JointTrajectoryPoint()
+            point.positions = [float(value) for value in waypoint]
+            point.velocities = [0.0] * 6
+            point.time_from_start = DurationMsg(
+                sec=int(elapsed),
+                nanosec=int(round((elapsed - int(elapsed)) * 1e9)),
+            )
+            trajectory.points.append(point)
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory = trajectory
+        return goal
+
+    def _send_pose_locked(
         self,
         operation: str,
-        target: Sequence[float],
-        post_mode: str = MODE_JOINT,
-        via_zero: bool = True,
-        profile_duration: Optional[float] = None,
+        waypoints: Sequence[Sequence[float]],
+        duration: Optional[float] = None,
     ) -> bool:
         now = time.monotonic()
-        if not self.remote_enabled or not self.remote_controller_active:
-            self.get_logger().warn(
-                f"{operation} rejected: remote controller is not active"
-            )
-            return False
         if not self._joint_state_fresh_locked(now):
             self.get_logger().warn(
                 f"{operation} rejected: /joint_states is stale"
             )
             return False
-        vector = self._joint_vector_locked()
-        if vector is None:
-            return False
-        if operation != 'TARGET':
-            self._cancel_target_locked(f'Target cancelled by {operation}.')
-        self.command_positions = clamp_positions(
-            vector, self.joint_lower, self.joint_upper
-        )
-        self.motion_mode = MODE_JOINT
-        self._clear_stream_command_locked()
-        self.ik_target_pos = None
-        self.ik_target_rotation = None
-        self.pose_target = clamp_positions(target, self.joint_lower, self.joint_upper)
-        # READY/STARTUP retain their two-phase zero crossing. An absolute
-        # target must instead travel directly to its requested pose: passing
-        # through zero could be unexpectedly large and unsafe.
-        if via_zero:
-            zero_pose = clamp_positions(
-                [0.0] * 6, self.joint_lower, self.joint_upper
-            )
-            self.pose_phase_targets = [zero_pose, self.pose_target]
-        else:
-            self.pose_phase_targets = [self.pose_target]
-        self.pose_phase_index = 0
-        self.pose_phase_start = list(self.command_positions)
-        self.pose_phase_started_at = now
-        default_duration = getattr(self, "pose_profile_duration", 4.0)
-        default_accel = getattr(self, "pose_profile_accel", 2.0)
-        self.active_pose_profile_duration = (
-            float(profile_duration)
-            if profile_duration is not None else default_duration
-        )
-        self.active_pose_profile_accel = self.active_pose_profile_duration / 2.0
-        if via_zero:
-            self.active_pose_profile_accel = default_accel
-        self.pose_operation = operation
-        self.pose_target_until = now + self.pose_target_timeout
-        self.post_pose_mode = post_mode
-        self.return_autonomous_after_pose = False
-        self._publish_state()
-        self.get_logger().info(
-            f"{operation} profile: {'current -> zero ->' if via_zero else 'current ->'} {self.pose_target}; "
-            f"{self.active_pose_profile_duration:.1f}s per phase "
-            f"({self.active_pose_profile_accel:.1f}s accel/decel)"
-        )
-        return True
-
-    def _pose_profile_fraction(self, elapsed: float) -> float:
-        """Normalized trapezoid/triangle position profile with symmetric ramps."""
-        duration = getattr(
-            self, "active_pose_profile_duration",
-            getattr(self, "pose_profile_duration", 4.0),
-        )
-        accel = getattr(
-            self, "active_pose_profile_accel",
-            getattr(self, "pose_profile_accel", 2.0),
-        )
-        t = max(0.0, min(duration, elapsed))
-        cruise = duration - 2.0 * accel
-        denominator = accel * (duration - accel)
-        if t <= accel:
-            return 0.5 * t * t / denominator
-        if t <= accel + cruise:
-            return (0.5 * accel + (t - accel)) / (duration - accel)
-        remaining = duration - t
-        return 1.0 - 0.5 * remaining * remaining / denominator
-
-    def _start_next_pose_phase_locked(self, feedback: Sequence[float], now: float) -> bool:
-        self.pose_phase_index += 1
-        if self.pose_phase_index >= len(self.pose_phase_targets):
-            return False
-        self.pose_phase_start = clamp_positions(
-            feedback, self.joint_lower, self.joint_upper
-        )
-        self.pose_phase_started_at = now
-        self.command_positions = list(self.pose_phase_start)
-        return True
-
-    def _ready_resume_mode_locked(self) -> str:
-        """Coordinate mode to hand back after a READY move.
-
-        READY used to drop into JOINT, which left every coordinate-space
-        interface -- the gamepad especially -- unable to drive until the
-        operator picked a mode by hand. TOGGLE_REST_READY already resumed
-        the remembered mode; plain READY now matches it.
-        """
-        resume = self.last_coordinate_mode
-        if resume not in COORDINATE_MODES:
-            resume = MODE_CARTESIAN
-        return resume
-
-    def _schedule_ready_after_enable_locked(self, post_mode: str) -> bool:
-        now = time.monotonic()
-        if not self._joint_state_fresh_locked(now):
-            self.command_positions = None
-            self.ready_pending_on_enable = True
-            self.ready_pending_mode = post_mode
+        if not self.arm_client.server_is_ready():
             self.get_logger().warn(
-                "remote active; READY waits for fresh /joint_states",
-                throttle_duration_sec=2.0,
+                f"{operation} rejected: arm_controller action is unavailable"
             )
             return False
-        self.ready_pending_on_enable = False
-        self.ready_pending_mode = MODE_JOINT
-        return self._schedule_pose_locked(MODE_READY, self.ready_pose, post_mode)
+        clamped = [
+            clamp_positions(waypoint, self.joint_lower, self.joint_upper)
+            for waypoint in waypoints
+        ]
+        goal = self._trajectory_goal(
+            clamped, self.pose_profile_duration if duration is None else duration
+        )
+        self.arm_client.send_goal_async(goal)
+        # An absolute pose is an autonomous command: the operator's correction
+        # is no longer meaningful relative to it.
+        self.offset = np.zeros(6)
+        self.get_logger().info(
+            f"{operation} sent to arm_controller: {len(clamped)} waypoint(s)"
+        )
+        return True
 
     def _on_operation_mode(self, msg: String) -> None:
         raw_mode = str(msg.data).strip().upper()
@@ -944,12 +846,8 @@ class OM6DOFController(Node):
             with self.lock:
                 if self.startup_pose is None:
                     self.get_logger().warn(
-                        "REST/READY toggle rejected: startup pose has not been captured"
-                    )
-                    return
-                if not self.remote_enabled or not self.remote_controller_active:
-                    self.get_logger().warn(
-                        "REST/READY toggle rejected: remote controller is not active"
+                        "REST/READY toggle rejected: startup pose has not "
+                        "been captured"
                     )
                     return
                 vector = self._joint_vector_locked()
@@ -965,15 +863,12 @@ class OM6DOFController(Node):
                     np.asarray(vector) - np.asarray(self.ready_pose)
                 ))
                 if rest_distance <= ready_distance:
-                    resume_mode = self.last_coordinate_mode
-                    if resume_mode not in COORDINATE_MODES:
-                        resume_mode = MODE_CARTESIAN
-                    self._schedule_pose_locked(
-                        MODE_READY, self.ready_pose, resume_mode
+                    self._send_pose_locked(
+                        MODE_READY, [self.transition_pose, self.ready_pose]
                     )
                 else:
-                    self._schedule_pose_locked(
-                        MODE_STARTUP, self.startup_pose, MODE_JOINT
+                    self._send_pose_locked(
+                        MODE_STARTUP, [self.transition_pose, self.startup_pose]
                     )
             return
         try:
@@ -982,76 +877,197 @@ class OM6DOFController(Node):
             self.get_logger().warn(f"operation mode rejected: {exc}")
             return
         with self.lock:
-            if mode == MODE_AUTONOMOUS:
-                self._request_controller_mode_locked(False, "operation_mode")
-                return
-            if mode == MODE_JOINT:
-                if self.remote_enabled and self.remote_controller_active:
-                    self._set_motion_mode_locked(MODE_JOINT, "operation_mode")
-                else:
-                    self.pending_manual_mode = MODE_JOINT
-                    self._request_controller_mode_locked(True, "operation_mode")
-                return
-            if mode in COORDINATE_MODES:
-                if not self.remote_enabled or not self.remote_controller_active:
-                    self.get_logger().warn(
-                        f"{mode} rejected: request JOINT first to take remote "
-                        "ownership and enter READY"
-                    )
-                    return
+            if mode in MOTION_MODES:
                 self._set_motion_mode_locked(mode, "operation_mode")
                 return
             if mode == MODE_FLOAT:
-                if not self.remote_enabled or not self.remote_controller_active:
+                if self._set_motion_mode_locked(MODE_FLOAT, "operation_mode"):
                     self.get_logger().warn(
-                        "FLOAT rejected: request JOINT first to take remote "
-                        "ownership"
+                        "FLOAT: the arm is now free to push by hand. It holds "
+                        "where friction holds it, which is not everywhere."
                     )
-                    return
-                self._cancel_target_locked('Target cancelled by FLOAT mode.')
-                self._release_target_hold_locked()
-                self.motion_mode = MODE_FLOAT
-                self.pose_target = None
-                self.pose_operation = None
-                self._clear_stream_command_locked()
-                self.get_logger().warn(
-                    "FLOAT: the arm is now free to push by hand. It holds "
-                    "where friction holds it, which is not everywhere."
-                )
-                self._publish_state()
                 return
             if mode == MODE_READY:
-                resume = self._ready_resume_mode_locked()
-                if self.remote_enabled and self.remote_controller_active:
-                    self._schedule_pose_locked(
-                        MODE_READY, self.ready_pose, resume
-                    )
-                else:
-                    # Carried through the enable handshake, which schedules
-                    # the pose once ownership lands.
-                    self.pending_manual_mode = resume
-                    self._request_controller_mode_locked(True, "READY")
-                return
-            if mode == MODE_STARTUP:
-                if self.startup_pose is None:
-                    self.get_logger().warn(
-                        "STARTUP rejected: startup pose has not been captured"
-                    )
-                    return
-                self._schedule_pose_locked(
-                    MODE_STARTUP, self.startup_pose, MODE_JOINT
+                self.f1_destination = MODE_READY
+                self._send_pose_locked(
+                    MODE_READY, [self.transition_pose, self.ready_pose]
+                )
+                self._set_motion_mode_locked(
+                    self._ready_resume_mode_locked(), "READY"
                 )
                 return
-            if mode == MODE_REST:
+            if mode in (MODE_STARTUP, MODE_REST):
                 if self.startup_pose is None:
                     self.get_logger().warn(
-                        "REST rejected: startup pose has not been captured"
+                        f"{mode} rejected: startup pose has not been captured"
                     )
                     return
-                if self._schedule_pose_locked(
-                    MODE_REST, self.startup_pose, MODE_JOINT
-                ):
-                    self.return_autonomous_after_pose = True
+                self.f1_destination = MODE_STARTUP
+                self._send_pose_locked(
+                    mode, [self.transition_pose, self.startup_pose]
+                )
+                self._set_motion_mode_locked(MODE_JOINT, mode)
+                return
+            if mode == MODE_AUTONOMOUS:
+                # This used to mean "hand the hardware back". Nothing to hand
+                # back any more: both channels are always live. Zeroing the
+                # operator's offset is all the request can still mean.
+                self.offset = np.zeros(6)
+                self.get_logger().info(
+                    "manual offset cleared; the arm now follows the "
+                    "autonomous channel alone"
+                )
+                return
+            self.get_logger().warn(f"operation mode '{mode}' not handled")
+
+    def _ready_resume_mode_locked(self) -> str:
+        resume = self.last_coordinate_mode
+        if resume not in COORDINATE_MODES:
+            resume = MODE_CARTESIAN
+        return resume if self.ik is not None else MODE_JOINT
+
+    # ------------------------------------------------------------- commands
+
+    def _on_control_cmd(self, msg: Float64MultiArray) -> None:
+        try:
+            values = validated_control_command(msg.data)
+        except ValueError as exc:
+            self.get_logger().warn(f"control_cmd rejected: {exc}")
+            return
+        with self.lock:
+            self.control_velocity = values
+            self.last_control_cmd = time.monotonic()
+
+    def _on_gripper_command(self, msg: String) -> None:
+        command = msg.data.strip().lower()
+        if command == "open":
+            target = float(self.get_parameter("gripper_open_target").value)
+        elif command == "close":
+            target = float(self.get_parameter("gripper_close_target").value)
+        else:
+            self.get_logger().warn(f"gripper command '{command}' rejected")
+            return
+        if not self.gripper_client.server_is_ready():
+            self.get_logger().warn("gripper action server is not ready")
+            return
+        goal = GripperCommand.Goal()
+        goal.command.position = target
+        goal.command.max_effort = 0.0
+        self.gripper_client.send_goal_async(goal)
+        self.gripper_state_pub.publish(
+            String(data=f"{command.upper()} requested")
+        )
+
+    # --------------------------------------------------------- web targets
+
+    def _target_current_locked(self) -> dict[str, list[float]]:
+        """Return current arm pose in controller SI units for target feedback."""
+        joint = self._joint_vector_locked()
+        if joint is None:
+            return {}
+        current = {"joint": [float(value) for value in joint]}
+        if self.ik is None:
+            return current
+        try:
+            position, rotation = self.ik.fk_pose(np.asarray(joint, dtype=float))
+            roll, pitch, yaw = rotation_to_zyx(rotation)
+            current["cartesian"] = [float(v) for v in position] + list(
+                tip_rotation_to_cartesian_rpy(rotation)
+            )
+            dx = float(position[0] - self.cylindrical_origin_xy[0])
+            dy = float(position[1] - self.cylindrical_origin_xy[1])
+            current["cylindrical"] = [
+                math.hypot(dx, dy), math.atan2(dy, dx), float(position[2]),
+                roll, pitch, yaw,
+            ]
+        except Exception as exc:
+            self.get_logger().warn(
+                f"target feedback FK unavailable: {exc}",
+                throttle_duration_sec=5.0,
+            )
+        return current
+
+    def _publish_target_status_locked(self, state: str, message: str) -> None:
+        current = self._target_current_locked()
+        errors = {}
+        command_joints = getattr(self, "target_command_joints", None)
+        if command_joints is not None and "joint" in current:
+            errors["joint_max_deg"] = math.degrees(max(
+                abs(a - b) for a, b in zip(command_joints, current["joint"])
+            ))
+        if (
+            self.target_goal is not None
+            and self.target_mode in (MODE_CARTESIAN, MODE_CYLINDRICAL)
+            and self.ik is not None
+        ):
+            try:
+                goal = self.target_goal
+                if self.target_mode == MODE_CARTESIAN:
+                    position = np.asarray(goal[:3])
+                    rotation = cartesian_rpy_to_tip_rotation(*goal[3:])
+                else:
+                    position = np.array([
+                        self.cylindrical_origin_xy[0] + goal[0] * math.cos(goal[1]),
+                        self.cylindrical_origin_xy[1] + goal[0] * math.sin(goal[1]),
+                        goal[2],
+                    ])
+                    rotation = rotation_from_zyx(*goal[3:])
+                if "joint" in current:
+                    ep, er = pose_error(
+                        self.ik, current["joint"], position, rotation
+                    )
+                    errors.update(
+                        position_mm=1000.0 * ep, orientation_deg=math.degrees(er)
+                    )
+            except Exception as exc:
+                self.get_logger().warn(
+                    f"Target error feedback unavailable: {exc}",
+                    throttle_duration_sec=5.0,
+                )
+        if self.target_active and state == "running":
+            joints_reached = errors.get("joint_max_deg", math.inf) <= math.degrees(
+                JOINT_TOLERANCE
+            )
+            pose_reached = self.target_mode == MODE_JOINT or (
+                errors.get("position_mm", math.inf) <= POSITION_TOLERANCE * 1000
+                and errors.get("orientation_deg", math.inf)
+                <= math.degrees(ORIENTATION_TOLERANCE)
+            )
+            if joints_reached and pose_reached:
+                state, message = (
+                    "reached", "Target reached within feedback tolerance."
+                )
+                self.target_active = False
+            elif joints_reached and self.target_approximate:
+                state, message = (
+                    "approximate",
+                    "Approximate IK goal reached; requested pose differs.",
+                )
+                self.target_active = False
+            if "position_mm" in errors:
+                message += (
+                    f" Error: {errors['position_mm']:.2f} mm / "
+                    f"{errors['orientation_deg']:.2f} deg."
+                )
+        self.target_status_state = state
+        self.target_status_message = message
+        self.last_target_status_publish = time.monotonic()
+        payload = {
+            "state": state,
+            "active": bool(self.target_active),
+            "mode": self.target_mode,
+            "request_id": self.target_request_id,
+            "goal": self.target_goal,
+            "approximate": bool(self.target_approximate),
+            "current": current,
+            "command_joints": command_joints,
+            "errors": errors,
+            "feedback_fresh": self._joint_state_fresh_locked(time.monotonic()),
+            "message": message,
+        }
+        self.target_status_pub.publish(String(data=json.dumps(
+            payload, separators=(",", ":"), allow_nan=False
+        )))
 
     def _on_target_command(self, msg: String) -> None:
         """Accept one validated absolute target from the web monitor.
@@ -1071,26 +1087,14 @@ class OM6DOFController(Node):
 
         with self.lock:
             if action == "stop":
-                if self.target_active or self.held_target_positions is not None:
-                    feedback = self._joint_vector_locked()
-                    if feedback is not None:
-                        self.command_positions = clamp_positions(
-                            feedback, self.joint_lower, self.joint_upper
-                        )
-                    self.pose_target = None
-                    self.pose_phase_targets = []
-                    self.pose_phase_start = None
-                    self.pose_operation = None
-                    self._clear_stream_command_locked()
-                    self.target_active = False
-                    self.target_request_id = request_id
-                    self._publish_target_status_locked(
-                        "stopped", "Target stopped; holding current position."
-                    )
-                else:
-                    self._publish_target_status_locked(
-                        "stopped", "No target was running."
-                    )
+                # Cancelling the trajectory is arm_controller's business; all
+                # this node can retract is its own offset.
+                self.target_active = False
+                self.target_request_id = request_id
+                self.offset = np.zeros(6)
+                self._publish_target_status_locked(
+                    "stopped", "Target stopped; manual offset cleared."
+                )
                 return
             if action != "move":
                 self._publish_target_status_locked(
@@ -1106,6 +1110,7 @@ class OM6DOFController(Node):
                 )
             except (TypeError, ValueError):
                 values = []
+                reach_duration = self.target_reach_duration
             if (
                 mode not in (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL)
                 or len(values) != 6
@@ -1117,21 +1122,13 @@ class OM6DOFController(Node):
                 return
             if not math.isfinite(reach_duration) or not 0.5 <= reach_duration <= 5.0:
                 self._publish_target_status_locked(
-                    "rejected", "Target rejected: reach time must be 0.5–5 seconds."
-                )
-                return
-            if not self.remote_enabled or not self.remote_controller_active or self.switch_in_progress:
-                self._publish_target_status_locked(
-                    "rejected", "Target rejected: remote arm ownership is inactive."
-                )
-                return
-            if self.pose_target is not None or self.target_active:
-                self._publish_target_status_locked(
-                    "rejected", "Target rejected: another pose is still running."
+                    "rejected", "Target rejected: reach time must be 0.5-5 seconds."
                 )
                 return
             feedback = self._joint_vector_locked()
-            if feedback is None or not self._joint_state_fresh_locked(time.monotonic()):
+            if feedback is None or not self._joint_state_fresh_locked(
+                time.monotonic()
+            ):
                 self._publish_target_status_locked(
                     "rejected", "Target rejected: joint feedback is unavailable."
                 )
@@ -1140,11 +1137,15 @@ class OM6DOFController(Node):
             target_joint: Optional[list[float]] = None
             approximate = False
             if mode == MODE_JOINT:
-                if any(value < lower or value > upper for value, lower, upper in zip(
-                    values, self.joint_lower, self.joint_upper
-                )):
+                if any(
+                    value < lower or value > upper
+                    for value, lower, upper in zip(
+                        values, self.joint_lower, self.joint_upper
+                    )
+                ):
                     self._publish_target_status_locked(
-                        "rejected", "Target rejected: joint target exceeds URDF limits."
+                        "rejected",
+                        "Target rejected: joint target exceeds URDF limits.",
                     )
                     return
                 target_joint = values
@@ -1161,12 +1162,14 @@ class OM6DOFController(Node):
                     radius, theta, z, roll, pitch, yaw = values
                     if radius < self.cylindrical_min_radius:
                         self._publish_target_status_locked(
-                            "rejected", "Target rejected: cylindrical radius is too small."
+                            "rejected",
+                            "Target rejected: cylindrical radius is too small.",
                         )
                         return
                     target_position = np.asarray([
                         self.cylindrical_origin_xy[0] + radius * math.cos(theta),
-                        self.cylindrical_origin_xy[1] + radius * math.sin(theta), z,
+                        self.cylindrical_origin_xy[1] + radius * math.sin(theta),
+                        z,
                     ])
                     target_rotation = rotation_from_zyx(roll, pitch, yaw)
                 try:
@@ -1183,782 +1186,108 @@ class OM6DOFController(Node):
                 approximate = plan.approximate
                 target_joint = plan.joints.tolist()
 
-            # JOINT targets need the same path check as Cartesian targets.
-            if mode == MODE_JOINT and self.ik_self_collision:
+            if self.ik_self_collision and self.ik is not None:
                 try:
-                    if self.ik is None or not path_is_clear(
+                    if not path_is_clear(
                         self.ik, np.asarray(feedback), np.asarray(target_joint),
                         self.ik_collision_radius,
                     ):
-                        raise ValueError('joint path is blocked or collision checking unavailable')
+                        raise ValueError("joint path is blocked")
                 except Exception as exc:
-                    self._publish_target_status_locked('blocked', f'Target blocked: {exc}')
+                    self._publish_target_status_locked(
+                        "blocked", f"Target blocked: {exc}"
+                    )
                     return
-            peak_velocity = 2.0 * max(abs(a - b) for a, b in zip(target_joint, feedback)) / reach_duration
+            travel = max(abs(a - b) for a, b in zip(target_joint, feedback))
+            peak_velocity = 2.0 * travel / reach_duration
             if peak_velocity > self.max_joint_velocity:
-                minimum = 2.0 * max(abs(a - b) for a, b in zip(target_joint, feedback)) / self.max_joint_velocity
+                minimum = 2.0 * travel / self.max_joint_velocity
                 self._publish_target_status_locked(
-                    'rejected', f'Target requires at least {minimum:.2f} s to respect joint velocity limits.'
+                    "rejected",
+                    f"Target requires at least {minimum:.2f} s to respect "
+                    "joint velocity limits.",
                 )
                 return
 
-            self.target_active = True
             self.target_mode = mode
             self.target_goal = values
             self.target_command_joints = list(target_joint)
             self.target_request_id = request_id
             self.target_approximate = approximate
-            if self._schedule_pose_locked(
-                "TARGET", target_joint, post_mode=mode, via_zero=False,
-                profile_duration=reach_duration,
-            ):
+            if self._send_pose_locked("TARGET", [target_joint], reach_duration):
+                self.target_active = True
                 self._publish_target_status_locked(
-                    "running", (
-                        f"{mode} target is running"
-                        + (" toward the closest reachable pose." if approximate else ".")
-                    )
+                    "running",
+                    f"{mode} target is running"
+                    + (
+                        " toward the closest reachable pose."
+                        if approximate else "."
+                    ),
                 )
             else:
                 self.target_active = False
                 self._publish_target_status_locked(
-                    "rejected", "Target rejected: unable to schedule profile."
+                    "rejected", "Target rejected: arm_controller did not accept it."
                 )
 
-    def _on_gripper_command(self, msg: String) -> None:
-        command = msg.data.strip().lower()
-        if command == "open":
-            target = float(self.get_parameter("gripper_open_target").value)
-        elif command == "close":
-            target = float(self.get_parameter("gripper_close_target").value)
-        else:
-            self.get_logger().warn(f"gripper command '{command}' rejected")
-            return
-        if not self.gripper_client.server_is_ready():
-            self.get_logger().warn("gripper action server is not ready")
-            return
-        goal = GripperCommand.Goal()
-        goal.command.position = target
-        goal.command.max_effort = 0.0
-        self.gripper_client.send_goal_async(goal)
-        self.gripper_state_pub.publish(String(data=f"{command.upper()} requested"))
-
-    def _on_control_cmd(self, msg: Float64MultiArray) -> None:
-        try:
-            values = validated_control_command(msg.data)
-        except ValueError as exc:
-            self.get_logger().warn(f"control_cmd rejected: {exc}")
-            return
-        with self.lock:
-            if (
-                not self.remote_enabled
-                or not self.remote_controller_active
-                or self.switch_in_progress
-            ):
-                self.get_logger().warn(
-                    "control_cmd ignored: remote ownership is inactive",
-                    throttle_duration_sec=2.0,
-                )
-                return
-            if self.pose_target is not None:
-                # READY/STARTUP is a guarded two-phase motion. Do not let
-                # held joystick axes cancel the final zero->target phase.
-                if np.any(np.abs(values) > 1.0e-9):
-                    self.get_logger().warn(
-                        f"{self.pose_operation or 'pose'} ignores control_cmd "
-                        "until its profile completes",
-                        throttle_duration_sec=2.0,
-                    )
-                return
-            if self.held_target_positions is not None:
-                # Neutral teleop packets are a heartbeat, not a request to
-                # replace the final absolute goal with measured positions.
-                if not np.any(np.abs(values) > 1.0e-9):
-                    return
-                self._cancel_target_locked('Target hold replaced by joystick input.')
-            self.control_velocity = values
-            self.last_control_cmd = time.monotonic()
-
-    def _request_controller_mode_locked(
-        self, enable_remote: bool, source: str
-    ) -> None:
-        if self.switch_in_progress:
-            self.get_logger().warn(
-                f"{source} request ignored: controller switch is in progress"
-            )
-            return
-        if enable_remote == self.remote_enabled:
-            self._publish_state()
-            return
-        now = time.monotonic()
-        if enable_remote:
-            if not self._joint_state_fresh_locked(now):
-                self.get_logger().warn(
-                    f"{source} remote enable rejected: /joint_states is stale"
-                )
-                return
-            vector = self._joint_vector_locked()
-            if vector is None:
-                self.get_logger().warn(
-                    f"{source} remote enable rejected: incomplete joint state"
-                )
-                return
-            self.command_positions = clamp_positions(
-                vector, self.joint_lower, self.joint_upper
-            )
-        if not self.switch_client.service_is_ready():
-            self.get_logger().warn(
-                f"{source} request rejected: switch_controller unavailable"
-            )
-            return
-
-        request = SwitchController.Request()
-        if enable_remote:
-            request.activate_controllers = [self.remote_controller]
-            request.deactivate_controllers = [self.arm_controller]
-        else:
-            request.activate_controllers = [self.arm_controller]
-            request.deactivate_controllers = [self.remote_controller]
-        request.strictness = SwitchController.Request.STRICT
-        request.activate_asap = True
-        timeout = max(
-            0.0, float(self.get_parameter("switch_timeout_seconds").value)
-        )
-        request.timeout.sec = int(timeout)
-        request.timeout.nanosec = int((timeout - int(timeout)) * 1e9)
-        self.switch_in_progress = True
-        self.switch_target = enable_remote
-        future = self.switch_client.call_async(request)
-        future.add_done_callback(
-            lambda result, target=enable_remote, origin=source:
-            self._on_switch_done(result, target, origin)
-        )
-        self.get_logger().info(
-            f"{source}: switching to "
-            f"{'REMOTE' if enable_remote else 'AUTONOMOUS'}"
-        )
-
-    def _on_switch_done(self, future, enable_remote: bool, source: str) -> None:
-        try:
-            response = future.result()
-            success = bool(response and response.ok)
-        except Exception as exc:
-            success = False
-            self.get_logger().error(f"controller switch failed: {exc}")
-
-        command = None
-        with self.lock:
-            self.switch_in_progress = False
-            self.switch_target = None
-            if not success:
-                self.get_logger().error(
-                    f"{source}: switch to "
-                    f"{'REMOTE' if enable_remote else 'AUTONOMOUS'} rejected"
-                )
-                return
-            self.remote_enabled = enable_remote
-            self.remote_controller_active = enable_remote
-            self.arm_controller_active = not enable_remote
-            self._cancel_target_locked('Target cancelled by controller ownership change.')
-            self._clear_stream_command_locked()
-            if enable_remote:
-                self.motion_mode = MODE_JOINT
-                post_mode = self.pending_manual_mode
-                self.pending_manual_mode = MODE_JOINT
-                scheduled = self._schedule_ready_after_enable_locked(post_mode)
-                if scheduled and self.command_positions is not None:
-                    command = list(self.command_positions)
-            else:
-                self.motion_mode = MODE_AUTONOMOUS
-                self.pose_target = None
-                self.pose_operation = None
-                self.ready_pending_on_enable = False
-                self.command_positions = None
-                self.ik_target_pos = None
-                self.ik_target_rotation = None
-            self._publish_state()
-
-        if command is not None:
-            self.command_pub.publish(Float64MultiArray(data=command))
-        self.get_logger().info(
-            f"controller ownership -> "
-            f"{'REMOTE' if enable_remote else 'AUTONOMOUS'}"
-        )
-
-    def _poll_controllers(self, now: float) -> None:
-        if (
-            self.controller_list_future is not None
-            or now < self.next_controller_poll
-            or not self.list_client.service_is_ready()
-        ):
-            return
-        self.next_controller_poll = now + 1.0
-        self.controller_list_future = self.list_client.call_async(
-            ListControllers.Request()
-        )
-        self.controller_list_future.add_done_callback(self._on_controller_list)
-
-    def _on_controller_list(self, future) -> None:
-        self.controller_list_future = None
-        try:
-            response = future.result()
-        except Exception as exc:
-            self.get_logger().warn(f"list_controllers failed: {exc}")
-            return
-        states = {
-            controller.name: controller.state
-            for controller in response.controller
-        }
-        arm_active = states.get(self.arm_controller) == "active"
-        remote_active = states.get(self.remote_controller) == "active"
-        command = None
-        with self.lock:
-            self.arm_controller_active = arm_active
-            self.remote_controller_active = remote_active
-            if self.switch_in_progress:
-                return
-            actual_remote = remote_active and not arm_active
-            if actual_remote == self.remote_enabled:
-                return
-            self.remote_enabled = actual_remote
-            self._cancel_target_locked('Target cancelled by external ownership change.')
-            self._clear_stream_command_locked()
-            if actual_remote:
-                self.motion_mode = MODE_JOINT
-                if self._schedule_ready_after_enable_locked(MODE_JOINT):
-                    command = list(self.command_positions or [])
-            else:
-                self.motion_mode = MODE_AUTONOMOUS
-                self.pose_target = None
-                self.pose_operation = None
-                self.ready_pending_on_enable = False
-                self.command_positions = None
-                self.ik_target_pos = None
-                self.ik_target_rotation = None
-            self._publish_state()
-            self.get_logger().warn(
-                "controller state changed externally; internal state reconciled"
-            )
-        if command:
-            self.command_pub.publish(Float64MultiArray(data=command))
-
-    def _semi_joint_nudge_locked(self, velocity) -> Optional[np.ndarray]:
-        """Joint-space bias for SEMI_CYLINDRICAL, or None when there is none.
-
-        In this mode the pitch and yaw channels do not rotate the wrist
-        through IK; they offset joint 5 and joint 6 directly, which is what
-        the operator reaches for when the tool needs a small tilt or twist
-        that the coordinate frame makes awkward.
-        """
-        if self.motion_mode != MODE_SEMI_CYLINDRICAL:
-            return None
-        limit = self.max_joint_velocity
-        joint5 = max(-limit, min(limit, float(velocity[4])))
-        joint6 = max(-limit, min(limit, float(velocity[5])))
-        if abs(joint5) < 1e-9 and abs(joint6) < 1e-9:
-            return None
-        nudge = np.zeros(6)
-        nudge[4] = joint5
-        nudge[5] = joint6
-        return nudge
-
-    def _coordinate_step_locked(
-        self,
-        feedback_positions: Sequence[float],
-        coordinate_velocity: Sequence[float],
-        dt: float,
-    ) -> list[float]:
-        if self.ik is None or self.command_positions is None or dt <= 0.0:
-            return list(self.command_positions or feedback_positions)
-        q_feedback = np.asarray(feedback_positions, dtype=float)
-        q_command = np.asarray(self.command_positions, dtype=float)
-        velocity = np.asarray(coordinate_velocity, dtype=float)
-        if (
-            q_feedback.shape != (6,)
-            or q_command.shape != (6,)
-            or velocity.shape != (6,)
-            or not np.all(np.isfinite(q_feedback))
-            or not np.all(np.isfinite(q_command))
-            or not np.all(np.isfinite(velocity))
-        ):
-            return list(self.command_positions)
-
-        following_error = float(np.max(np.abs(q_command - q_feedback)))
-        if following_error > self.ik_max_joint_following_error:
-            self.get_logger().warn(
-                f"coordinate command stopped: joint following error "
-                f"{following_error:.3f} rad",
-                throttle_duration_sec=2.0,
-            )
-            self.command_positions = clamp_positions(
-                q_feedback, self.joint_lower, self.joint_upper
-            )
-            self._seed_ik_anchor_locked(q_feedback)
-            return list(self.command_positions)
-
-        if self.ik_target_pos is None or self.ik_target_rotation is None:
-            if not self._seed_ik_anchor_locked(q_command):
-                return list(self.command_positions)
-        try:
-            command_position, command_rotation = self.ik.fk_pose(q_command)
-            feedback_position, _ = self.ik.fk_pose(q_feedback)
-            command_position = np.asarray(command_position, dtype=float)
-            command_rotation = np.asarray(command_rotation, dtype=float)
-            feedback_position = np.asarray(feedback_position, dtype=float)
-
-            if self.motion_mode == MODE_CARTESIAN:
-                linear_feedforward = limit_norm(
-                    velocity[:3], self.max_cartesian_linear_velocity
-                )
-                self.ik_target_pos = (
-                    self.ik_target_pos + linear_feedforward * dt
-                )
-            elif self.motion_mode in CYLINDRICAL_MODES:
-                radial_velocity = max(
-                    -self.max_cartesian_linear_velocity,
-                    min(self.max_cartesian_linear_velocity, float(velocity[0])),
-                )
-                theta_velocity = max(
-                    -self.max_cylindrical_theta_velocity,
-                    min(
-                        self.max_cylindrical_theta_velocity,
-                        float(velocity[1]),
-                    ),
-                )
-                vertical_velocity = max(
-                    -self.max_cartesian_linear_velocity,
-                    min(self.max_cartesian_linear_velocity, float(velocity[2])),
-                )
-                previous_target = self.ik_target_pos.copy()
-                self.ik_target_pos, self.cylindrical_theta_hint = (
-                    integrate_cylindrical_position(
-                        self.ik_target_pos,
-                        radial_velocity,
-                        theta_velocity,
-                        vertical_velocity,
-                        dt,
-                        self.cylindrical_origin_xy,
-                        self.cylindrical_min_radius,
-                        self.cylindrical_theta_hint,
-                    )
-                )
-                linear_feedforward = (
-                    self.ik_target_pos - previous_target
-                ) / dt
-                linear_feedforward = limit_norm(
-                    linear_feedforward, self.max_cartesian_linear_velocity
-                )
-            else:
-                return list(self.command_positions)
-
-            lead = self.ik_target_pos - feedback_position
-            lead_distance = float(np.linalg.norm(lead))
-            if lead_distance > self.ik_max_target_lead:
-                self.ik_target_pos = feedback_position + lead * (
-                    self.ik_max_target_lead / lead_distance
-                )
-                if self.motion_mode in CYLINDRICAL_MODES:
-                    dx = float(
-                        self.ik_target_pos[0] - self.cylindrical_origin_xy[0]
-                    )
-                    dy = float(
-                        self.ik_target_pos[1] - self.cylindrical_origin_xy[1]
-                    )
-                    if math.hypot(dx, dy) > 1e-9:
-                        self.cylindrical_theta_hint = math.atan2(dy, dx)
-
-            # Orientation is resolved after the lead clamp, because that
-            # clamp can pull the target back and recompute theta. Doing it
-            # earlier made yaw track a theta the arm never reached, so the
-            # heading crept ahead of the sweep whenever the clamp engaged.
-            if self.motion_mode == MODE_SEMI_CYLINDRICAL:
-                # Absolute angles, not an incremental twist: the stick moves
-                # roll/pitch/yaw targets that are then held, so the wrist does
-                # not drift as theta sweeps. Rates stay in the base frame here
-                # -- converting them to the tool frame would reintroduce the
-                # coupling this mode exists to remove.
-                # Only roll steers the wrist here. Pitch and yaw are joint
-                # nudges in this mode (joint 5 and joint 6), applied further
-                # down; leaving them on the orientation target as well would
-                # have the IK and the nudge pulling the same joints apart.
-                rates = limit_norm(
-                    np.array([float(velocity[3]), 0.0, 0.0]),
-                    self.max_cartesian_angular_velocity,
-                )
-                if float(np.linalg.norm(rates)) > 1e-9:
-                    if self.ik_tool_frame_rotation:
-                        rates = self.ik.ee_to_base_angular(q_command, rates)
-                    # Turn the rotation, then read the absolute angles back
-                    # out of it. Integrating the Euler angles directly instead
-                    # put the yaw axis on the world vertical, 60 degrees off
-                    # the Cartesian one on a downward-pointing wrist, so the
-                    # tool swept a cone rather than spinning in place.
-                    turned = (
-                        rotation_from_rotvec(rates * dt) @ self.ik_target_rotation
-                    )
-                    turned_roll, turned_pitch, turned_yaw = rotation_to_zyx(turned)
-                    self.semi_roll = turned_roll
-                    self.semi_pitch = max(
-                        -SEMI_PITCH_LIMIT, min(SEMI_PITCH_LIMIT, turned_pitch)
-                    )
-                    self.semi_yaw_offset = wrap_angle(
-                        turned_yaw - self.cylindrical_theta_hint
-                    )
-                previous_rotation = self.ik_target_rotation
-                self.ik_target_rotation = semi_cylindrical_rotation(
-                    self.cylindrical_theta_hint,
-                    self.semi_roll,
-                    self.semi_pitch,
-                    self.semi_yaw_offset,
-                )
-                # The downstream term expects an angular velocity, so derive
-                # it from how far the target actually moved -- mirroring what
-                # the cylindrical branch does for position. Taking the raw
-                # stick rates instead would ignore the yaw that theta just
-                # contributed.
-                angular_feedforward = limit_norm(
-                    rotation_error(self.ik_target_rotation, previous_rotation)
-                    / dt,
-                    self.max_cartesian_angular_velocity,
-                )
-            else:
-                angular_feedforward = limit_norm(
-                    velocity[3:], self.max_cartesian_angular_velocity
-                )
-                if (
-                    self.ik_tool_frame_rotation
-                    and float(np.linalg.norm(angular_feedforward)) > 1e-9
-                ):
-                    angular_feedforward = self.ik.ee_to_base_angular(
-                        q_command, angular_feedforward
-                    )
-                if float(np.linalg.norm(angular_feedforward)) > 1e-9:
-                    self.ik_target_rotation = rotation_from_rotvec(
-                        angular_feedforward * dt
-                    ) @ self.ik_target_rotation
-
-            position_error = self.ik_target_pos - command_position
-            orientation_error = rotation_error(
-                self.ik_target_rotation, command_rotation
-            )
-            orientation_norm = float(np.linalg.norm(orientation_error))
-            if orientation_norm > 0.35:
-                excess = orientation_error * (
-                    (orientation_norm - 0.35) / orientation_norm
-                )
-                self.ik_target_rotation = (
-                    rotation_from_rotvec(-excess) @ self.ik_target_rotation
-                )
-                orientation_error *= 0.35 / orientation_norm
-                if self.motion_mode == MODE_SEMI_CYLINDRICAL:
-                    # Anti-windup. The semi-cylindrical target is rebuilt from
-                    # these angles every cycle, so without writing the clamped
-                    # rotation back they would keep integrating past whatever
-                    # the wrist can actually reach: pitch would sit at its own
-                    # travel limit while the arm had barely moved, and the
-                    # stick would appear dead. When the arm is keeping up the
-                    # clamp never fires and this is an exact no-op.
-                    clamped_roll, clamped_pitch, clamped_yaw = rotation_to_zyx(
-                        self.ik_target_rotation
-                    )
-                    self.semi_roll = clamped_roll
-                    self.semi_pitch = max(
-                        -SEMI_PITCH_LIMIT, min(SEMI_PITCH_LIMIT, clamped_pitch)
-                    )
-                    self.semi_yaw_offset = wrap_angle(
-                        clamped_yaw - self.cylindrical_theta_hint
-                    )
-
-            linear_command = (
-                linear_feedforward + self.ik_position_gain * position_error
-            )
-            angular_command = (
-                angular_feedforward + self.ik_rotation_gain * orientation_error
-            )
-            # Computed before the idle check: a joint nudge on its own
-            # produces no Cartesian command, so the early return would have
-            # skipped it and the stick would do nothing.
-            joint_nudge = self._semi_joint_nudge_locked(velocity)
-            if joint_nudge is None and float(np.linalg.norm(np.concatenate([
-                linear_command, angular_command
-            ]))) < 1e-8:
-                return list(self.command_positions)
-
-            joint_velocity = self.ik.velocity_ik_priority(
-                q_command, linear_command, angular_command
-            )
-            if not np.all(np.isfinite(joint_velocity)):
-                raise ValueError("IK produced non-finite joint velocity")
-            peak = float(np.max(np.abs(joint_velocity)))
-            if peak > self.max_joint_velocity:
-                joint_velocity *= self.max_joint_velocity / peak
-            raw_candidate = q_command + joint_velocity * dt
-            if joint_nudge is not None:
-                raw_candidate = raw_candidate + joint_nudge * dt
-            candidate = np.asarray(
-                clamp_positions(
-                    raw_candidate, self.joint_lower, self.joint_upper
-                ),
-                dtype=float,
-            )
-            hit_limit = bool(
-                np.any(np.abs(candidate - raw_candidate) > 1e-9)
-            )
-            if self.ik_self_collision and self.ik.self_collides(
-                candidate, self.ik_collision_radius
-            ):
-                if not self.ik_collision_blocked:
-                    self.get_logger().warn(
-                        "coordinate motion blocked by self-collision boundary"
-                    )
-                self._seed_ik_anchor_locked(q_command)
-                self.ik_collision_blocked = True
-                return list(self.command_positions)
-            self.ik_collision_blocked = False
-            if hit_limit or joint_nudge is not None:
-                self._seed_ik_anchor_locked(candidate)
-            return candidate.tolist()
-        except Exception as exc:
-            self.get_logger().error(
-                f"coordinate IK step failed; holding: {exc}",
-                throttle_duration_sec=2.0,
-            )
-            self._seed_ik_anchor_locked(q_command)
-            return list(self.command_positions)
+    # ------------------------------------------------------------------ loop
 
     def _tick(self) -> None:
         now = time.monotonic()
         dt = max(0.0, min(0.1, now - self.last_tick))
         self.last_tick = now
-        self._poll_controllers(now)
-
-        if (
-            self.remote_enabled_on_start
-            and not self.startup_switch_attempted
-            and self.arm_controller_active
-            and self._joint_state_fresh_locked(now)
-            and self.switch_client.service_is_ready()
-        ):
-            with self.lock:
-                self.startup_switch_attempted = True
-                self.pending_manual_mode = MODE_JOINT
-                self._request_controller_mode_locked(True, "startup")
-
-        command = None
-        reached_operation = None
-        timeout_operation = None
-        return_to_autonomous = False
         with self.lock:
-            if (
-                not self.remote_enabled
-                or not self.remote_controller_active
-                or self.switch_in_progress
-            ):
-                return
             if not self._joint_state_fresh_locked(now):
-                if getattr(self, 'target_active', False) or self.held_target_positions is not None:
-                    self._cancel_target_locked('Target cancelled: joint feedback lost.')
-                    self._publish_target_status_locked('blocked', 'Joint feedback lost; target will not resume automatically.')
-                # Do not replay an old target after feedback recovers.
-                self.held_target_positions = None
-                self.command_positions = None
-                self.ik_target_pos = None
-                self.ik_target_rotation = None
+                # Without feedback there is no safe way to bound the sum, so
+                # stop adding to the offset. The existing one is held, not
+                # dropped: releasing it would move the arm by exactly the
+                # amount the operator dialled in, with no one asking.
                 self.get_logger().warn(
-                    "/joint_states stale; holding the last hardware command",
+                    "/joint_states stale; holding the manual offset",
                     throttle_duration_sec=2.0,
                 )
-                return
-            if self.ready_pending_on_enable:
-                if not self._schedule_ready_after_enable_locked(
-                    self.ready_pending_mode
-                ):
-                    return
-                dt = 0.0
-            feedback = self._joint_vector_locked()
-            if feedback is None:
-                return
-            if self.command_positions is None:
-                self.command_positions = clamp_positions(
-                    feedback, self.joint_lower, self.joint_upper
-                )
-
-            if self.pose_target is not None:
-                if now > self.pose_target_until:
-                    timeout_operation = self.pose_operation or "pose"
-                    self.pose_target = None
-                    self.pose_operation = None
-                    self.pose_phase_targets = []
-                    self.pose_phase_start = None
-                    self.motion_mode = MODE_JOINT
-                    self.return_autonomous_after_pose = False
-                    self.command_positions = clamp_positions(
-                        feedback, self.joint_lower, self.joint_upper
-                    )
-                    self._publish_state()
-                else:
-                    phase_target = self.pose_phase_targets[self.pose_phase_index]
-                    phase_start = self.pose_phase_start or list(feedback)
-                    fraction = self._pose_profile_fraction(
-                        now - self.pose_phase_started_at
-                    )
-                    self.command_positions = [
-                        start + (target - start) * fraction
-                        for start, target in zip(phase_start, phase_target)
-                    ]
-                    phase_finished = (
-                        now - self.pose_phase_started_at
-                        >= self.active_pose_profile_duration
-                    )
-                    # Advance on the configured profile time. The zero phase
-                    # remains part of every READY/STARTUP transition, but it
-                    # intentionally does not wait for sub-tolerance feedback.
-                    if phase_finished:
-                        if self._start_next_pose_phase_locked(feedback, now):
-                            self.get_logger().info(
-                                f"{self.pose_operation} zero phase reached; "
-                                "starting final pose phase"
-                            )
-                        else:
-                            reached_operation = self.pose_operation or "pose"
-                            next_mode = self.post_pose_mode
-                            self.pose_target = None
-                            self.pose_operation = None
-                            self.pose_phase_targets = []
-                            self.pose_phase_start = None
-                            self.motion_mode = next_mode
-                            return_to_autonomous = (
-                                self.return_autonomous_after_pose
-                            )
-                            self.return_autonomous_after_pose = False
-                            self._clear_stream_command_locked()
-                            if reached_operation == "TARGET":
-                                self.held_target_positions = list(self.command_positions)
-                            if next_mode != MODE_JOINT:
-                                self._seed_ik_anchor_locked(feedback)
-                            self._publish_state()
-            elif self.held_target_positions is not None:
-                # Time controls the ramp, not the lifetime of the goal.
-                # Keep the final goal so the servo can close its remaining
-                # following error even after the ramp has finished.
-                self.command_positions = list(self.held_target_positions)
-            elif self.motion_mode == MODE_FLOAT:
-                # Chase the measurement so the servo's position error, and so
-                # its holding torque, stay near zero. Rate limited: a hand
-                # moves the arm slowly, a fall does not, and refusing to chase
-                # the fast case is what makes the servo catch the arm rather
-                # than follow it to the bench.
-                target = clamp_positions(
-                    feedback, self.joint_lower, self.joint_upper
-                )
-                self.command_positions = step_toward(
-                    self.command_positions,
-                    target,
-                    self._float_follow_velocity() * dt,
-                )
+                command = self.offset.tolist()
             else:
-                stream_fresh = bool(
-                    self.last_control_cmd
-                    and now - self.last_control_cmd
-                    <= self.control_cmd_timeout
-                )
-                if not stream_fresh:
-                    self.command_positions = clamp_positions(
-                        feedback, self.joint_lower, self.joint_upper
+                feedback = self._joint_vector_locked()
+                if feedback is None:
+                    command = self.offset.tolist()
+                elif self.motion_mode == MODE_FLOAT:
+                    # Chase the measurement so the servo's position error, and
+                    # so its holding torque, stay near zero. Rate limited: a
+                    # hand moves the arm slowly, a fall does not, and refusing
+                    # to chase the fast case is what makes the servo catch the
+                    # arm rather than follow it to the bench.
+                    reference = self.arm_reference or feedback
+                    # Bounded by the arm itself: it chases a pose the arm is
+                    # already measured to be in, so it cannot ask for one the
+                    # joints cannot reach.
+                    wanted = np.asarray(feedback) - np.asarray(reference)
+                    self.offset = np.asarray(step_toward(
+                        self.offset.tolist(), wanted.tolist(),
+                        self._float_follow_velocity() * dt,
+                    ))
+                    command = self.offset.tolist()
+                else:
+                    fresh = bool(
+                        self.last_control_cmd
+                        and now - self.last_control_cmd <= self.control_cmd_timeout
                     )
-                    if self.motion_mode != MODE_JOINT:
-                        self._seed_ik_anchor_locked(feedback)
-                elif self.motion_mode == MODE_JOINT:
-                    velocity = np.clip(
-                        self.control_velocity,
-                        -self.max_joint_velocity,
-                        self.max_joint_velocity,
-                    )
-                    self.command_positions = [
-                        self.command_positions[index]
-                        + float(velocity[index]) * dt
-                        for index in range(6)
-                    ]
-                elif self.motion_mode in COORDINATE_MODES:
-                    velocity = self.control_velocity.copy()
-                    if self.motion_mode == MODE_CARTESIAN:
-                        velocity[:3] = limit_norm(
-                            velocity[:3],
-                            self.max_cartesian_linear_velocity,
-                        )
-                    else:
-                        velocity[0] = max(
-                            -self.max_cartesian_linear_velocity,
-                            min(
-                                self.max_cartesian_linear_velocity,
-                                velocity[0],
+                    if fresh and dt > 0.0:
+                        self._apply_offset_locked(
+                            feedback,
+                            self._offset_delta_locked(
+                                feedback, self.control_velocity, dt
                             ),
                         )
-                        velocity[1] = max(
-                            -self.max_cylindrical_theta_velocity,
-                            min(
-                                self.max_cylindrical_theta_velocity,
-                                velocity[1],
-                            ),
-                        )
-                        velocity[2] = max(
-                            -self.max_cartesian_linear_velocity,
-                            min(
-                                self.max_cartesian_linear_velocity,
-                                velocity[2],
-                            ),
-                        )
-                    velocity[3:] = limit_norm(
-                        velocity[3:], self.max_cartesian_angular_velocity
-                    )
-                    self.command_positions = self._coordinate_step_locked(
-                        feedback, velocity, dt
-                    )
-
-            self.command_positions = clamp_positions(
-                self.command_positions, self.joint_lower, self.joint_upper
-            )
-            command = list(self.command_positions)
-
-        if command is not None:
-            self.command_pub.publish(Float64MultiArray(data=command))
-        if timeout_operation:
-            self.get_logger().warn(f"{timeout_operation} target timed out")
-            if timeout_operation == "TARGET":
-                with self.lock:
-                    self.target_active = False
-                    self._publish_target_status_locked(
-                        "timeout", "Target timed out; holding current position."
-                    )
-        if reached_operation:
-            self.get_logger().info(f"{reached_operation} time profile complete")
-            if reached_operation == "TARGET":
-                with self.lock:
-                    self.target_active = False
-                    self._publish_target_status_locked(
-                        "holding", (
-                            "Profile complete; holding approximate IK goal."
-                            if self.target_approximate else
-                            "Profile complete; holding final goal."
-                        )
-                    )
-        if return_to_autonomous:
-            with self.lock:
-                self._request_controller_mode_locked(False, "REST complete")
+                    command = self.offset.tolist()
+        self.offset_pub.publish(Float64MultiArray(data=command))
 
     def destroy_node(self):
+        # Leave the operator channel at zero: whatever starts next must not
+        # inherit an offset nobody is holding a stick for.
         try:
-            if (
-                rclpy.ok()
-                and self.remote_enabled
-                and self.switch_client.service_is_ready()
-            ):
-                request = SwitchController.Request()
-                request.activate_controllers = [self.arm_controller]
-                request.deactivate_controllers = [self.remote_controller]
-                request.strictness = SwitchController.Request.BEST_EFFORT
-                request.activate_asap = True
-                future = self.switch_client.call_async(request)
-                rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
+            if rclpy.ok():
+                self.offset_pub.publish(Float64MultiArray(data=[0.0] * 6))
         except Exception:
             pass
         return super().destroy_node()

@@ -1,0 +1,385 @@
+Starting >>> om6dof_dd_gng
+UpdateCTestConfiguration  from :/home/kublab/ros2_ws/build/om6dof_dd_gng/CTestConfiguration.ini
+Parse Config file:/home/kublab/ros2_ws/build/om6dof_dd_gng/CTestConfiguration.ini
+   Site: agx
+   Build name: (empty)
+ Add coverage exclude regular expressions.
+Create new tag: 20260911-0844 - Experimental
+UpdateCTestConfiguration  from :/home/kublab/ros2_ws/build/om6dof_dd_gng/CTestConfiguration.ini
+Parse Config file:/home/kublab/ros2_ws/build/om6dof_dd_gng/CTestConfiguration.ini
+Test project /home/kublab/ros2_ws/build/om6dof_dd_gng
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 1
+      Start  1: test_dynamic_density_gng
+
+1: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dynamic_density_gng.gtest.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_gtest/test_dynamic_density_gng.txt" "--command" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_dynamic_density_gng" "--gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dynamic_density_gng.gtest.xml"
+1: Test timeout computed to be: 60
+1: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+1:  - /home/kublab/ros2_ws/build/om6dof_dd_gng/test_dynamic_density_gng --gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dynamic_density_gng.gtest.xml
+1: Running main() from /opt/ros/humble/src/gtest_vendor/src/gtest_main.cc
+1: [==========] Running 13 tests from 1 test suite.
+1: [----------] Global test environment set-up.
+1: [----------] 13 tests from DynamicDensityGng
+1: [ RUN      ] DynamicDensityGng.MaintainsFiniteBoundedUndirectedGraphDuringLongUpdates
+1: [       OK ] DynamicDensityGng.MaintainsFiniteBoundedUndirectedGraphDuringLongUpdates (42 ms)
+1: [ RUN      ] DynamicDensityGng.StableIdsSurviveCompactionAndRetiredIdsAreNotReused
+1: [       OK ] DynamicDensityGng.StableIdsSurviveCompactionAndRetiredIdsAreNotReused (6 ms)
+1: [ RUN      ] DynamicDensityGng.SeedAndResetReproduceGraphAndSamplingCounters
+1: [       OK ] DynamicDensityGng.SeedAndResetReproduceGraphAndSamplingCounters (4 ms)
+1: [ RUN      ] DynamicDensityGng.IgnoresNonfinitePointsAndNonpositiveUpdateCountsSafely
+1: [       OK ] DynamicDensityGng.IgnoresNonfinitePointsAndNonpositiveUpdateCountsSafely (0 ms)
+1: [ RUN      ] DynamicDensityGng.RejectsInvalidParametersBeforeAllocatingOrTraining
+1: [       OK ] DynamicDensityGng.RejectsInvalidParametersBeforeAllocatingOrTraining (0 ms)
+1: [ RUN      ] DynamicDensityGng.FiniteFloatExtremesDoNotOverflowNodeCoordinates
+1: [       OK ] DynamicDensityGng.FiniteFloatExtremesDoNotOverflowNodeCoordinates (1 ms)
+1: [ RUN      ] DynamicDensityGng.InvalidRegionReplacementPreservesPreviousAttention
+1: [       OK ] DynamicDensityGng.InvalidRegionReplacementPreservesPreviousAttention (0 ms)
+1: [ RUN      ] DynamicDensityGng.NeutralStrengthIsIdenticalToNoAttention
+1: [       OK ] DynamicDensityGng.NeutralStrengthIsIdenticalToNoAttention (5 ms)
+1: [ RUN      ] DynamicDensityGng.GeometricStrengthIsBoundedLocalAndClearable
+1: [       OK ] DynamicDensityGng.GeometricStrengthIsBoundedLocalAndClearable (2 ms)
+1: [ RUN      ] DynamicDensityGng.AttentionOutsideObservedGeometryDoesNotInventFocusedSamples
+1: [       OK ] DynamicDensityGng.AttentionOutsideObservedGeometryDoesNotInventFocusedSamples (2 ms)
+1: [ RUN      ] DynamicDensityGng.ReservesAtLeastHalfThePerCallBudgetForGlobalSampling
+1: [       OK ] DynamicDensityGng.ReservesAtLeastHalfThePerCallBudgetForGlobalSampling (0 ms)
+1: [ RUN      ] DynamicDensityGng.ReallocatesDensityWhenAttentionSwitchesAfterCapacity
+1: [       OK ] DynamicDensityGng.ReallocatesDensityWhenAttentionSwitchesAfterCapacity (221 ms)
+1: [ RUN      ] DynamicDensityGng.ReallocatesDensityAtDeployedSemanticStrength
+1: [       OK ] DynamicDensityGng.ReallocatesDensityAtDeployedSemanticStrength (195 ms)
+1: [----------] 13 tests from DynamicDensityGng (478 ms total)
+1: 
+1: [----------] Global test environment tear-down
+1: [==========] 13 tests from 1 test suite ran. (478 ms total)
+1: [  PASSED  ] 13 tests.
+1: -- run_test.py: return code 0
+1: -- run_test.py: inject classname prefix into gtest result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dynamic_density_gng.gtest.xml'
+1: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dynamic_density_gng.gtest.xml'
+ 1/12 Test  #1: test_dynamic_density_gng ...................   Passed    0.62 sec
+test 2
+      Start  2: test_semantic_density_attention
+
+2: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_semantic_density_attention.gtest.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_gtest/test_semantic_density_attention.txt" "--command" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_semantic_density_attention" "--gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_semantic_density_attention.gtest.xml"
+2: Test timeout computed to be: 60
+2: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+2:  - /home/kublab/ros2_ws/build/om6dof_dd_gng/test_semantic_density_attention --gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_semantic_density_attention.gtest.xml
+2: Running main() from /opt/ros/humble/src/gtest_vendor/src/gtest_main.cc
+2: [==========] Running 17 tests from 1 test suite.
+2: [----------] Global test environment set-up.
+2: [----------] 17 tests from SemanticDensityAttention
+2: [ RUN      ] SemanticDensityAttention.ExpiresFromSourceCaptureNotInferenceCompletion
+2: [       OK ] SemanticDensityAttention.ExpiresFromSourceCaptureNotInferenceCompletion (0 ms)
+2: [ RUN      ] SemanticDensityAttention.DuplicateResultDoesNotRefreshOrMoveAttention
+2: [       OK ] SemanticDensityAttention.DuplicateResultDoesNotRefreshOrMoveAttention (0 ms)
+2: [ RUN      ] SemanticDensityAttention.NewUniqueResultReplacesAndEmptyResultClears
+2: [       OK ] SemanticDensityAttention.NewUniqueResultReplacesAndEmptyResultClears (0 ms)
+2: [ RUN      ] SemanticDensityAttention.PoseMismatchClearsAndCannotResurrectSameResult
+2: [       OK ] SemanticDensityAttention.PoseMismatchClearsAndCannotResurrectSameResult (0 ms)
+2: [ RUN      ] SemanticDensityAttention.InvalidDuplicateClearsPreviousAttention
+2: [       OK ] SemanticDensityAttention.InvalidDuplicateClearsPreviousAttention (0 ms)
+2: [ RUN      ] SemanticDensityAttention.StaleUnknownAndFutureSourceClearAttention
+2: [       OK ] SemanticDensityAttention.StaleUnknownAndFutureSourceClearAttention (0 ms)
+2: [ RUN      ] SemanticDensityAttention.SequenceZeroAndOutOfOrderFailClosed
+2: [       OK ] SemanticDensityAttention.SequenceZeroAndOutOfOrderFailClosed (0 ms)
+2: [ RUN      ] SemanticDensityAttention.NewSequenceWithRegressingCaptureTimeFailsClosed
+2: [       OK ] SemanticDensityAttention.NewSequenceWithRegressingCaptureTimeFailsClosed (0 ms)
+2: [ RUN      ] SemanticDensityAttention.InvalidOrRegressingReadClockClears
+2: [       OK ] SemanticDensityAttention.InvalidOrRegressingReadClockClears (0 ms)
+2: [ RUN      ] SemanticDensityAttention.InvalidOrRegressingObservationClockConsumesResult
+2: [       OK ] SemanticDensityAttention.InvalidOrRegressingObservationClockConsumesResult (0 ms)
+2: [ RUN      ] SemanticDensityAttention.LengthMismatchClearsInsteadOfReadingOutOfBounds
+2: [       OK ] SemanticDensityAttention.LengthMismatchClearsInsteadOfReadingOutOfBounds (0 ms)
+2: [ RUN      ] SemanticDensityAttention.RejectsInvalidPointsAndScoresAndClampsConfidence
+2: [       OK ] SemanticDensityAttention.RejectsInvalidPointsAndScoresAndClampsConfidence (0 ms)
+2: [ RUN      ] SemanticDensityAttention.ZeroDirectMatchesDoNotCreateAttention
+2: [       OK ] SemanticDensityAttention.ZeroDirectMatchesDoNotCreateAttention (0 ms)
+2: [ RUN      ] SemanticDensityAttention.GreedySelectionUsesScoreThenIndexAndHalfRadius
+2: [       OK ] SemanticDensityAttention.GreedySelectionUsesScoreThenIndexAndHalfRadius (0 ms)
+2: [ RUN      ] SemanticDensityAttention.MaximumRegionBudgetIsBoundedAndDeterministic
+2: [       OK ] SemanticDensityAttention.MaximumRegionBudgetIsBoundedAndDeterministic (0 ms)
+2: [ RUN      ] SemanticDensityAttention.ReturnedSnapshotCannotMutateInternalRegions
+2: [       OK ] SemanticDensityAttention.ReturnedSnapshotCannotMutateInternalRegions (0 ms)
+2: [ RUN      ] SemanticDensityAttention.ValidatesParameterBounds
+2: [       OK ] SemanticDensityAttention.ValidatesParameterBounds (0 ms)
+2: [----------] 17 tests from SemanticDensityAttention (0 ms total)
+2: 
+2: [----------] Global test environment tear-down
+2: [==========] 17 tests from 1 test suite ran. (0 ms total)
+2: [  PASSED  ] 17 tests.
+2: -- run_test.py: return code 0
+2: -- run_test.py: inject classname prefix into gtest result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_semantic_density_attention.gtest.xml'
+2: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_semantic_density_attention.gtest.xml'
+ 2/12 Test  #2: test_semantic_density_attention ............   Passed    0.12 sec
+test 3
+      Start  3: test_camera_profile
+
+3: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_profile.gtest.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_gtest/test_camera_profile.txt" "--command" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_camera_profile" "--gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_profile.gtest.xml"
+3: Test timeout computed to be: 60
+3: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+3:  - /home/kublab/ros2_ws/build/om6dof_dd_gng/test_camera_profile --gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_profile.gtest.xml
+3: Running main() from /opt/ros/humble/src/gtest_vendor/src/gtest_main.cc
+3: [==========] Running 5 tests from 1 test suite.
+3: [----------] Global test environment set-up.
+3: [----------] 5 tests from CameraProfile
+3: [ RUN      ] CameraProfile.LegacyDefaultsAndV2D435i
+3: [       OK ] CameraProfile.LegacyDefaultsAndV2D435i (0 ms)
+3: [ RUN      ] CameraProfile.RefusesMixedCameraAndFrames
+3: [       OK ] CameraProfile.RefusesMixedCameraAndFrames (0 ms)
+3: [ RUN      ] CameraProfile.SelectsSingleMatchingCameraWithoutSerial
+3: [       OK ] CameraProfile.SelectsSingleMatchingCameraWithoutSerial (0 ms)
+3: [ RUN      ] CameraProfile.MultipleCamerasRequireSerialAndReconnectCannotSwitchUnit
+3: [       OK ] CameraProfile.MultipleCamerasRequireSerialAndReconnectCannotSwitchUnit (1 ms)
+3: [ RUN      ] CameraProfile.RejectsInvalidStaleOrFutureCaptureTime
+3: [       OK ] CameraProfile.RejectsInvalidStaleOrFutureCaptureTime (0 ms)
+3: [----------] 5 tests from CameraProfile (1 ms total)
+3: 
+3: [----------] Global test environment tear-down
+3: [==========] 5 tests from 1 test suite ran. (1 ms total)
+3: [  PASSED  ] 5 tests.
+3: -- run_test.py: return code 0
+3: -- run_test.py: inject classname prefix into gtest result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_profile.gtest.xml'
+3: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_profile.gtest.xml'
+ 3/12 Test  #3: test_camera_profile ........................   Passed    0.12 sec
+test 4
+      Start  4: test_v2_launch
+
+4: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_v2_launch.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_v2_launch.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_v2_launch.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_v2_launch/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_v2_launch.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+4: Test timeout computed to be: 30
+4: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+4:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_v2_launch.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_v2_launch/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_v2_launch.xunit.xml --junit-prefix=om6dof_dd_gng
+4: ============================= test session starts ==============================
+4: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+4: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_v2_launch/.cache
+4: rootdir: /home/kublab/ros2_ws
+4: plugins: ament-pep257-0.12.15, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-ros-0.19.14, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.1
+4: collected 11 items
+4: 
+4: ../../src/om6dof/om6dof_dd_gng/test/test_v2_launch.py ...........        [100%]
+4: 
+4: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_v2_launch.xunit.xml -
+4: ============================== 11 passed in 0.26s ==============================
+4: -- run_test.py: return code 0
+4: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_v2_launch.xunit.xml'
+ 4/12 Test  #4: test_v2_launch .............................   Passed    0.96 sec
+test 5
+      Start  5: test_web_launch
+
+5: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_web_launch.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_web_launch.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_web_launch.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_web_launch/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_web_launch.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+5: Test timeout computed to be: 30
+5: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+5:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_web_launch.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_web_launch/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_web_launch.xunit.xml --junit-prefix=om6dof_dd_gng
+5: ============================= test session starts ==============================
+5: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+5: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_web_launch/.cache
+5: rootdir: /home/kublab/ros2_ws
+5: plugins: ament-pep257-0.12.15, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-ros-0.19.14, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.1
+5: collected 4 items
+5: 
+5: ../../src/om6dof/om6dof_dd_gng/test/test_web_launch.py ....              [100%]
+5: 
+5: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_web_launch.xunit.xml -
+5: ============================== 4 passed in 0.03s ===============================
+5: -- run_test.py: return code 0
+5: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_web_launch.xunit.xml'
+ 5/12 Test  #5: test_web_launch ............................   Passed    0.69 sec
+test 6
+      Start  6: test_camera_input
+
+6: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_input.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_camera_input.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/realsense_ddgng/test/test_camera_input.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_camera_input/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_input.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+6: Test timeout computed to be: 30
+6: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+6:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/realsense_ddgng/test/test_camera_input.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_camera_input/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_input.xunit.xml --junit-prefix=om6dof_dd_gng
+6: ============================= test session starts ==============================
+6: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+6: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_camera_input/.cache
+6: rootdir: /home/kublab/ros2_ws
+6: plugins: ament-pep257-0.12.15, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-ros-0.19.14, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.1
+6: collected 14 items
+6: 
+6: ../../src/om6dof/om6dof_dd_gng/realsense_ddgng/test/test_camera_input.py . [  7%]
+6: .............                                                            [100%]
+6: 
+6: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_input.xunit.xml -
+6: ============================== 14 passed in 0.81s ==============================
+6: -- run_test.py: return code 0
+6: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_camera_input.xunit.xml'
+ 6/12 Test  #6: test_camera_input ..........................   Passed    1.55 sec
+test 7
+      Start  7: test_dd_gng_yolo
+
+7: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dd_gng_yolo.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_dd_gng_yolo.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/realsense_ddgng/test/test_dd_gng_yolo.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_dd_gng_yolo/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dd_gng_yolo.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+7: Test timeout computed to be: 30
+7: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+7:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/realsense_ddgng/test/test_dd_gng_yolo.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_dd_gng_yolo/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dd_gng_yolo.xunit.xml --junit-prefix=om6dof_dd_gng
+7: ============================= test session starts ==============================
+7: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+7: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_dd_gng_yolo/.cache
+7: rootdir: /home/kublab/ros2_ws
+7: plugins: ament-pep257-0.12.15, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-ros-0.19.14, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.1
+7: collected 6 items
+7: 
+7: ../../src/om6dof/om6dof_dd_gng/realsense_ddgng/test/test_dd_gng_yolo.py . [ 16%]
+7: .....                                                                    [100%]
+7: 
+7: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dd_gng_yolo.xunit.xml -
+7: ============================== 6 passed in 0.65s ===============================
+7: -- run_test.py: return code 0
+7: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_dd_gng_yolo.xunit.xml'
+ 7/12 Test  #7: test_dd_gng_yolo ...........................   Passed    1.38 sec
+test 8
+      Start  8: test_reachability_graph
+
+8: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_gtest/test_reachability_graph.txt" "--command" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_reachability_graph" "--gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml"
+8: Test timeout computed to be: 60
+8: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+8:  - /home/kublab/ros2_ws/build/om6dof_dd_gng/test_reachability_graph --gtest_output=xml:/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml
+8: Running main() from /opt/ros/humble/src/gtest_vendor/src/gtest_main.cc
+8: [==========] Running 13 tests from 4 test suites.
+8: [----------] Global test environment set-up.
+8: [----------] 2 tests from ReachabilityGeometry
+8: [ RUN      ] ReachabilityGeometry.PointAndSegmentDistancesAreFinite
+8: [       OK ] ReachabilityGeometry.PointAndSegmentDistancesAreFinite (0 ms)
+8: [ RUN      ] ReachabilityGeometry.CapsuleChecksPointsAndObstacleEdges
+8: [       OK ] ReachabilityGeometry.CapsuleChecksPointsAndObstacleEdges (0 ms)
+8: [----------] 2 tests from ReachabilityGeometry (0 ms total)
+8: 
+8: [----------] 5 tests from ReachabilityGng
+8: [ RUN      ] ReachabilityGng.IsDeterministicFiniteAndHonorsNodeBudget
+8: [       OK ] ReachabilityGng.IsDeterministicFiniteAndHonorsNodeBudget (0 ms)
+8: [ RUN      ] ReachabilityGng.RejectsInconsistentTrainingSamples
+8: [       OK ] ReachabilityGng.RejectsInconsistentTrainingSamples (0 ms)
+8: [ RUN      ] ReachabilityGng.GuardIndicesAreDeterministicStratifiedAndUnique
+8: [       OK ] ReachabilityGng.GuardIndicesAreDeterministicStratifiedAndUnique (0 ms)
+8: [ RUN      ] ReachabilityGng.GuardIndicesClampToAvailableSamples
+8: [       OK ] ReachabilityGng.GuardIndicesClampToAvailableSamples (0 ms)
+8: [ RUN      ] ReachabilityGng.NodeBudgetExcludesFixedAnchors
+8: [       OK ] ReachabilityGng.NodeBudgetExcludesFixedAnchors (0 ms)
+8: [----------] 5 tests from ReachabilityGng (0 ms total)
+8: 
+8: [----------] 1 test from ReachabilitySampling
+8: [ RUN      ] ReachabilitySampling.DigitScrambledHaltonIsDeterministicAndBijective
+8: [       OK ] ReachabilitySampling.DigitScrambledHaltonIsDeterministicAndBijective (0 ms)
+8: [----------] 1 test from ReachabilitySampling (0 ms total)
+8: 
+8: [----------] 5 tests from ReachabilityGraph
+8: [ RUN      ] ReachabilityGraph.JointRankingUsesNormalizedJointSpace
+8: [       OK ] ReachabilityGraph.JointRankingUsesNormalizedJointSpace (0 ms)
+8: [ RUN      ] ReachabilityGraph.ObstacleBlocksNodeAndCrossingEdge
+8: [       OK ] ReachabilityGraph.ObstacleBlocksNodeAndCrossingEdge (0 ms)
+8: [ RUN      ] ReachabilityGraph.DijkstraChoosesClosestReachableIntersection
+8: [       OK ] ReachabilityGraph.DijkstraChoosesClosestReachableIntersection (0 ms)
+8: [ RUN      ] ReachabilityGraph.BlockedRouteAndOutOfRangeTargetFailCleanly
+8: [       OK ] ReachabilityGraph.BlockedRouteAndOutOfRangeTargetFailCleanly (0 ms)
+8: [ RUN      ] ReachabilityGraph.IntersectionRadiusIncludesBoundary
+8: [       OK ] ReachabilityGraph.IntersectionRadiusIncludesBoundary (0 ms)
+8: [----------] 5 tests from ReachabilityGraph (0 ms total)
+8: 
+8: [----------] Global test environment tear-down
+8: [==========] 13 tests from 4 test suites ran. (0 ms total)
+8: [  PASSED  ] 13 tests.
+8: -- run_test.py: return code 0
+8: -- run_test.py: inject classname prefix into gtest result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml'
+8: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_graph.gtest.xml'
+ 8/12 Test  #8: test_reachability_graph ....................   Passed    0.12 sec
+test 9
+      Start  9: test_reachability_benchmark
+
+9: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_benchmark.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_reachability_benchmark.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_benchmark/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+9: Test timeout computed to be: 30
+9: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+9:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_reachability_benchmark.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_benchmark/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml --junit-prefix=om6dof_dd_gng
+9: ============================= test session starts ==============================
+9: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+9: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_benchmark/.cache
+9: rootdir: /home/kublab/ros2_ws
+9: plugins: ament-pep257-0.12.15, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-ros-0.19.14, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.1
+9: collected 5 items
+9: 
+9: ../../src/om6dof/om6dof_dd_gng/test/test_reachability_benchmark.py ..... [100%]
+9: 
+9: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml -
+9: ============================== 5 passed in 0.03s ===============================
+9: -- run_test.py: return code 0
+9: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_benchmark.xunit.xml'
+ 9/12 Test  #9: test_reachability_benchmark ................   Passed    0.69 sec
+test 10
+      Start 10: test_reachability_multiscene_benchmark
+
+10: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_multiscene_benchmark.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_reachability_multiscene_benchmark.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_multiscene_benchmark/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+10: Test timeout computed to be: 30
+10: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+10:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_reachability_multiscene_benchmark.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_multiscene_benchmark/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml --junit-prefix=om6dof_dd_gng
+10: ============================= test session starts ==============================
+10: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+10: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_reachability_multiscene_benchmark/.cache
+10: rootdir: /home/kublab/ros2_ws
+10: plugins: ament-pep257-0.12.15, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-ros-0.19.14, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.1
+10: collected 15 items
+10: 
+10: ../../src/om6dof/om6dof_dd_gng/test/test_reachability_multiscene_benchmark.py . [  6%]
+10: ..............                                                           [100%]
+10: 
+10: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml -
+10: ============================== 15 passed in 0.14s ==============================
+10: -- run_test.py: return code 0
+10: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_reachability_multiscene_benchmark.xunit.xml'
+10/12 Test #10: test_reachability_multiscene_benchmark .....   Passed    0.80 sec
+test 11
+      Start 11: test_generate_reachability_scene_catalog
+
+11: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_generate_reachability_scene_catalog.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_generate_reachability_scene_catalog.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_generate_reachability_scene_catalog/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+11: Test timeout computed to be: 30
+11: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+11:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_generate_reachability_scene_catalog.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_generate_reachability_scene_catalog/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml --junit-prefix=om6dof_dd_gng
+11: ============================= test session starts ==============================
+11: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+11: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_generate_reachability_scene_catalog/.cache
+11: rootdir: /home/kublab/ros2_ws
+11: plugins: ament-pep257-0.12.15, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-ros-0.19.14, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.1
+11: collected 6 items
+11: 
+11: ../../src/om6dof/om6dof_dd_gng/test/test_generate_reachability_scene_catalog.py . [ 16%]
+11: .....                                                                    [100%]
+11: 
+11: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml -
+11: ============================== 6 passed in 0.03s ===============================
+11: -- run_test.py: return code 0
+11: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_generate_reachability_scene_catalog.xunit.xml'
+11/12 Test #11: test_generate_reachability_scene_catalog ...   Passed    0.70 sec
+test 12
+      Start 12: test_analyze_reachability_multiscene
+
+12: Test command: /usr/bin/python3 "-u" "/opt/ros/humble/share/ament_cmake_test/cmake/run_test.py" "/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml" "--package-name" "om6dof_dd_gng" "--output-file" "/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_analyze_reachability_multiscene.txt" "--command" "/usr/bin/python3" "-u" "-m" "pytest" "/home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_analyze_reachability_multiscene.py" "-o" "cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_analyze_reachability_multiscene/.cache" "--junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml" "--junit-prefix=om6dof_dd_gng"
+12: Test timeout computed to be: 60
+12: -- run_test.py: invoking following command in '/home/kublab/ros2_ws/build/om6dof_dd_gng':
+12:  - /usr/bin/python3 -u -m pytest /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/test/test_analyze_reachability_multiscene.py -o cache_dir=/home/kublab/ros2_ws/build/om6dof_dd_gng/ament_cmake_pytest/test_analyze_reachability_multiscene/.cache --junit-xml=/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml --junit-prefix=om6dof_dd_gng
+12: ============================= test session starts ==============================
+12: platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+12: cachedir: build/om6dof_dd_gng/ament_cmake_pytest/test_analyze_reachability_multiscene/.cache
+12: rootdir: /home/kublab/ros2_ws
+12: plugins: ament-pep257-0.12.15, ament-flake8-0.12.15, ament-xmllint-0.12.15, ament-lint-0.12.15, launch-testing-ros-0.19.14, launch-testing-1.0.14, ament-copyright-0.12.15, cov-3.0.0, colcon-core-0.21.1
+12: collected 19 items
+12: 
+12: ../../src/om6dof/om6dof_dd_gng/test/test_analyze_reachability_multiscene.py . [  5%]
+12: ..................                                                       [100%]
+12: 
+12: - generated xml file: /home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml -
+12: ============================= 19 passed in 10.85s ==============================
+12: -- run_test.py: return code 0
+12: -- run_test.py: verify result file '/home/kublab/ros2_ws/build/om6dof_dd_gng/test_results/om6dof_dd_gng/test_analyze_reachability_multiscene.xunit.xml'
+12/12 Test #12: test_analyze_reachability_multiscene .......   Passed   11.51 sec
+
+100% tests passed, 0 tests failed out of 12
+
+Label Time Summary:
+gtest     =   0.97 sec*proc (4 tests)
+pytest    =  18.28 sec*proc (8 tests)
+
+Total Test time (real) =  19.26 sec
+Finished <<< om6dof_dd_gng [19.3s]
+
+Summary: 1 package finished [21.7s]

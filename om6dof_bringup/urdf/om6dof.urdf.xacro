@@ -20,7 +20,10 @@
   <xacro:property name="hardware_safety"
     value="${xacro.load_yaml('$(find om6dof_bringup)/config/hardware_safety.yaml')}"/>
 
-  <xacro:include filename="$(find om6dof_description)/urdf/om6dof.urdf.xacro"/>
+  <!-- The physical arm uses the v2 link3 mounting geometry. Keep the
+       robot_state_publisher/controller_manager model aligned with MoveIt,
+       direct pick, and Gemini pick. -->
+  <xacro:include filename="$(find om6dof_description)/urdf/om6dof_v2.urdf.xacro"/>
   <!-- Exactly one of these: both define om6dof_ros2_control, so including
        both would redefine the macro. -->
   <xacro:unless value="$(arg current_control)">

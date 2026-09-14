@@ -90,15 +90,12 @@ install(DIRECTORY systemd/ DESTINATION share/${PROJECT_NAME}/systemd)
 
 # ============================================================================
 # topo_gng_node: the ROS 2 (rclcpp) TopoVLA DD-GNG + robot-topology integration.
-# Everything above this point is the pre-existing plain-CMake sub-build
-# (legacy visualizer + realsense_ddgng's own build_om6dof); it is untouched.
-# This package was a plain CMake package (identified by colcon on
-# CMakeLists.txt alone, no package.xml); it now also carries a package.xml and
-# becomes ament_cmake so it can depend on rclcpp etc. colcon still builds both
-# halves of this one CMakeLists.txt in a single pass.
+# The legacy ODE visualizer above remains optional. The native Python
+# camera core below is built and installed in the same ament/colcon pass.
 # ============================================================================
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -121,6 +118,16 @@ find_package(rosidl_default_generators REQUIRED)
 # pyrealsense2, so topo_gng_node and dd_gng_yolo.py contend for the same
 # camera handle exactly like any two processes opening the same device would.
 find_package(realsense2 REQUIRED)
+find_path(TENSORRT_INCLUDE_DIR NvInfer.h
+  HINTS /usr/include/aarch64-linux-gnu /usr/include)
+find_library(TENSORRT_NVINFER_LIBRARY nvinfer REQUIRED)
+find_path(CUDA_RUNTIME_INCLUDE_DIR cuda_runtime_api.h
+  HINTS /usr/local/cuda/include)
+find_library(CUDA_RUNTIME_LIBRARY cudart
+  HINTS /usr/local/cuda/lib64 /usr/local/cuda/targets/aarch64-linux/lib)
+if(NOT TENSORRT_INCLUDE_DIR OR NOT CUDA_RUNTIME_INCLUDE_DIR OR NOT CUDA_RUNTIME_LIBRARY)
+  message(FATAL_ERROR "TensorRT and CUDA runtime development files are required for topo_gng_node")
+endif()
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TopologyEdge.msg"
@@ -142,9 +149,58 @@ add_executable(topo_gng_node
 target_include_directories(topo_gng_node PRIVATE
   include
 )
+
+add_executable(yolox_viewer_node
+  src/yolox_viewer_node.cpp
+)
+target_include_directories(yolox_viewer_node PRIVATE
+  include
+  ${OpenCV_INCLUDE_DIRS}
+  ${TENSORRT_INCLUDE_DIR}
+  ${CUDA_RUNTIME_INCLUDE_DIR}
+)
+target_compile_features(yolox_viewer_node PRIVATE cxx_std_17)
+ament_target_dependencies(yolox_viewer_node rclcpp sensor_msgs std_msgs)
+target_link_libraries(yolox_viewer_node
+  ${OpenCV_LIBS}
+  ${TENSORRT_NVINFER_LIBRARY}
+  ${CUDA_RUNTIME_LIBRARY}
+)
+
+# Standalone YOLO + 3D box + DD-GNG node: owns the camera itself (no
+# dependency on topo_gng_node's RGB stream), runs YOLOX synchronously once
+# per captured frame, and feeds a DynamicDensityGrowingNeuralGas whose
+# attention is pulled toward each frame's YOLO/3D-box detections -- no TF, no
+# MoveIt, no cross-frame re-projection (everything happens in the same
+# camera-frame instant).
+add_executable(yolo_3d_box_node
+  src/yolo_3d_box_node.cpp
+)
+target_include_directories(yolo_3d_box_node PRIVATE
+  include
+  ${OpenCV_INCLUDE_DIRS}
+  ${TENSORRT_INCLUDE_DIR}
+  ${CUDA_RUNTIME_INCLUDE_DIR}
+)
+target_compile_features(yolo_3d_box_node PRIVATE cxx_std_17)
+ament_target_dependencies(yolo_3d_box_node
+  rclcpp
+  sensor_msgs
+  std_msgs
+  geometry_msgs
+  visualization_msgs
+)
+target_link_libraries(yolo_3d_box_node
+  realsense2::realsense2
+  ${OpenCV_LIBS}
+  ${TENSORRT_NVINFER_LIBRARY}
+  ${CUDA_RUNTIME_LIBRARY}
+  ${cpp_typesupport_target}
+)
 target_compile_features(topo_gng_node PRIVATE cxx_std_17)
 ament_target_dependencies(topo_gng_node
   rclcpp
+  rcl_interfaces
   sensor_msgs
   visualization_msgs
   geometry_msgs
@@ -156,9 +212,15 @@ ament_target_dependencies(topo_gng_node
 target_link_libraries(topo_gng_node
   realsense2::realsense2
   ${OpenCV_LIBS}
+  ${TENSORRT_NVINFER_LIBRARY}
+  ${CUDA_RUNTIME_LIBRARY}
   ${cpp_typesupport_target}
 )
-target_include_directories(topo_gng_node PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_include_directories(topo_gng_node PRIVATE
+  ${OpenCV_INCLUDE_DIRS}
+  ${TENSORRT_INCLUDE_DIR}
+  ${CUDA_RUNTIME_INCLUDE_DIR}
+)
 
 add_executable(reachability_graph_node
   src/reachability_graph_node.cpp
@@ -181,7 +243,7 @@ ament_target_dependencies(reachability_graph_node
 )
 target_link_libraries(reachability_graph_node ${cpp_typesupport_target})
 
-install(TARGETS topo_gng_node reachability_graph_node
+install(TARGETS topo_gng_node yolox_viewer_node yolo_3d_box_node reachability_graph_node
   DESTINATION lib/${PROJECT_NAME}
 )
 install(DIRECTORY include/
@@ -197,6 +259,7 @@ install(DIRECTORY rviz/
   DESTINATION share/${PROJECT_NAME}/rviz
 )
 install(PROGRAMS
+  scripts/semantic_target_gui.py
   scripts/reachability_benchmark.py
   scripts/reachability_multiscene_benchmark.py
   scripts/generate_reachability_scene_catalog.py
@@ -204,9 +267,40 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Install the headless-capable Python camera/web path with its native core,
+# so launching it no longer depends on a separately built source-tree .so.
+add_subdirectory(realsense_ddgng)
+install(TARGETS ddgng LIBRARY DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS
+  realsense_ddgng/dd_gng_yolo.py
+  realsense_ddgng/ddgng_realsense.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(FILES realsense_ddgng/camera_input.py DESTINATION lib/${PROJECT_NAME})
+
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
+  ament_add_gtest(test_dynamic_density_gng test/test_dynamic_density_gng.cpp)
+  target_include_directories(test_dynamic_density_gng PRIVATE include)
+  target_compile_features(test_dynamic_density_gng PRIVATE cxx_std_17)
+  ament_add_gtest(test_semantic_density_attention test/test_semantic_density_attention.cpp)
+  target_include_directories(test_semantic_density_attention PRIVATE include)
+  target_compile_features(test_semantic_density_attention PRIVATE cxx_std_17)
+  ament_add_gtest(test_camera_profile test/test_camera_profile.cpp)
+  target_include_directories(test_camera_profile PRIVATE include)
+  target_compile_features(test_camera_profile PRIVATE cxx_std_17)
+  ament_add_pytest_test(test_v2_launch test/test_v2_launch.py TIMEOUT 30)
+  ament_add_pytest_test(test_web_launch test/test_web_launch.py TIMEOUT 30)
+  ament_add_pytest_test(test_camera_input realsense_ddgng/test/test_camera_input.py TIMEOUT 30)
+  ament_add_pytest_test(test_dd_gng_yolo realsense_ddgng/test/test_dd_gng_yolo.py TIMEOUT 30)
+  ament_add_gtest(test_workspace_samples test/test_workspace_samples.cpp)
+  target_include_directories(test_workspace_samples PRIVATE include)
+  ament_add_gtest(test_semantic_target_selection test/test_semantic_target_selection.cpp)
+  target_include_directories(test_semantic_target_selection PRIVATE include)
+  target_compile_features(test_semantic_target_selection PRIVATE cxx_std_17)
+  ament_add_pytest_test(test_experiment_launch test/test_experiment_launch.py TIMEOUT 30)
+
   ament_add_gtest(test_reachability_graph
     test/test_reachability_graph.cpp
   )

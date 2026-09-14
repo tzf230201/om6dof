@@ -1,0 +1,25 @@
+{
+  "description": "Unmodified core snapshot from the local TopoVLA bio-inspired F-GNG; packaged without a runtime dependency on that repository.",
+  "files": {
+    "bio_focus.hpp": {
+      "source": "TopoVLA/native_fgng_bio/include/bio_focus.hpp",
+      "sha256": "67894f985ebb4eedb5c8022ccb983c8063eb6105791e766186e02b33c90ce23f"
+    },
+    "bio_mapper.hpp": {
+      "source": "TopoVLA/native_fgng_bio/include/bio_mapper.hpp",
+      "sha256": "9ad5898b6cc6edde52f2af27fdad459bf9d271fa6364aed6ca5c6364c93ac4ff"
+    },
+    "world_fgng.hpp": {
+      "source": "TopoVLA/native_fgng_world/include/world_fgng.hpp",
+      "sha256": "c869df4b2d4e57fa2ace4503f7b2129bc8898b5f6328aac18b61b4680bbd2666"
+    },
+    "fgng_core.hpp": {
+      "source": "TopoVLA/native_fgng/include/fgng_core.hpp",
+      "sha256": "2e02b3ab768af860987c7925ce439bccadc8454674ddd99bfcf5528d127188ee"
+    },
+    "dblgng_core.hpp": {
+      "source": "TopoVLA/native_dblgng/include/dblgng_core.hpp",
+      "sha256": "7879274d72f6c86abeb180aa569a1fb1f86c227df5ebedc157d758a96bdd3bfc"
+    }
+  }
+}

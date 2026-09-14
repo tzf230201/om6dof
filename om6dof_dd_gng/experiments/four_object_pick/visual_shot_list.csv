@@ -1,0 +1,9 @@
+shot_id,required,source,nominal_rate,content,acceptance_check,output
+V01,yes,separate_UVC_or_external_camera,30_fps,"whole robot; table; four objects; operator and E-stop visible","robot base and complete arm never leave frame",outside_camera.mp4
+V02,yes,/om6dof_topo_gng_v2/debug_image/compressed,2_fps,"robot POV with YOLO class confidence and boxes","all four classes readable; no duplicate camera owner",rosbag_topic
+V03,yes,RViz_screen,15_fps,"semantic DD-GNG environment nodes and edges","world graph remains fixed while wrist moves",rviz_desktop.mp4
+V04,yes,RViz_screen,15_fps,"reachability graph intersection selected goal and path","start goal and path colors remain distinguishable",rviz_desktop.mp4
+V05,yes,performance_plot_or_postprocess,per_trial,"stage timings CPU RSS/PSS GPU/power and outcome","same opportunity_id/time interval as result",paper_figure
+V06,yes,external_and_robot_POV,start_and_end,"LED flash or clap synchronization marker","marker visible in all independent video clocks",operator_event
+V07,yes,overhead_still,one_per_reset,"P1-P4 markers and full four-object layout","scene_id and object IDs visible on slate",scene_layout.jpg
+V08,stage_C_only,gripper_closeup,30_fps,"approach closure lift and place","contact/lift failure can be judged independently",gripper_closeup.mp4

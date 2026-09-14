@@ -1,19 +1,14 @@
-"""Launch topo_gng_node (+ RViz by default) with its default parameter file.
+"""DD-GNG camera/body graph and preview-only reachability, V1 or V2.
 
-Does NOT bring up robot_state_publisher or the D405 -- run this against an
-already-running bringup (topo_gng_node needs TF from world down to
-d405_depth_optical_frame, and exclusive access to the RealSense: stop
-om6dof-dd-gng.service / om6dof-perception.service first).
-
-RViz needs a real X display: run this from a terminal inside the session you
-want it to appear in (e.g. a NoMachine session, DISPLAY=:1002 here), or pass
-launch_rviz:=false for headless use (the RViz-on-another-machine workflow
-described in TopoVLA/CONNECTING_TO_MSI_AND_AGX.md).
+V1 defaults to the existing bringup TF. V2 uses isolated TF topics so an old
+hardware stack cannot supply V1 arm geometry to D435 perception. Pass
+publish_robot_state:=true for a read-only V2 state publisher, or use the
+dedicated topo_gng_v2.launch.py wrapper. Actual /joint_states are required;
+this launch never starts ros2_control, fake joints, or a motion controller.
 """
-import hashlib
+
+import importlib.util
 import os
-import shutil
-import subprocess
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -22,117 +17,93 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
-def _sha256(payload):
-    return hashlib.sha256(payload).hexdigest()
+_spec = importlib.util.spec_from_file_location(
+    "dd_gng_model_inputs", Path(__file__).with_name("_model_inputs.py"))
+_model_inputs = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_model_inputs)
 
 
-def _launch_setup(context, *, moveit_share, description_share):
-    """Resolve the reachability node's model/parameter inputs and hash them.
-
-    reachability_graph_node refuses to start unless expanded_urdf_sha256,
-    srdf_sha256, and reachability_parameters_sha256 are valid SHA-256 digests
-    of the exact bytes it was handed -- mirrors reachability_graph.launch.py.
-    """
-    params_path = Path(
-        LaunchConfiguration('params_file').perform(context)
-    ).expanduser().resolve(strict=True)
-    srdf_path = Path(moveit_share) / 'config' / 'om6dof.srdf'
-    xacro_path = Path(description_share) / 'urdf' / 'om6dof.urdf.xacro'
-    xacro_executable = shutil.which('xacro')
-    if not xacro_executable:
-        raise RuntimeError('could not resolve the xacro executable')
-
-    expanded = subprocess.run(
-        [xacro_executable, os.fspath(xacro_path)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if expanded.returncode != 0:
-        detail = expanded.stderr.decode('utf-8', errors='replace').strip()
-        raise RuntimeError(f'xacro expansion failed: {detail}')
-
-    urdf_bytes = expanded.stdout
-    srdf_bytes = srdf_path.read_bytes()
-    params_bytes = params_path.read_bytes()
-    robot_description = urdf_bytes.decode('utf-8')
-    robot_description_semantic = srdf_bytes.decode('utf-8')
-
+def _launch_setup(context, *, moveit_share, description_share, dd_gng_share):
+    inputs = _model_inputs.resolve_model_inputs(
+        context, moveit_share=moveit_share, description_share=description_share,
+        dd_gng_share=dd_gng_share)
+    overrides = {
+        "model_version": inputs["version"],
+        "camera_model": LaunchConfiguration("camera_model").perform(context),
+        "camera_frame": "auto",
+    }
+    serial = LaunchConfiguration("camera_serial").perform(context)
+    if serial:
+        # RealSense serials are decimal-looking identifiers, not ROS integers.
+        overrides["camera_serial"] = ParameterValue(serial, value_type=str)
+    overrides.update(inputs["calibration_parameters"])
+    rviz_path = LaunchConfiguration("rviz_config").perform(context) or os.path.join(
+        dd_gng_share, "rviz", "topo_gng_v2.rviz" if inputs["version"] == "v2" else "topo_gng.rviz")
     return [
         Node(
-            package='om6dof_dd_gng',
-            executable='reachability_graph_node',
-            name='reachability_graph_node',
-            output='screen',
-            parameters=[
-                os.fspath(params_path),
-                {
-                    'robot_description': robot_description,
-                    'robot_description_semantic': robot_description_semantic,
-                    'expanded_urdf_sha256': _sha256(urdf_bytes),
-                    'srdf_sha256': _sha256(srdf_bytes),
-                    'reachability_parameters_sha256': _sha256(params_bytes),
-                },
-            ],
-            condition=IfCondition(LaunchConfiguration('launch_reachability')),
+            package="robot_state_publisher", executable="robot_state_publisher",
+            name=f"dd_gng_{inputs['version']}_state_publisher", output="screen",
+            parameters=[{"robot_description": inputs["model_parameters"]["robot_description"]}],
+            remappings=inputs["remappings"],
+            condition=IfCondition(LaunchConfiguration("publish_robot_state")),
+        ),
+        Node(
+            package="om6dof_dd_gng", executable="topo_gng_node",
+            name="topo_gng_node", output="screen",
+            parameters=[inputs["params_path"], overrides],
+            remappings=inputs["remappings"],
+        ),
+        Node(
+            package="om6dof_dd_gng", executable="reachability_graph_node",
+            name="reachability_graph_node", output="screen",
+            parameters=[inputs["params_path"], inputs["model_parameters"]],
+            remappings=inputs["remappings"],
+            condition=IfCondition(LaunchConfiguration("launch_reachability")),
+        ),
+        Node(
+            package="rviz2", executable="rviz2", name="rviz2", output="screen",
+            arguments=["-d", rviz_path],
+            remappings=inputs["remappings"],
+            condition=IfCondition(LaunchConfiguration("launch_rviz")),
         ),
     ]
 
 
 def generate_launch_description():
-    share_dir = get_package_share_directory('om6dof_dd_gng')
-    default_params = os.path.join(share_dir, 'config', 'topo_gng.yaml')
-    default_rviz = os.path.join(share_dir, 'rviz', 'topo_gng.rviz')
-    params_file = LaunchConfiguration('params_file')
-    rviz_config = LaunchConfiguration('rviz_config')
-    launch_rviz = LaunchConfiguration('launch_rviz')
-
-    moveit_share = get_package_share_directory('om6dof_moveit_config')
-    description_share = get_package_share_directory('om6dof_description')
-
+    share = get_package_share_directory("om6dof_dd_gng")
     return LaunchDescription([
+        DeclareLaunchArgument("model_version", default_value="v1", choices=["v1", "v2"]),
         DeclareLaunchArgument(
-            'params_file',
-            default_value=default_params,
-            description='YAML parameters for topo_gng_node and reachability_graph_node',
-        ),
-        DeclareLaunchArgument(
-            'launch_rviz',
-            default_value='true',
-            description='Also start RViz2 pre-configured for environment_graph/robot_graph',
+            "params_file", default_value="",
+            description="Empty selects topo_gng.yaml (V1) or topo_gng_v2.yaml (V2)",
         ),
         DeclareLaunchArgument(
-            'launch_reachability',
-            default_value='true',
-            description='Start the preview-only end-effector reachability graph node',
+            "camera_model", default_value="auto",
+            description="auto selects the model's camera; explicit model must match the device",
         ),
         DeclareLaunchArgument(
-            'rviz_config',
-            default_value=default_rviz,
-            description='RViz config used when launch_rviz:=true',
+            "camera_serial", default_value="",
+            description="Optional serial; one compatible connected camera needs no serial",
         ),
-        Node(
-            package='om6dof_dd_gng',
-            executable='topo_gng_node',
-            name='topo_gng_node',
-            output='screen',
-            parameters=[params_file],
+        DeclareLaunchArgument(
+            "camera_calibration_file", default_value="",
+            description="Measured om6dof.hand_eye.v1 artifact; empty keeps preview-only nominal TF",
         ),
-        OpaqueFunction(
-            function=_launch_setup,
-            kwargs={
-                'moveit_share': moveit_share,
-                'description_share': description_share,
-            },
+        DeclareLaunchArgument(
+            "publish_robot_state", default_value="false", choices=["true", "false"],
+            description="Read-only state publisher; V2 TF is isolated from hardware TF",
         ),
-        Node(
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2',
-            output='screen',
-            arguments=['-d', rviz_config],
-            condition=IfCondition(launch_rviz),
-        ),
+        DeclareLaunchArgument("launch_rviz", default_value="true", choices=["true", "false"]),
+        DeclareLaunchArgument("launch_reachability", default_value="true", choices=["true", "false"]),
+        DeclareLaunchArgument(
+            "rviz_config", default_value="",
+            description="Empty selects the model-specific RViz preset"),
+        OpaqueFunction(function=_launch_setup, kwargs={
+            "moveit_share": get_package_share_directory("om6dof_moveit_config"),
+            "description_share": get_package_share_directory("om6dof_description"),
+            "dd_gng_share": share,
+        }),
     ])

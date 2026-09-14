@@ -1,0 +1,47 @@
+graph_pick:
+  ros__parameters:
+    world_frame: world
+    arm_joint_names: [joint1, joint2, joint3, joint4, joint5, joint6]
+
+    # Inputs produced by the V2 semantic environment and ordinary reachability
+    # GNG. The coordinator does not open the camera or build another graph.
+    environment_topic: /om6dof_topo_gng_v2/environment_graph_data
+    reachability_plan_topic: /om6dof_topo_gng_v2/reachability_plan
+    perception_status_topic: /om6dof_topo_gng_v2/status
+    labels_topic: /om6dof_topo_gng_v2/labels
+    joint_state_topic: /joint_states
+    operation_mode_state_topic: /om6dof/operation_mode/state
+    remote_enabled_state_topic: /om6dof/remote_enabled/state
+    dynamixel_health_topic: /dynamixel_hardware_interface/health
+    dynamixel_health_status_name: dynamixel_hardware_interface/BusHealth
+    dynamixel_health_timeout_sec: 0.30
+
+    # Fail-closed validation. These limits reject stale perception, a path
+    # whose first point no longer matches the robot, a weak semantic fragment,
+    # or a goal whose tool axis does not face the selected object.
+    max_input_age_sec: 2.0
+    max_joint_state_age_sec: 0.5
+    max_plan_hold_sec: 5.0
+    max_start_joint_error_rad: 0.08
+    max_target_distance_m: 0.055
+    minimum_target_distance_m: 0.01
+    minimum_target_component_nodes: 3
+    tool_approach_axis: [0.0, 0.0, 1.0]
+    minimum_approach_alignment: 0.30
+    require_calibration_verified: true
+
+    # Planning is always available. Motion additionally requires launching
+    # with execution_enabled:=true and an explicit /execute_graph_pick call.
+    execution_enabled: false
+    arm_action_name: /arm_controller/follow_joint_trajectory
+    gripper_action_name: /gripper_controller/gripper_cmd
+    gripper_open: 0.019
+    gripper_close: -0.010
+    gripper_max_effort: 0.0
+    action_timeout_sec: 120.0
+
+    # A payload-aware collision model is not yet available, so automatic
+    # reverse traversal while holding the object remains disabled by default.
+    retreat_after_grasp: false
+    retreat_joint_velocity: 0.20
+    minimum_segment_time_sec: 0.10

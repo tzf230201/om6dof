@@ -26,6 +26,7 @@ setup(
         "console_scripts": [
             "perception_node = om6dof_perception.perception_node:main",
             "perception_view = om6dof_perception.perception_view:main",
+            "world_projection_node = om6dof_perception.world_projection:main",
         ],
     },
 )

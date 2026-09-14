@@ -8,7 +8,9 @@ Conflicts=om6dof-perception.service om6dof-perception-pick.service
 Type=simple
 Environment=HOME=/home/kublab
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/bin/bash -lc 'set -e; source /opt/ros/humble/setup.bash; source /home/kublab/ros2_ws/install/setup.bash; unset CYCLONEDDS_URI; exec /usr/bin/python3 /home/kublab/ros2_ws/src/om6dof/om6dof_dd_gng/realsense_ddgng/dd_gng_yolo.py --headless --ros-topic /application_web_monitor/ddgng/image/compressed --labels-topic /application_web_monitor/ddgng/labels'
+Environment=OM6DOF_MODEL_VERSION=v1
+Environment=OM6DOF_CAMERA_MODEL=auto
+ExecStart=/bin/bash -lc 'set -e; source /opt/ros/humble/setup.bash; source /home/kublab/ros2_ws/install/setup.bash; unset CYCLONEDDS_URI; exec ros2 launch om6dof_dd_gng dd_gng_yolo.launch.py model_version:=${OM6DOF_MODEL_VERSION} camera_model:=${OM6DOF_CAMERA_MODEL} headless:=true'
 KillMode=control-group
 KillSignal=SIGINT
 TimeoutStopSec=15

@@ -169,6 +169,30 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     RCLCPP_INFO(logger_, "error_timeout_ms parameter not found, using default value of 500ms");
   }
 
+  // Ceiling for the additive HW_IF_POSITION_OFFSET channel. Deliberately read
+  // here and clamped in write(): a runaway operator command must be bounded at
+  // the last point before the bus, not only by whichever node produced it.
+  if (info_.hardware_parameters.find("max_position_offset") !=
+    info_.hardware_parameters.end())
+  {
+    try {
+      const double requested = stod(info_.hardware_parameters["max_position_offset"]);
+      if (!std::isfinite(requested) || requested < 0.0) {
+        RCLCPP_ERROR(
+          logger_, "max_position_offset must be finite and non-negative; using %.3f rad",
+          max_position_offset_);
+      } else {
+        max_position_offset_ = requested;
+      }
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR(
+        logger_, "Failed to parse max_position_offset parameter: %s, using default value",
+        e.what());
+    }
+  }
+  RCLCPP_INFO(
+    logger_, "Manual position-offset channel limited to +/-%.3f rad", max_position_offset_);
+
   const auto read_timeout_parameter = info_.hardware_parameters.find("read_packet_timeout_ms");
   if (read_timeout_parameter != info_.hardware_parameters.end()) {
     if (!ParseReadPacketTimeoutMs(read_timeout_parameter->second, read_packet_timeout_ms_)) {
@@ -492,7 +516,8 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
       if (hardware_interface::HW_IF_POSITION != it.name &&
         hardware_interface::HW_IF_VELOCITY != it.name &&
         hardware_interface::HW_IF_ACCELERATION != it.name &&
-        hardware_interface::HW_IF_EFFORT != it.name)
+        hardware_interface::HW_IF_EFFORT != it.name &&
+        HW_IF_POSITION_OFFSET != it.name)
       {
         RCLCPP_ERROR_STREAM(
           logger_, "Error: invalid joint command interface " << it.name);
@@ -777,6 +802,9 @@ hardware_interface::CallbackReturn DynamixelHardware::on_activate(
 hardware_interface::CallbackReturn DynamixelHardware::on_deactivate(
   [[maybe_unused]] const rclcpp_lifecycle::State & previous_state)
 {
+  // Do not let an offset outlive the controller that produced it: the next
+  // activation would silently fold it into the very first motor command.
+  ZeroPositionOffsets();
   return stop();
 }
 
@@ -1083,6 +1111,12 @@ hardware_interface::return_type DynamixelHardware::write(
     for (const auto & joint : hdl_joint_commands_) {
       for (size_t i = 0; i < joint.value_ptr_vec.size(); ++i) {
         const double value = *joint.value_ptr_vec.at(i);
+        // The additive offset channel is exempt: ApplyPositionOffsets() already
+        // treats a non-finite offset as zero, and a stray NaN from the operator
+        // side must not be able to trip the torque-disable fail-safe.
+        if (joint.interface_name_vec.at(i) == HW_IF_POSITION_OFFSET) {
+          continue;
+        }
         commands_are_finite = commands_are_finite && std::isfinite(value);
         if (joint.interface_name_vec.at(i) == hardware_interface::HW_IF_EFFORT) {
           effort_commands_are_zero = effort_commands_are_zero && std::abs(value) <= 1.0e-6;
@@ -1108,7 +1142,12 @@ hardware_interface::return_type DynamixelHardware::write(
       return hardware_interface::return_type::ERROR;
     }
 
+    // position + position_offset, for the duration of this mapping only. The
+    // controllers own those doubles and only touch them in update(), so the
+    // summed value is never visible to them.
+    const auto saved_positions = ApplyPositionOffsets();
     CalcJointToTransmission();
+    RestorePositionOffsets(saved_positions);
 
     const DxlError item_result = dxl_comm_->WriteItemBuf();
     const DxlError command_result = dxl_comm_->WriteMultiDxlData();
@@ -2132,6 +2171,58 @@ void DynamixelHardware::CalcTransmissionToJoint()
   );
 }
 
+std::vector<std::pair<std::shared_ptr<double>, double>>
+DynamixelHardware::ApplyPositionOffsets()
+{
+  std::vector<std::pair<std::shared_ptr<double>, double>> saved;
+  for (auto & joint : hdl_joint_commands_) {
+    std::shared_ptr<double> position;
+    double offset = 0.0;
+    for (size_t i = 0; i < joint.interface_name_vec.size(); ++i) {
+      if (joint.interface_name_vec.at(i) == hardware_interface::HW_IF_POSITION) {
+        position = joint.value_ptr_vec.at(i);
+      } else if (joint.interface_name_vec.at(i) == HW_IF_POSITION_OFFSET) {
+        offset = *joint.value_ptr_vec.at(i);
+      }
+    }
+    if (position == nullptr) {
+      continue;
+    }
+    // A joint with no offset interface, or an offset that has never been
+    // written, contributes nothing. Non-finite is treated as zero rather than
+    // faulted: this channel must never be able to torque-disable the arm.
+    if (!std::isfinite(offset)) {
+      offset = 0.0;
+    }
+    offset = std::max(-max_position_offset_, std::min(max_position_offset_, offset));
+    if (offset == 0.0) {
+      continue;
+    }
+    saved.emplace_back(position, *position);
+    *position = *position + offset;
+  }
+  return saved;
+}
+
+void DynamixelHardware::RestorePositionOffsets(
+  const std::vector<std::pair<std::shared_ptr<double>, double>> & saved)
+{
+  for (const auto & entry : saved) {
+    *entry.first = entry.second;
+  }
+}
+
+void DynamixelHardware::ZeroPositionOffsets()
+{
+  for (auto & joint : hdl_joint_commands_) {
+    for (size_t i = 0; i < joint.interface_name_vec.size(); ++i) {
+      if (joint.interface_name_vec.at(i) == HW_IF_POSITION_OFFSET) {
+        *joint.value_ptr_vec.at(i) = 0.0;
+      }
+    }
+  }
+}
+
 void DynamixelHardware::CalcJointToTransmission()
 {
   std::function<double(double)> conv = use_revolute_to_prismatic_ ?
@@ -2153,6 +2244,9 @@ void DynamixelHardware::CalcJointToTransmission()
 
 void DynamixelHardware::SyncJointCommandWithStates()
 {
+  // Syncing means "command exactly where the arm already is", so a stale
+  // operator offset left over from the previous session must not survive it.
+  ZeroPositionOffsets();
   for (auto & it_states : hdl_joint_states_) {
     for (auto & it_commands : hdl_joint_commands_) {
       if (it_states.name == it_commands.name) {

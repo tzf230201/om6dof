@@ -1,0 +1,33 @@
+Arguments (pass arguments as '<name>:=<value>'):
+
+    'boxer_python':
+        no description given
+        (default: '/home/kublab/ros2_ws/src/.boxer_runtime/venv/bin/python')
+
+    'boxer_repo':
+        no description given
+        (default: '/home/kublab/ros2_ws/src/.boxer_runtime/boxer')
+
+    'camera_serial':
+        no description given
+        (default: '243222076197')
+
+    'labels':
+        no description given
+        (default: 'bottle,keyboard')
+
+    'device':
+        One of: ['cpu', 'cuda']
+        (default: 'cpu')
+
+    'snapshot':
+        no description given
+        (default: '')
+
+    'output_dir':
+        no description given
+        (default: '/home/kublab/ros2_ws/src/.boxer_runtime/outputs')
+
+    'launch_rviz':
+        One of: ['true', 'false']
+        (default: 'true')

@@ -1,35 +1,39 @@
-import math
+"""Tests for the additive operator channel.
+
+The node under test owns exactly one output: a bounded joint-space offset that
+the hardware adds to whatever ``arm_controller`` is commanding. Every test here
+is ultimately about one of two things -- that the offset tracks the operator,
+and that it can never grow into something the arm should not be asked to do.
+"""
+
 import json
+import math
 import threading
 import time
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from controller_manager_msgs.srv import SwitchController
+from action_msgs.msg import GoalStatus, GoalStatusArray
+from control_msgs.msg import JointTrajectoryControllerState
 from std_msgs.msg import Float64MultiArray, String
+from trajectory_msgs.msg import JointTrajectoryPoint
 
 from om6dof_controller.control_math import (
-    MODE_FLOAT,
-    MODE_SEMI_CYLINDRICAL,
-    SEMI_PITCH_LIMIT,
-    rotation_error,
-    rotation_from_zyx,
-    rotation_to_zyx,
-    semi_cylindrical_rotation,
-    wrap_angle,
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
     MODE_CYLINDRICAL,
+    MODE_FLOAT,
     MODE_JOINT,
     MODE_READY,
     MODE_REST,
+    MODE_SEMI_CYLINDRICAL,
     MODE_STARTUP,
 )
 from om6dof_controller.controller_node import (
     DEFAULT_JOINT_LOWER,
     DEFAULT_JOINT_UPPER,
-    DEFAULT_READY_JOINT_POSITIONS,
+    DEFAULT_READY_JOINT_POSITIONS_DEG,
+    DEFAULT_TRANSITION_JOINT_POSITIONS_DEG,
     OM6DOFController,
 )
 
@@ -51,51 +55,38 @@ class _Logger:
 
 
 class _Publisher:
-    def __init__(self):
+    def __init__(self, topic_name="/fake"):
         self.messages = []
+        self.topic_name = topic_name
 
     def publish(self, message):
         self.messages.append(message)
 
 
 class _Future:
-    def __init__(self):
-        self.callback = None
-        self.response = None
-
-    def add_done_callback(self, callback):
-        self.callback = callback
-
-    def result(self):
-        return self.response
-
-    def finish(self, response):
-        self.response = response
-        self.callback(self)
+    def add_done_callback(self, _callback):
+        return None
 
 
-class _SwitchClient:
+class _ActionClient:
     def __init__(self, ready=True):
         self.ready = ready
-        self.requests = []
-        self.futures = []
+        self.goals = []
 
-    def service_is_ready(self):
+    def server_is_ready(self):
         return self.ready
 
-    def call_async(self, request):
-        self.requests.append(request)
-        future = _Future()
-        self.futures.append(future)
-        return future
-
-
-class _UnavailableListClient:
-    def service_is_ready(self):
-        return False
+    def send_goal_async(self, goal):
+        self.goals.append(goal)
+        return _Future()
 
 
 class _IdentityIK:
+    """Tip position is the first three joints; orientation is identity."""
+
+    def __init__(self):
+        self.collides = False
+
     def fk_pose(self, q):
         values = np.asarray(q, dtype=float)
         return values[:3].copy(), np.eye(3)
@@ -107,827 +98,453 @@ class _IdentityIK:
         return np.asarray(angular, dtype=float)
 
     def self_collides(self, _q, _radius):
-        return False
+        return self.collides
 
     def manipulability(self, _q):
         return 1.0
 
 
-def _controller(remote_enabled=False):
+INITIAL = [0.1, -0.4, 0.3, 0.2, 0.5, -0.1]
+
+
+def _controller(mode=MODE_JOINT, ik=True):
     node = object.__new__(OM6DOFController)
     node.lock = threading.RLock()
     node.joint_names = [f"joint{index}" for index in range(1, 7)]
     node.arm_controller = "arm_controller"
-    node.remote_controller = "forward_position_controller"
-    node.motion_mode = MODE_JOINT if remote_enabled else MODE_AUTONOMOUS
-    node.remote_enabled = remote_enabled
-    node.arm_controller_active = not remote_enabled
-    node.remote_controller_active = remote_enabled
-    node.switch_in_progress = False
-    node.switch_target = None
-    node.pending_manual_mode = MODE_JOINT
-    node.remote_enabled_on_start = False
-    node.startup_switch_attempted = False
-    node.controller_list_future = None
-    node.next_controller_poll = 0.0
+    node.motion_mode = mode
+    node.last_coordinate_mode = MODE_CARTESIAN
 
-    initial = [0.1, -1.9, 1.8, 0.2, 2.0, -0.1]
-    node.joint_positions = dict(zip(node.joint_names, initial))
+    node.offset = np.zeros(6)
+    node.offset_blocked = False
+
+    node.joint_positions = dict(zip(node.joint_names, INITIAL))
     node.last_joint_state = time.monotonic()
-    node.startup_pose = list(initial)
-    node.command_positions = list(initial) if remote_enabled else None
+    node.startup_pose = list(INITIAL)
     node.control_velocity = np.zeros(6)
     node.last_control_cmd = 0.0
     node.last_tick = time.monotonic() - 0.02
-
-    node.pose_target = None
-    node.held_target_positions = None
-    node.pose_operation = None
-    node.pose_target_until = 0.0
-    node.post_pose_mode = MODE_JOINT
-    node.return_autonomous_after_pose = False
-    node.ready_pending_on_enable = False
-    node.ready_pending_mode = MODE_JOINT
+    node.arm_reference = None
+    node.seen_goal_ids = set()
 
     node.joint_state_timeout = 1.0
     node.control_cmd_timeout = 0.3
     node.max_joint_velocity = 1.2
     node.joint_lower = [value + 0.02 for value in DEFAULT_JOINT_LOWER]
     node.joint_upper = [value - 0.02 for value in DEFAULT_JOINT_UPPER]
-    node.ready_pose = list(DEFAULT_READY_JOINT_POSITIONS)
-    node.pose_target_velocity = 0.5
-    node.pose_target_tolerance = 0.01
-    node.pose_target_timeout = 20.0
+    node.ready_pose = [
+        math.radians(value) for value in DEFAULT_READY_JOINT_POSITIONS_DEG
+    ]
+    node.transition_pose = [
+        math.radians(value) for value in DEFAULT_TRANSITION_JOINT_POSITIONS_DEG
+    ]
+    node.pose_profile_duration = 4.0
+    node.target_reach_duration = 5.0
 
     node.max_cartesian_linear_velocity = 0.1
     node.max_cartesian_angular_velocity = 1.0
     node.max_cylindrical_theta_velocity = 0.5
     node.cylindrical_origin_xy = np.array([0.012, 0.0])
     node.cylindrical_min_radius = 0.03
-    node.ik_position_gain = 4.0
-    node.ik_rotation_gain = 3.0
     node.ik_tool_frame_rotation = True
-    node.ik_max_target_lead = 0.04
-    node.ik_max_joint_following_error = 0.30
     node.ik_manipulability_warning_threshold = 1.0e-6
-    node.ik_self_collision = False
+    node.ik_self_collision = True
     node.ik_collision_radius = 0.025
-    node.ik_collision_blocked = False
-    node.ik = _IdentityIK()
-    node.ik_target_pos = None
-    node.ik_target_rotation = None
-    node.cylindrical_theta_hint = None
+    node.ik = _IdentityIK() if ik else None
 
-    node.command_pub = _Publisher()
+    node.f1_destination = MODE_READY
+    node.target_active = False
+    node.target_mode = ""
+    node.target_goal = None
+    node.target_command_joints = None
+    node.target_request_id = ""
+    node.target_approximate = False
+    node.target_status_state = "idle"
+    node.target_status_message = "no target yet"
+    node.last_target_status_publish = 0.0
+
+    node.offset_pub = _Publisher("/forward_offset_controller/commands")
     node.operation_state_pub = _Publisher()
     node.remote_state_pub = _Publisher()
-    node.switch_client = _SwitchClient()
-    node.list_client = _UnavailableListClient()
+    node.gripper_state_pub = _Publisher()
+    node.target_status_pub = _Publisher()
+    node.arm_client = _ActionClient()
+    node.gripper_client = _ActionClient()
     node._logger = _Logger()
     node.get_logger = lambda: node._logger
-    node.get_parameter = lambda name: SimpleNamespace(
-        value={"switch_timeout_seconds": 2.0, "float_follow_velocity": 0.35}[name]
-    )
+    node.get_parameter = lambda name: type(
+        "P", (), {"value": {"float_follow_velocity": 0.35}[name]}
+    )()
     return node
 
 
-@pytest.mark.parametrize('old_rpy', [
-    (0.0, math.pi / 2, 0.0),
-    tuple(np.radians([-18.435, 89.722, -18.523])),
-    (0.3, -0.4, 1.1),
-])
-def test_cartesian_current_pose_target_preserves_physical_tip_rotation(old_rpy):
-    node = _controller(remote_enabled=True)
-    physical_rotation = rotation_from_zyx(*old_rpy)
-    position = np.array([0.162846, -0.000231, 0.271815])
-    calls = []
-
-    def solve(q, xyz, rotation, **kwargs):
-        calls.append((xyz.copy(), rotation.copy()))
-        return q.copy(), True
-
-    node.ik = SimpleNamespace(
-        fk_pose=lambda q: (position.copy(), physical_rotation.copy()),
-        solve_pose_ik=solve,
-    )
-    node.target_active = False
-    node.target_reach_duration = 5.0
-    node.target_status_pub = _Publisher()
-    current = node._target_current_locked()
-    # Cylindrical keeps its existing URDF-tip orientation convention.
-    assert current['cylindrical'][3:] == pytest.approx(
-        rotation_to_zyx(physical_rotation)
-    )
-    if old_rpy == (0.0, math.pi / 2, 0.0):
-        assert current['cartesian'][3:] == pytest.approx([0, 0, 0], abs=1e-12)
-    node._on_target_command(String(data=json.dumps({
-        'action': 'move', 'mode': 'CARTESIAN',
-        'values': current['cartesian'], 'reach_duration': 5.0,
-    })))
-    assert node.target_active
-    assert len(calls) == 1
-    assert calls[0][0] == pytest.approx(position)
-    assert calls[0][1] == pytest.approx(physical_rotation, abs=1e-12)
-
-
-def test_joint_mode_switches_only_after_success_and_schedules_ready():
-    node = _controller(remote_enabled=False)
-
-    node._on_operation_mode(String(data="JOINT"))
-
-    assert node.remote_enabled is False
-    request = node.switch_client.requests[-1]
-    assert request.activate_controllers == ["forward_position_controller"]
-    assert request.deactivate_controllers == ["arm_controller"]
-    assert request.strictness == SwitchController.Request.STRICT
-    node.switch_client.futures[-1].finish(SimpleNamespace(ok=True))
-    assert node.remote_enabled is True
-    assert node.pose_operation == MODE_READY
-    assert node.pose_target == pytest.approx(DEFAULT_READY_JOINT_POSITIONS)
-    assert node.command_pub.messages[-1].data == pytest.approx(node.startup_pose)
-
-
-def test_failed_switch_never_arms_ready():
-    node = _controller(remote_enabled=False)
-    node._on_operation_mode(String(data="JOINT"))
-    node.switch_client.futures[-1].finish(SimpleNamespace(ok=False))
-    assert node.remote_enabled is False
-    assert node.pose_target is None
-    assert node._logger.errors
-
-
-def test_coordinate_mode_requires_manual_ownership():
-    node = _controller(remote_enabled=False)
-    node._on_operation_mode(String(data="CARTESIAN"))
-    assert node.motion_mode == MODE_AUTONOMOUS
-    assert not node.switch_client.requests
-    assert any("request JOINT first" in msg for msg in node._logger.warnings)
-
-
-def test_mode_change_clears_old_command():
-    node = _controller(remote_enabled=True)
-    node.control_velocity = np.ones(6)
-    node.last_control_cmd = time.monotonic()
-    node._on_operation_mode(String(data="CARTESIAN"))
-    assert node.motion_mode == MODE_CARTESIAN
-    assert node.last_control_cmd == 0.0
-    assert node.control_velocity == pytest.approx(np.zeros(6))
-
-
-def _completed_target(post_mode=MODE_JOINT):
-    """Finish the time profile while a deliberately lagging servo stays put."""
-    node = _controller(remote_enabled=True)
-    node.target_status_pub = _Publisher()
-    node.target_mode = post_mode
-    node.target_goal = list(node.startup_pose)
-    node.target_goal[0] += 0.2
-    node.target_command_joints = list(node.target_goal)
-    node.target_request_id = 'lagging-servo'
-    node.target_approximate = False
-    node.target_active = True
-    node.target_reach_duration = 5.0
-    node._schedule_pose_locked(
-        'TARGET', node.target_goal, post_mode=post_mode,
-        via_zero=False, profile_duration=5.0,
-    )
-    node.pose_phase_started_at = time.monotonic() - 5.01
-    node._tick()
-    assert node.pose_target is None
-    assert not node.target_active
-    return node
-
-
-@pytest.mark.parametrize('mode', [MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL])
-def test_completed_target_keeps_goal_despite_servo_lag_and_neutral_packets(mode):
-    node = _completed_target(mode)
-    goal = list(node.target_goal)
-    for neutral_packet in (False, True, True, False):
-        if neutral_packet:
-            node._on_control_cmd(Float64MultiArray(data=[0.0] * 6))
+def _jog(node, velocity, dt=0.02, repeats=1):
+    """Feed one fresh jog command and run `repeats` ticks of `dt` each."""
+    for _ in range(repeats):
+        node._on_control_cmd(Float64MultiArray(data=list(velocity)))
+        node.last_tick = time.monotonic() - dt
         node._tick()
-        assert node.command_pub.messages[-1].data == pytest.approx(goal)
-        assert node.held_target_positions == pytest.approx(goal)
-    assert node.joint_positions['joint1'] != pytest.approx(goal[0])
 
 
-def test_stop_after_profile_completion_cancels_final_goal():
-    node = _completed_target()
-    node._on_target_command(String(data='{"action":"stop","request_id":"stop"}'))
+def _goal_status(uuid_byte, status=GoalStatus.STATUS_ACCEPTED):
+    message = GoalStatusArray()
+    entry = GoalStatus()
+    entry.status = status
+    entry.goal_info.goal_id.uuid = [uuid_byte] * 16
+    message.status_list.append(entry)
+    return message
+
+
+# --------------------------------------------------------------- the output
+
+def test_the_node_only_ever_publishes_an_offset_never_a_pose():
+    """The whole point of the split: this channel is additive, so a zero
+    command must mean 'no operator contribution', not 'go to zero'."""
+    node = _controller()
     node._tick()
-    assert node.held_target_positions is None
-    assert node.command_pub.messages[-1].data == pytest.approx(node.startup_pose)
-    assert json.loads(node.target_status_pub.messages[-1].data)['state'] == 'stopped'
+    assert node.offset_pub.messages[-1].data == pytest.approx([0.0] * 6)
+    # An untouched arm sitting far from zero still publishes zeros.
+    assert INITIAL != [0.0] * 6
 
 
-def test_finished_time_profile_is_holding_until_feedback_reaches_goal():
-    node = _completed_target()
-    payload = json.loads(node.target_status_pub.messages[-1].data)
-    assert payload['state'] == 'holding'
-    assert payload['errors']['joint_max_deg'] == pytest.approx(math.degrees(.2))
-    node.joint_positions = dict(zip(node.joint_names, node.target_command_joints))
-    node._publish_target_status_locked('holding', '')
-    assert json.loads(node.target_status_pub.messages[-1].data)['state'] == 'reached'
-    assert node.held_target_positions is not None
+def test_joint_jog_integrates_into_the_offset():
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    assert node.offset[0] == pytest.approx(0.05, abs=1e-6)
+    assert node.offset[1:] == pytest.approx([0.0] * 5)
+    assert node.offset_pub.messages[-1].data == pytest.approx(node.offset.tolist())
 
 
-def test_approximate_status_does_not_claim_requested_pose_reached():
-    node = _completed_target(MODE_CARTESIAN)
-    node.target_approximate = True
-    node.target_goal = [10, 0, 0, 0, 0, 0]
-    node.joint_positions = dict(zip(node.joint_names, node.target_command_joints))
-    node._publish_target_status_locked('holding', '')
-    payload = json.loads(node.target_status_pub.messages[-1].data)
-    assert payload['state'] == 'approximate'
-    assert payload['errors']['position_mm'] > 1000
+def test_joint_jog_accumulates_across_ticks():
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1, repeats=3)
+    assert node.offset[0] == pytest.approx(0.15, abs=1e-6)
 
 
-def test_mode_change_during_target_clears_busy_state():
-    node = _completed_target()
-    node._on_target_command(String(data=json.dumps({
-        'action': 'move', 'mode': 'JOINT', 'values': node.target_goal, 'reach_duration': 5,
-    })))
-    assert node.target_active
-    node._on_operation_mode(String(data='CARTESIAN'))
-    assert not node.target_active
-    assert node.pose_target is None
-    assert json.loads(node.target_status_pub.messages[-1].data)['state'] == 'stopped'
+def test_jog_velocity_is_clamped_to_the_joint_ceiling():
+    node = _controller()
+    _jog(node, [99.0, 0, 0, 0, 0, 0], dt=0.1)
+    assert node.offset[0] == pytest.approx(node.max_joint_velocity * 0.1)
 
 
-def test_too_short_duration_is_rejected_instead_of_exceeding_velocity_limit():
-    node = _completed_target()
-    node._on_target_command(String(data=json.dumps({
-        'action': 'move', 'mode': 'JOINT',
-        'values': [1.5, 0, 0, 0, 0, 0], 'reach_duration': .5,
-    })))
-    assert not node.target_active
-    payload = json.loads(node.target_status_pub.messages[-1].data)
-    assert payload['state'] == 'rejected'
-    assert 'at least' in payload['message']
+# ------------------------------------------------------------------ bounds
 
+def test_offset_travel_is_not_halved_by_a_servo_that_follows():
+    """Regression: the limit belongs on reference + offset.
 
-@pytest.mark.parametrize('mode', [MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL])
-def test_jog_after_completed_target_starts_from_feedback(mode):
-    node = _completed_target(mode)
-    node._on_control_cmd(Float64MultiArray(data=[0.01, 0, 0, 0, 0, 0]))
-    assert node.held_target_positions is None
-    assert node.command_positions == pytest.approx(node.startup_pose)
-    node.last_tick = time.monotonic() - 0.02
-    node._tick()
-    assert abs(node.command_pub.messages[-1].data[0] - node.startup_pose[0]) < 0.01
-
-
-@pytest.mark.parametrize('mode', [MODE_JOINT, MODE_CARTESIAN, MODE_FLOAT])
-def test_explicit_mode_selection_releases_completed_goal(mode):
-    node = _completed_target()
-    node._on_operation_mode(String(data=mode))
-    assert node.held_target_positions is None
-    node._tick()
-    assert node.command_pub.messages[-1].data == pytest.approx(node.startup_pose)
-
-
-def test_autonomous_handover_clears_completed_goal():
-    node = _completed_target()
-    node._on_operation_mode(String(data='AUTONOMOUS'))
-    node.switch_client.futures[-1].finish(SimpleNamespace(ok=True))
-    assert node.held_target_positions is None
-    before = len(node.command_pub.messages)
-    node._tick()
-    assert len(node.command_pub.messages) == before
-
-
-def test_new_target_replaces_completed_goal_from_measured_start():
-    node = _completed_target()
-    goal = list(node.startup_pose)
-    goal[0] -= 0.1
-    node._on_target_command(String(data=json.dumps({
-        'action': 'move', 'mode': 'JOINT', 'values': goal, 'reach_duration': 5,
-    })))
-    assert node.held_target_positions is None
-    assert node.pose_target == pytest.approx(goal)
-    assert node.pose_phase_start == pytest.approx(node.startup_pose)
-
-
-def test_stale_feedback_does_not_replay_completed_goal_on_recovery():
-    node = _completed_target()
-    node.last_joint_state = time.monotonic() - 2.0
-    before = len(node.command_pub.messages)
-    node._tick()
-    assert node.held_target_positions is None
-    assert len(node.command_pub.messages) == before
-    node.last_joint_state = time.monotonic()
-    node._tick()
-    assert node.command_pub.messages[-1].data == pytest.approx(node.startup_pose)
-
-
-def test_joint_velocity_stream_integrates_then_watchdog_holds_feedback():
-    node = _controller(remote_enabled=True)
-    before = list(node.command_positions)
-    node._on_control_cmd(Float64MultiArray(data=[0.5, 0, 0, 0, 0, 0]))
-    node.last_tick = time.monotonic() - 0.02
-    node._tick()
-    moved = node.command_pub.messages[-1].data
-    assert moved[0] > before[0]
-
-    node.last_control_cmd = time.monotonic() - 1.0
-    node.last_tick = time.monotonic() - 0.02
-    node._tick()
-    assert node.command_pub.messages[-1].data == pytest.approx(node.startup_pose)
-
-
-def test_cartesian_velocity_resolves_to_joint_positions():
-    node = _controller(remote_enabled=True)
-    node.motion_mode = MODE_CARTESIAN
-    node._seed_ik_anchor_locked(node.command_positions)
-    before = list(node.command_positions)
-    node._on_control_cmd(Float64MultiArray(data=[0.02, 0, 0, 0, 0, 0]))
-    node.last_tick = time.monotonic() - 0.02
-    node._tick()
-    assert node.command_pub.messages[-1].data[0] > before[0]
-
-
-def test_cylindrical_velocity_resolves_to_joint_positions():
-    node = _controller(remote_enabled=True)
-    node.motion_mode = MODE_CYLINDRICAL
-    node._seed_ik_anchor_locked(node.command_positions)
-    before = list(node.command_positions)
-    node._on_control_cmd(Float64MultiArray(data=[0.02, 0, 0, 0, 0, 0]))
-    node.last_tick = time.monotonic() - 0.02
-    node._tick()
-    assert node.command_pub.messages[-1].data[0] > before[0]
-
-
-def test_ready_and_startup_are_transient_joint_pose_operations():
-    node = _controller(remote_enabled=True)
-    node._on_operation_mode(String(data="READY"))
-    assert node.pose_operation == MODE_READY
-    assert node.motion_mode == MODE_JOINT
-
-
-def test_rest_returns_to_startup_then_requests_autonomous_ownership():
-    node = _controller(remote_enabled=True)
-    node.pose_profile_duration = 0.01
-
-    node._on_operation_mode(String(data="REST"))
-
-    assert node.pose_operation == MODE_REST
-    assert node.pose_target == pytest.approx(node.startup_pose)
-    assert node.return_autonomous_after_pose is True
-
-    # Finish the zero phase, then the startup/rest phase.
-    node.pose_phase_started_at = time.monotonic() - 1.0
-    node._tick()
-    node.pose_phase_started_at = time.monotonic() - 1.0
-    node._tick()
-
-    request = node.switch_client.requests[-1]
-    assert request.activate_controllers == ["arm_controller"]
-    assert request.deactivate_controllers == ["forward_position_controller"]
-    node._on_operation_mode(String(data="STARTUP"))
-    assert node.pose_target == pytest.approx(node.startup_pose)
-    assert node.motion_mode == MODE_JOINT
-
-
-def test_ready_hands_back_a_coordinate_mode_not_joint():
-    """READY must leave the arm drivable by coordinate-space interfaces.
-
-    Handing back JOINT locked the gamepad out after every READY, because
-    its mapping is Cartesian and it refuses JOINT. TOGGLE_REST_READY
-    already resumed the remembered mode; plain READY has to match it.
+    The measured pose already contains the offset, so clamping against it
+    counted the operator's contribution twice and stopped the arm at roughly
+    half its travel -- an invisible wall that moved as the offset grew. This
+    fake arm settles on the command each tick, the way a real servo does.
     """
-    node = _controller(remote_enabled=True)
-    node.last_coordinate_mode = MODE_CYLINDRICAL
-    node._on_operation_mode(String(data="READY"))
-    assert node.pose_operation == MODE_READY
-    assert node.post_pose_mode == MODE_CYLINDRICAL
-
-    # An unset or non-coordinate memory falls back to CARTESIAN rather
-    # than passing JOINT through and reintroducing the lockout.
-    node = _controller(remote_enabled=True)
-    node.last_coordinate_mode = MODE_JOINT
-    node._on_operation_mode(String(data="READY"))
-    assert node.post_pose_mode == MODE_CARTESIAN
-
-
-def test_rest_ready_toggle_selects_the_opposite_nearest_pose():
-    node = _controller(remote_enabled=True)
-    node._set_motion_mode_locked(MODE_CYLINDRICAL, "test")
-    node.joint_positions = dict(zip(node.joint_names, node.startup_pose))
-    node._on_operation_mode(String(data="TOGGLE_REST_READY"))
-    assert node.pose_operation == MODE_READY
-    assert node.pose_target == pytest.approx(node.ready_pose)
-    assert node.post_pose_mode == MODE_CYLINDRICAL
-
-    node.joint_positions = dict(zip(node.joint_names, node.ready_pose))
-    node._on_operation_mode(String(data="TOGGLE_REST_READY"))
-    assert node.pose_operation == MODE_STARTUP
-    assert node.pose_target == pytest.approx(node.startup_pose)
-    assert node.post_pose_mode == MODE_JOINT
-
-
-def test_joint_commands_do_not_interrupt_guarded_pose_profile():
-    node = _controller(remote_enabled=True)
-    node._on_operation_mode(String(data="READY"))
-
-    node._on_control_cmd(Float64MultiArray(data=[0.0] * 6))
-    assert node.pose_operation == MODE_READY
-    assert node.last_control_cmd == 0.0
-
-    node._on_control_cmd(Float64MultiArray(data=[0.2, 0, 0, 0, 0, 0]))
-    assert node.pose_target is not None
-    assert node.pose_operation == MODE_READY
-    assert node.motion_mode == MODE_JOINT
-    assert node.control_velocity == pytest.approx([0.0] * 6)
-    assert node.last_control_cmd == 0.0
-    assert any("ignores control_cmd" in message for message in node._logger.warnings)
-
-
-def test_autonomous_restores_trajectory_controller():
-    node = _controller(remote_enabled=True)
-    node._on_operation_mode(String(data="AUTONOMOUS"))
-    request = node.switch_client.requests[-1]
-    assert request.activate_controllers == ["arm_controller"]
-    assert request.deactivate_controllers == ["forward_position_controller"]
-    node.switch_client.futures[-1].finish(SimpleNamespace(ok=True))
-    assert node.remote_enabled is False
-    assert node.motion_mode == MODE_AUTONOMOUS
-
-
-@pytest.mark.parametrize(
-    "values",
-    ([0.0] * 5, [0.0] * 7, [0, 0, np.nan, 0, 0, 0]),
-)
-def test_invalid_control_command_is_rejected(values):
-    node = _controller(remote_enabled=True)
-    node._on_control_cmd(Float64MultiArray(data=values))
-    assert node.last_control_cmd == 0.0
-    assert node._logger.warnings
-
-
-class _FollowingIK(_IdentityIK):
-    """A wrist that reaches whatever was last asked of it.
-
-    Needed to exercise limits that only bite when the arm is keeping up --
-    with a lagging wrist the anti-windup clamp stops the angles first.
-    """
-
-    def __init__(self, node):
-        self.node = node
-
-    def fk_pose(self, q):
-        values = np.asarray(q, dtype=float)
-        rotation = self.node.ik_target_rotation
-        if rotation is None:
-            rotation = np.eye(3)
-        return values[:3].copy(), np.asarray(rotation, dtype=float).copy()
-
-    def ee_to_base_angular(self, q, angular):
-        # The real IK rotates a tool-frame rate into the base frame.
-        # _IdentityIK returns it unchanged, which cannot tell a tool-frame
-        # command apart from a base-frame one -- exactly the distinction the
-        # stick-axis test exists to check.
-        rotation = self.node.ik_target_rotation
-        if rotation is None:
-            rotation = np.eye(3)
-        return np.asarray(rotation, dtype=float) @ np.asarray(angular, dtype=float)
-
-
-class _TiltedIK(_IdentityIK):
-    """An IK whose tool is not axis-aligned, so seeding has to do real work."""
-
-    ROTATION = rotation_from_zyx(0.35, -0.42, 1.1)
-
-    def fk_pose(self, q):
-        values = np.asarray(q, dtype=float)
-        return values[:3].copy(), self.ROTATION.copy()
-
-
-def test_entering_semi_cylindrical_does_not_move_the_wrist():
-    """Seeding must reproduce the pose the arm is already holding.
-
-    The mode drives absolute wrist angles. If they started at zero instead
-    of at the current orientation, selecting the mode would snap the wrist
-    on a real arm before the operator touched anything.
-    """
-    node = _controller(remote_enabled=True)
-    node.ik = _TiltedIK()
-    assert node._seed_ik_anchor_locked(node.command_positions)
-
-    rebuilt = semi_cylindrical_rotation(
-        node.cylindrical_theta_hint,
-        node.semi_roll,
-        node.semi_pitch,
-        node.semi_yaw_offset,
-    )
-    assert np.allclose(rebuilt, _TiltedIK.ROTATION, atol=1e-9)
-
-
-def test_semi_cylindrical_yaw_offset_is_measured_from_theta():
-    """Yaw is stored relative to theta, which is what makes it follow."""
-    node = _controller(remote_enabled=True)
-    node.ik = _TiltedIK()
-    node._seed_ik_anchor_locked(node.command_positions)
-
-    _, _, absolute_yaw = rotation_to_zyx(_TiltedIK.ROTATION)
-    expected = math.remainder(
-        absolute_yaw - node.cylindrical_theta_hint, 2.0 * math.pi
-    )
-    assert math.isclose(node.semi_yaw_offset, expected, abs_tol=1e-9)
-
-
-def test_semi_cylindrical_pitch_is_clamped_when_seeding_near_vertical():
-    """Entering the mode from a near-vertical wrist must not seed a singularity.
-
-    This is the only way pitch can reach the limit now. The stick cannot get
-    there: pitch and yaw became joint 5 / joint 6 offsets, and roll is a
-    rotation about the body X axis, which by construction changes only the
-    roll term of a Z-Y-X decomposition and leaves pitch untouched -- measured,
-    not assumed.
-    """
-    class _NearVerticalIK(_IdentityIK):
-        ROTATION = rotation_from_zyx(0.2, math.pi / 2 - 0.001, 0.4)
-
-        def fk_pose(self, q):
-            values = np.asarray(q, dtype=float)
-            return values[:3].copy(), self.ROTATION.copy()
-
-    node = _controller(remote_enabled=True)
-    node.ik = _NearVerticalIK()
-    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
-    assert node._seed_ik_anchor_locked(node.command_positions)
-
-    assert math.isfinite(node.semi_pitch)
-    assert math.isfinite(node.semi_roll)
-    assert math.isfinite(node.semi_yaw_offset)
-    assert abs(node.semi_pitch) <= SEMI_PITCH_LIMIT + 1e-9, (
-        f"seeded pitch {node.semi_pitch:+.4f} sits past the limit"
-    )
-
-
-def test_semi_cylindrical_roll_does_not_disturb_pitch():
-    """Rolling must leave the wrist's tilt alone, so the tool spins in place."""
-    node = _semi_node()
-    pitch_before = node.semi_pitch
-    roll_before = node.semi_roll
-    _drive(node, 3, 5.0, steps=300)
-    assert not node._logger.errors, node._logger.errors
-    # Non-vacuous: roll really turned, so "pitch held" is a statement about
-    # the decomposition and not about nothing happening.
-    # 0.2 rad is roughly where the fixture's joint limits stop the roll; well
-    # clear of zero, which is all this guard needs to rule out.
-    assert abs(wrap_angle(node.semi_roll - roll_before)) > 0.2
-    assert math.isclose(node.semi_pitch, pitch_before, abs_tol=1e-6)
-
-
-def test_semi_cylindrical_sweep_carries_yaw_and_leaves_the_tilt_alone():
-    """The defining behaviour, end to end through the control step.
-
-    Commanding only theta must rotate the wrist target's heading by the same
-    amount and leave pitch and roll exactly where the operator put them.
-    """
-    node = _controller(remote_enabled=True)
-    node.ik = _TiltedIK()
-    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
-    node._seed_ik_anchor_locked(node.command_positions)
-
-    roll_before, pitch_before, yaw_before = rotation_to_zyx(
-        node.ik_target_rotation
-    )
-    theta_before = node.cylindrical_theta_hint
-
-    # theta only: index 1 of the coordinate velocity is the angular sweep.
-    node.control_velocity = np.array([0.0, 0.4, 0.0, 0.0, 0.0, 0.0])
-    node.last_control_cmd = time.monotonic()
-    for _ in range(25):
-        node._coordinate_step_locked(
-            node.command_positions, node.control_velocity, 0.02
-        )
-
-    assert not node._logger.errors, node._logger.errors
-    roll_after, pitch_after, yaw_after = rotation_to_zyx(
-        node.ik_target_rotation
-    )
-    swept = node.cylindrical_theta_hint - theta_before
-    assert abs(swept) > 1e-3, "theta did not actually move"
-    assert math.isclose(roll_after, roll_before, abs_tol=1e-6)
-    assert math.isclose(pitch_after, pitch_before, abs_tol=1e-6)
-    assert math.isclose(
-        math.remainder(yaw_after - yaw_before, 2.0 * math.pi),
-        math.remainder(swept, 2.0 * math.pi),
-        abs_tol=1e-6,
-    )
-
-
-def test_semi_cylindrical_angles_cannot_wind_up_past_the_arm():
-    """The stored angles must not run away from what the arm is holding.
-
-    They are rebuilt into the target every cycle, so the orientation-error
-    clamp that bounds the incremental modes was being discarded here. The
-    angles then integrated freely, pitch reached its own limit while the
-    wrist had barely moved, and the stick went dead -- which is what "roll
-    and pitch keep getting stuck" actually was.
-    """
-    node = _controller(remote_enabled=True)
-    node.ik = _TiltedIK()  # orientation never changes: a wrist that cannot keep up
-    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
-    node._seed_ik_anchor_locked(node.command_positions)
-
-    node.control_velocity = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
-    node.last_control_cmd = time.monotonic()
-    for _ in range(120):
-        node._coordinate_step_locked(
-            node.command_positions, node.control_velocity, 0.02
-        )
-
-    achieved_pitch = rotation_to_zyx(_TiltedIK.ROTATION)[1]
-    lead = abs(node.semi_pitch - achieved_pitch)
-    # The same 0.35 rad ceiling the incremental modes get, plus one step of
-    # slack for the integration that happens before the clamp is applied.
-    assert lead <= 0.35 + 0.05, f"pitch led the arm by {lead:.3f} rad"
-    assert abs(node.semi_pitch) < SEMI_PITCH_LIMIT - 0.1, (
-        "pitch reached its travel limit while the wrist never moved"
-    )
-
-
-def test_semi_cylindrical_stick_turns_the_tool_like_cartesian_does():
-    """The stick must rotate about the tool's axis, not the world vertical.
-
-    Absolute angles describe where the wrist is *held*; they should not also
-    dictate what the stick turns around. Interpreting the rates as base-frame
-    Euler rates put the yaw axis 60 degrees away from the Cartesian one on a
-    typical downward-pointing wrist, so pressing yaw swept the tool through a
-    cone instead of spinning it in place.
-    """
-    node = _controller(remote_enabled=True)
-    node.ik = _TiltedIK()
-    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
-    node._seed_ik_anchor_locked(node.command_positions)
-    node.ik = _FollowingIK(node)
-
-    before = node.ik_target_rotation.copy()
-    # Roll is the only channel left steering the wrist: pitch and yaw became
-    # joint 5 / joint 6 offsets.
-    node.control_velocity = np.array([0.0, 0.0, 0.0, 0.35, 0.0, 0.0])
-    node.last_control_cmd = time.monotonic()
-    node._coordinate_step_locked(
-        node.command_positions, node.control_velocity, 0.02
-    )
-    produced = rotation_error(node.ik_target_rotation, before) / 0.02
-    expected = before @ np.array([0.35, 0.0, 0.0])
-
-    produced_axis = produced / np.linalg.norm(produced)
-    expected_axis = expected / np.linalg.norm(expected)
-    assert np.allclose(produced_axis, expected_axis, atol=1e-6), (
-        f"axis {produced_axis} is not the tool axis {expected_axis}"
-    )
-
-
-def _semi_node():
-    node = _controller(remote_enabled=True)
-    node.ik = _TiltedIK()
-    node._set_motion_mode_locked(MODE_SEMI_CYLINDRICAL, "test")
-    node._seed_ik_anchor_locked(node.command_positions)
-    node.ik = _FollowingIK(node)
-    node.last_control_cmd = time.monotonic()
-    return node
-
-
-def _drive(node, index, rate, steps=30, dt=0.02):
-    before = list(node.command_positions)
-    velocity = np.zeros(6)
-    velocity[index] = rate
-    node.control_velocity = velocity
-    for _ in range(steps):
-        node.command_positions = node._coordinate_step_locked(
-            node.command_positions, node.control_velocity, dt
-        )
-    return np.asarray(node.command_positions) - np.asarray(before)
-
-
-def test_semi_cylindrical_pitch_stick_offsets_joint5_only():
-    """Y/A nudge joint 5 directly instead of steering the wrist through IK."""
-    node = _semi_node()
-    delta = _drive(node, 4, 0.5)
-    assert not node._logger.errors, node._logger.errors
-    assert abs(delta[4]) > 0.05, f"joint5 barely moved: {delta[4]:+.4f}"
-    others = [abs(delta[i]) for i in range(6) if i != 4]
-    assert max(others) < 1e-6, f"other joints moved: {np.round(delta, 5)}"
-
-
-def test_semi_cylindrical_yaw_stick_offsets_joint6_only():
-    """LT/RT nudge joint 6 directly."""
-    node = _semi_node()
-    delta = _drive(node, 5, 0.5)
-    assert not node._logger.errors, node._logger.errors
-    assert abs(delta[5]) > 0.05, f"joint6 barely moved: {delta[5]:+.4f}"
-    others = [abs(delta[i]) for i in range(6) if i != 5]
-    assert max(others) < 1e-6, f"other joints moved: {np.round(delta, 5)}"
-
-
-def test_semi_cylindrical_joint_nudges_are_not_undone_by_ik():
-    """The offset has to stick once the stick is released.
-
-    Without re-seeding the IK anchor, the next cycles would read the nudge as
-    an orientation error and drive it straight back out.
-    """
-    node = _semi_node()
-    _drive(node, 4, 0.5)
-    held = node.command_positions[4]
-    _drive(node, 4, 0.0, steps=50)  # let go and let the loop settle
-    assert abs(node.command_positions[4] - held) < 1e-6, (
-        "IK pulled joint 5 back to where it was"
-    )
-
-
-def test_semi_cylindrical_joint_nudges_respect_joint_limits():
-    node = _semi_node()
-    _drive(node, 4, 5.0, steps=400)
-    _drive(node, 5, 5.0, steps=400)
-    assert node.command_positions[4] <= node.joint_upper[4] + 1e-9
-    assert node.command_positions[5] <= node.joint_upper[5] + 1e-9
-
-
-def _float_node(follow=0.35):
-    node = _controller(remote_enabled=True)
-    node._float_follow_velocity = lambda: follow
-    node._on_operation_mode(String(data="FLOAT"))
-    return node
-
-
-def test_float_requires_remote_ownership():
-    """Handing the arm to a person must not bypass taking control of it."""
-    node = _controller(remote_enabled=False)
-    node._float_follow_velocity = lambda: 0.35
-    node._on_operation_mode(String(data="FLOAT"))
-    assert node.motion_mode != MODE_FLOAT
-
-
-def test_float_is_entered_by_name_and_by_alias():
-    assert _float_node().motion_mode == MODE_FLOAT
-    node = _controller(remote_enabled=True)
-    node._float_follow_velocity = lambda: 0.35
-    node._on_operation_mode(String(data="teach"))
-    assert node.motion_mode == MODE_FLOAT
-
-
-def test_float_command_follows_a_hand_moving_the_arm():
-    """Pushed slowly, the command tracks the arm so the servo stops resisting."""
-    node = _float_node()
-    start = list(node.command_positions)
-    # A hand nudges joint 2 by 2 degrees; feedback reports the new place.
-    moved = list(start)
-    moved[1] += math.radians(2.0)
-    node.joint_positions = dict(zip(node.joint_names, moved))
-    node.last_joint_state = time.monotonic()
-
-    for _ in range(60):
+    node = _controller()
+    reference = node.joint_positions["joint1"]        # arm_controller holds
+    node.arm_reference = list(INITIAL)
+    for _ in range(400):
+        node._on_control_cmd(Float64MultiArray(data=[1.0, 0, 0, 0, 0, 0]))
         node.last_tick = time.monotonic() - 0.02
         node._tick()
+        # The servo catches up: measured = what the motors were commanded.
+        node.joint_positions["joint1"] = reference + node.offset[0]
+    assert reference + node.offset[0] == pytest.approx(node.joint_upper[0])
 
-    assert node.command_positions[1] == pytest.approx(moved[1], abs=1e-4)
+
+def test_the_urdf_joint_range_is_the_only_bound_on_the_offset():
+    """No separate offset ceiling: jogging for a long time must run the joint
+    all the way to its URDF limit rather than stopping short of it."""
+    node = _controller()
+    start = node.joint_positions["joint1"]
+    _jog(node, [1.0, 0, 0, 0, 0, 0], dt=0.1, repeats=200)
+    assert start + node.offset[0] == pytest.approx(node.joint_upper[0])
+
+
+def test_offset_is_bounded_so_the_total_stays_inside_joint_limits():
+    node = _controller()
+    # Park joint1 one hair below its upper limit, then push past it.
+    near_limit = node.joint_upper[0] - 0.01
+    node.joint_positions["joint1"] = near_limit
+    _jog(node, [1.0, 0, 0, 0, 0, 0], dt=0.1, repeats=20)
+    total = near_limit + node.offset[0]
+    assert total <= node.joint_upper[0] + 1e-9
+    assert node.offset[0] == pytest.approx(0.01, abs=1e-6)
+
+
+def test_self_collision_blocks_a_jog_that_enters_the_boundary():
+    node = _controller()
+
+    class _EntersOnMove(_IdentityIK):
+        def self_collides(self, q, _radius):
+            # Clear where the arm is; colliding anywhere it would move to.
+            return not np.allclose(np.asarray(q, dtype=float), INITIAL)
+
+    node.ik = _EntersOnMove()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    assert node.offset == pytest.approx(np.zeros(6))
+    assert any("self-collision" in msg for msg in node._logger.warnings)
+
+
+def test_an_arm_already_inside_the_boundary_can_still_be_jogged_out():
+    """The collision model flags poses the real arm rests in safely, so
+    refusing from inside one would trap the operator with no way back out."""
+    node = _controller()
+    node.ik.collides = True          # every pose, including where it sits
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    assert node.offset[0] == pytest.approx(0.05, abs=1e-6)
+
+
+# ------------------------------------------------------------- staleness
+
+def test_stale_jog_stream_freezes_the_offset_without_dropping_it():
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    held = node.offset.copy()
+    node.last_control_cmd = time.monotonic() - 5.0
+    node.last_tick = time.monotonic() - 0.1
+    node._tick()
+    # Held, not released: dropping it would move the arm by exactly the
+    # amount the operator dialled in, with nobody asking for it.
+    assert node.offset == pytest.approx(held)
+    assert node.offset_pub.messages[-1].data == pytest.approx(held.tolist())
+
+
+def test_stale_joint_feedback_holds_the_offset():
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    held = node.offset.copy()
+    node.last_joint_state = time.monotonic() - 10.0
+    node._on_control_cmd(Float64MultiArray(data=[0.5, 0, 0, 0, 0, 0]))
+    node.last_tick = time.monotonic() - 0.1
+    node._tick()
+    assert node.offset == pytest.approx(held)
+    assert any("stale" in msg for msg in node._logger.warnings)
+
+
+# --------------------------------------------------------------- rebasing
+
+def test_a_new_autonomous_goal_rebases_the_offset_to_zero():
+    """MoveIt replans from the measured pose, which already contains the
+    offset; keeping it would apply the operator's correction twice."""
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    assert node.offset[0] != pytest.approx(0.0)
+    node._on_arm_goal_status(_goal_status(7))
+    assert node.offset == pytest.approx(np.zeros(6))
+
+
+def test_the_same_goal_reported_twice_rebases_only_once():
+    node = _controller()
+    node._on_arm_goal_status(_goal_status(7))
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    moved = node.offset.copy()
+    node._on_arm_goal_status(_goal_status(7))
+    assert node.offset == pytest.approx(moved)
+
+
+def test_a_finished_goal_does_not_rebase():
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    moved = node.offset.copy()
+    node._on_arm_goal_status(_goal_status(9, GoalStatus.STATUS_SUCCEEDED))
+    assert node.offset == pytest.approx(moved)
+
+
+# ------------------------------------------------------------------- FLOAT
+
+def _arm_state(positions):
+    message = JointTrajectoryControllerState()
+    message.joint_names = [f"joint{i}" for i in range(1, 7)]
+    point = JointTrajectoryPoint()
+    point.positions = list(positions)
+    message.reference = point
+    return message
+
+
+def test_float_offset_cancels_the_autonomous_reference():
+    """Total command = reference + offset, so tracking the measured arm means
+    the offset has to be exactly the servo's standing error."""
+    node = _controller(mode=MODE_FLOAT)
+    node._on_arm_state(_arm_state(INITIAL))
+    hand_moved = list(INITIAL)
+    hand_moved[0] += 0.10
+    node.joint_positions["joint1"] = hand_moved[0]
+    for _ in range(40):
+        node.last_tick = time.monotonic() - 0.02
+        node._tick()
+    assert node.offset[0] == pytest.approx(0.10, abs=1e-3)
 
 
 def test_float_does_not_chase_a_falling_joint():
-    """A fall outruns the follow rate, so the command lags and the servo holds.
-
-    Chasing it would mean the goal descends with the arm and nothing ever
-    catches it.
-    """
-    node = _float_node()
-    start = list(node.command_positions)
-    dropped = list(start)
-    dropped[1] += 1.2  # far more than a hand moves in one tick
-    node.joint_positions = dict(zip(node.joint_names, dropped))
-    node.last_joint_state = time.monotonic()
-
-    elapsed = 0.02
-    node.last_tick = time.monotonic() - elapsed
+    node = _controller(mode=MODE_FLOAT)
+    node._on_arm_state(_arm_state(INITIAL))
+    node.joint_positions["joint2"] = INITIAL[1] - 1.0   # a drop, not a push
+    node.last_tick = time.monotonic() - 0.02
     node._tick()
+    # A hand moves the arm slowly and a fall does not, so one tick may only
+    # close float_follow_velocity * dt of that metre-scale gap -- the servo
+    # catches the arm instead of following it to the bench. Generous on the
+    # upper bound because the real dt is whatever the clock says it was.
+    assert abs(node.offset[1]) <= 0.35 * 0.05
+    assert abs(node.offset[1]) < 0.1
 
-    moved = abs(node.command_positions[1] - start[1])
-    # dt is measured inside the tick, so allow for it being a shade over the
-    # sleep; the point is that 1.2 rad of fall produced millimetres of chase.
-    assert moved <= 0.35 * elapsed * 1.5, (
-        f"command chased {moved:.4f} rad in one tick"
+
+# ------------------------------------------------------------ coordinates
+
+def test_cartesian_jog_goes_through_ik_into_the_offset():
+    node = _controller(mode=MODE_CARTESIAN)
+    _jog(node, [0.05, 0, 0, 0, 0, 0], dt=0.1)
+    # _IdentityIK maps a linear x twist straight onto joint1.
+    assert node.offset[0] == pytest.approx(0.005, abs=1e-6)
+
+
+def test_cartesian_jog_is_inert_without_ik():
+    node = _controller(mode=MODE_CARTESIAN, ik=False)
+    _jog(node, [0.05, 0, 0, 0, 0, 0], dt=0.1)
+    assert node.offset == pytest.approx(np.zeros(6))
+
+
+def test_cylindrical_theta_sweeps_around_the_column():
+    node = _controller(mode=MODE_CYLINDRICAL)
+    _jog(node, [0.0, 0.2, 0, 0, 0, 0], dt=0.1)
+    # Tangential motion is perpendicular to the radius, so it cannot be zero
+    # on an arm parked off the column.
+    assert float(np.linalg.norm(node.offset)) > 0.0
+
+
+def test_semi_cylindrical_pitch_and_yaw_nudge_the_wrist_joints():
+    node = _controller(mode=MODE_SEMI_CYLINDRICAL)
+    _jog(node, [0, 0, 0, 0, 0.5, 0.25], dt=0.1)
+    assert node.offset[4] == pytest.approx(0.05, abs=1e-6)
+    assert node.offset[5] == pytest.approx(0.025, abs=1e-6)
+
+
+# ------------------------------------------------------------ absolute poses
+
+def test_ready_sends_a_trajectory_goal_and_clears_the_offset():
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    assert node.offset[0] != pytest.approx(0.0)
+    node._on_operation_mode(String(data=MODE_READY))
+    assert len(node.arm_client.goals) == 1
+    goal = node.arm_client.goals[0]
+    assert list(goal.trajectory.joint_names) == node.joint_names
+    # Transition pose first, then READY itself.
+    assert len(goal.trajectory.points) == 2
+    assert list(goal.trajectory.points[-1].positions) == pytest.approx(
+        node.ready_pose
     )
-    assert moved > 0.0
-    assert moved < 0.05, "the command tracked most of the fall"
+    assert node.offset == pytest.approx(np.zeros(6))
 
 
-def test_float_follow_rate_takes_effect_without_a_restart():
-    """The rate must be tunable live, or the advice to tune it is useless.
+def test_rest_and_startup_target_the_captured_startup_pose():
+    for mode in (MODE_REST, MODE_STARTUP):
+        node = _controller()
+        node._on_operation_mode(String(data=mode))
+        goal = node.arm_client.goals[-1]
+        assert list(goal.trajectory.points[-1].positions) == pytest.approx(
+            node.startup_pose
+        )
 
-    It was cached at startup, so `ros2 param set` changed the parameter and
-    nothing else -- the arm kept the value it booted with.
-    """
-    steps = {}
-    for label, follow in (("slow", 0.2), ("fast", 1.2)):
-        node = _float_node(follow=follow)
-        start = list(node.command_positions)
-        moved = list(start)
-        moved[1] += 1.0
-        node.joint_positions = dict(zip(node.joint_names, moved))
-        node.last_joint_state = time.monotonic()
-        node.last_tick = time.monotonic() - 0.02
-        node._tick()
-        steps[label] = abs(node.command_positions[1] - start[1])
-    assert steps["fast"] > steps["slow"] * 3, steps
+
+def test_rest_is_refused_until_a_startup_pose_exists():
+    node = _controller()
+    node.startup_pose = None
+    node._on_operation_mode(String(data=MODE_REST))
+    assert not node.arm_client.goals
+    assert any("startup pose" in msg for msg in node._logger.warnings)
+
+
+def test_a_pose_is_refused_when_the_arm_action_is_down():
+    node = _controller()
+    node.arm_client.ready = False
+    node._on_operation_mode(String(data=MODE_READY))
+    assert not node.arm_client.goals
+    assert any("unavailable" in msg for msg in node._logger.warnings)
+
+
+def test_autonomous_request_only_clears_the_offset():
+    """Nothing to hand back any more -- both channels are always live."""
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    node._on_operation_mode(String(data=MODE_AUTONOMOUS))
+    assert node.offset == pytest.approx(np.zeros(6))
+    assert not node.arm_client.goals
+
+
+def test_mode_selection_switches_the_jog_frame():
+    node = _controller()
+    node._on_operation_mode(String(data=MODE_CARTESIAN))
+    assert node.motion_mode == MODE_CARTESIAN
+    assert node.last_coordinate_mode == MODE_CARTESIAN
+
+
+def test_coordinate_mode_is_refused_without_ik():
+    node = _controller(ik=False)
+    node._on_operation_mode(String(data=MODE_CARTESIAN))
+    assert node.motion_mode == MODE_JOINT
+    assert any("IK is unavailable" in msg for msg in node._logger.warnings)
+
+
+# ----------------------------------------------------------------- targets
+
+def _target(node, **payload):
+    node._on_target_command(String(data=json.dumps(payload)))
+    return json.loads(node.target_status_pub.messages[-1].data)
+
+
+def test_absolute_joint_target_sends_one_trajectory_goal():
+    node = _controller()
+    goal_positions = [0.2, -0.3, 0.2, 0.1, 0.4, 0.0]
+    status = _target(
+        node, action="move", mode=MODE_JOINT, values=goal_positions,
+        reach_duration=5.0, request_id="abc",
+    )
+    assert status["state"] == "running"
+    assert len(node.arm_client.goals) == 1
+    points = node.arm_client.goals[0].trajectory.points
+    assert len(points) == 1                      # straight there, no detour
+    assert list(points[0].positions) == pytest.approx(goal_positions)
+
+
+def test_target_clears_the_operator_offset():
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    _target(
+        node, action="move", mode=MODE_JOINT,
+        values=[0.2, -0.3, 0.2, 0.1, 0.4, 0.0], reach_duration=5.0,
+    )
+    assert node.offset == pytest.approx(np.zeros(6))
+
+
+def test_target_outside_joint_limits_is_rejected():
+    node = _controller()
+    status = _target(
+        node, action="move", mode=MODE_JOINT,
+        values=[99.0, 0, 0, 0, 0, 0], reach_duration=5.0,
+    )
+    assert status["state"] == "rejected"
+    assert not node.arm_client.goals
+
+
+def test_target_too_fast_for_the_joint_ceiling_is_rejected():
+    node = _controller()
+    status = _target(
+        node, action="move", mode=MODE_JOINT,
+        values=[1.4, -0.4, 0.3, 0.2, 0.5, -0.1], reach_duration=0.5,
+    )
+    assert status["state"] == "rejected"
+    assert "velocity" in status["message"]
+
+
+def test_target_stop_clears_the_offset():
+    node = _controller()
+    _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    status = _target(node, action="stop")
+    assert status["state"] == "stopped"
+    assert node.offset == pytest.approx(np.zeros(6))
+
+
+def test_malformed_target_is_rejected_not_crashed():
+    node = _controller()
+    node._on_target_command(String(data="{not json"))
+    status = _target(node, action="move", mode="NONSENSE", values=[])
+    assert status["state"] == "rejected"

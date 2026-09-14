@@ -52,7 +52,15 @@ struct YoloDetection
   }
 };
 
-class YoloXDetector
+class YoloDetector
+{
+public:
+  virtual ~YoloDetector() = default;
+  virtual std::vector<YoloDetection> detect(const cv::Mat & bgr) = 0;
+  virtual const char * backendName() const = 0;
+};
+
+class YoloXDetector : public YoloDetector
 {
 public:
   static constexpr int kInputSize = 640;
@@ -65,7 +73,7 @@ public:
     buildAnchors();
   }
 
-  std::vector<YoloDetection> detect(const cv::Mat & bgr)
+  std::vector<YoloDetection> detect(const cv::Mat & bgr) override
   {
     float scale = 1.0F;
     cv::Mat blob = letterboxToBlob(bgr, scale);
@@ -147,6 +155,11 @@ public:
       results.push_back(detection);
     }
     return results;
+  }
+
+  const char * backendName() const override
+  {
+    return "opencv";
   }
 
 private:

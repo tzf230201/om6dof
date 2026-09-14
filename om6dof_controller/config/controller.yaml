@@ -4,41 +4,48 @@ om6dof_controller:
     control_cmd_topic: /om6dof/control_cmd
     operation_mode_state_topic: /om6dof/operation_mode/state
     remote_enabled_state_topic: /om6dof/remote_enabled/state
-    forward_command_topic: /forward_position_controller/commands
     joint_state_topic: /joint_states
+
+    # The operator's own command channel. It carries a joint-space OFFSET that
+    # the hardware adds to whatever arm_controller is commanding on
+    # joint*/position -- never an absolute pose. That is why teleop and
+    # autonomous motion can both be live without ever contending.
+    offset_command_topic: /forward_offset_controller/commands
+    # Absolute moves (READY/STARTUP/REST and web targets) belong on the
+    # autonomous channel, so they are sent here as trajectory goals.
+    arm_action: /arm_controller/follow_joint_trajectory
+    arm_state_topic: /arm_controller/controller_state
 
     publish_rate_hz: 50.0
     joint_state_timeout_seconds: 1.0
     control_cmd_timeout_seconds: 0.3
     max_joint_command_velocity: 1.4
+    # No ceiling on the operator channel: the bound is the URDF joint range,
+    # applied to (measured + offset) every tick. One limit, one source of
+    # truth -- an extra cap on the offset only ever made the arm feel stuck
+    # short of where it can physically go.
 
-    ready_pose: [0.0, -0.6806, 1.3613, 0.0, 0.8901, 0.0]
-    pose_target_velocity: 0.5
-    pose_target_tolerance: 0.01
-    pose_target_timeout_seconds: 24.0
-    # READY and STARTUP/rest use two phases: current -> zero -> target.
-    # Each phase takes 4 seconds, with a 2-second acceleration and deceleration.
+    # OM6DOF v2 poses (degrees). READY is the arm's working pose; the
+    # transition pose is the guarded waypoint used before READY/STARTUP/rest.
+    ready_pose_degrees: [0.0, -60.0, 15.0, 0.0, 60.0, 0.0]
+    transition_pose_degrees: [0.0, 0.0, -90.0, 0.0, 0.0, 0.0]
+    # Seconds per waypoint leg. arm_controller does the time profiling now,
+    # so this is simply how long each leg of the trajectory is given.
     pose_profile_duration_seconds: 4.0
-    pose_profile_accel_seconds: 2.0
-    # Absolute Target-mode moves: 5 s total, triangular profile with 2.5 s
-    # acceleration then 2.5 s deceleration.
     target_reach_duration_seconds: 5.0
 
     ik_enabled: true
     ik_base_link: world
     ik_tip_link: end_effector_link
     ik_urdf_pkg: om6dof_description
+    ik_xacro_rel: urdf/om6dof_v2.urdf.xacro
     ik_damping: 0.05
     max_cartesian_linear_velocity: 0.17
     max_cartesian_angular_velocity: 1.95
     max_cylindrical_theta_velocity: 1.10
     cylindrical_origin_xy: [0.012, 0.0]
     cylindrical_min_radius: 0.03
-    ik_position_gain: 4.0
-    ik_rotation_gain: 3.0
     ik_tool_frame_rotation: true
-    ik_max_target_lead: 0.04
-    ik_max_joint_following_error: 0.30
     ik_manipulability_warning_threshold: 1.0e-6
     ik_self_collision: true
     ik_collision_radius: 0.025

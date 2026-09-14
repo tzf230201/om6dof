@@ -19,7 +19,15 @@ LimitMEMLOCK=infinity
 # path to the canonical ROS command topics.
 # JOINT/CARTESIAN/CYLINDRICAL all resolve in om6dof_controller; no second
 # process ever opens U2D2 or publishes final arm positions.
-ExecStart=/bin/bash -c 'set -e; source /opt/ros/humble/setup.bash; source /home/kublab/ros2_ws/install/setup.bash; unset CYCLONEDDS_URI; exec ros2 launch om6dof_teleop full_stack.launch.py start_go2w_teleop:=true input_source:=go2w'
+# teleop_node imports unitree_go.msg unconditionally (LowState,
+# WirelessController), so this workspace's setup.bash is not enough --
+# unitree_go only lives in the separate ~/unitree_ros2/cyclonedds_ws.
+# Sourcing its install/setup.bash puts the message python bindings on
+# PYTHONPATH without touching RMW_IMPLEMENTATION or CYCLONEDDS_URI (that
+# workspace's own setup.sh sets both to CycloneDDS; its colcon-generated
+# install/setup.bash does neither), so this unit stays on FastRTPS with
+# CYCLONEDDS_URI unset, exactly as before.
+ExecStart=/bin/bash -c 'set -e; source /opt/ros/humble/setup.bash; source /home/kublab/ros2_ws/install/setup.bash; source /home/kublab/unitree_ros2/cyclonedds_ws/install/setup.bash; unset CYCLONEDDS_URI; exec ros2 launch om6dof_teleop full_stack.launch.py start_go2w_teleop:=true input_source:=gamepad'
 KillMode=control-group
 KillSignal=SIGINT
 TimeoutStopSec=20

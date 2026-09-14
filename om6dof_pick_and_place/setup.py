@@ -30,8 +30,11 @@ setup(
             'qr_follower_node = om6dof_pick_and_place.qr_follower_node:main',
             'coordinate_debug_node = om6dof_pick_and_place.coordinate_debug_node:main',
             'tag_calibrate = om6dof_pick_and_place.tag_calibrate:main',
+            'ddgng_hand_eye_calibrate = om6dof_pick_and_place.hand_eye_calibrate:main',
+            'center_depth_urdf_check = om6dof_pick_and_place.center_depth_urdf_check:main',
             'calib_gui = om6dof_pick_and_place.calib_gui:main',
             'direct_pick_node = om6dof_pick_and_place.direct_pick_node:main',
+            'graph_pick_node = om6dof_pick_and_place.graph_pick_node:main',
         ],
     },
 )

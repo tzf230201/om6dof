@@ -61,6 +61,21 @@ namespace dynamixel_hardware_interface
 constexpr char HW_IF_HARDWARE_STATE[] = "hardware_state";
 constexpr char HW_IF_TORQUE_ENABLE[] = "torque_enable";
 
+// LOCAL DIVERGENCE FROM UPSTREAM ROBOTIS ---------------------------------
+// A second, additive position command channel. Autonomous motion (MoveIt via
+// the stock JointTrajectoryController) owns `position`; the human operator
+// owns `position_offset`. write() sends `position + position_offset` to the
+// motor, so both controllers can stay active at once instead of taking turns
+// over one shared `position` interface. Purely additive: leaving it at zero
+// reproduces upstream behaviour exactly.
+constexpr char HW_IF_POSITION_OFFSET[] = "position_offset";
+// Hard ceiling on that channel, at the lowest level, independent of whatever
+// limits the command converter above applies. Radians. This is a guard against
+// a garbage value from a publisher that bypassed the command converter, not a
+// motion limit -- joint limits are enforced a layer up, so keep it wide enough
+// that legitimate operator motion never reaches it.
+constexpr double kDefaultMaxPositionOffset = 3.20;
+
 /**
  * @brief Struct for handling variable types associated with Dynamixel components.
  */
@@ -198,6 +213,7 @@ private:
   std::map<std::pair<uint8_t /*comm_id*/, uint8_t /*id*/>, bool /*enable*/> dxl_torque_state_;
   std::vector<std::pair<uint8_t, uint8_t>> torque_enabled_comm_id_id_;
   double err_timeout_ms_;
+  double max_position_offset_{kDefaultMaxPositionOffset};
   double read_packet_timeout_ms_{kDefaultReadPacketTimeoutMs};
   int consecutive_failure_shutdown_threshold_{10};
   int consecutive_read_failures_{0};
@@ -364,6 +380,26 @@ private:
    * @brief Calculates the transmission commands from joint commands.
    */
   void CalcJointToTransmission();
+
+  /**
+   * @brief Folds `position_offset` into `position` before transmission mapping.
+   *
+   * Returns the untouched `position` values so the caller can restore them
+   * straight after mapping: the summed value is an internal detail of one
+   * write(), never something a controller should read back.
+   */
+  std::vector<std::pair<std::shared_ptr<double>, double>> ApplyPositionOffsets();
+
+  /**
+   * @brief Restores the `position` values saved by ApplyPositionOffsets().
+   */
+  void RestorePositionOffsets(
+    const std::vector<std::pair<std::shared_ptr<double>, double>> & saved);
+
+  /**
+   * @brief Zeroes every `position_offset` command interface.
+   */
+  void ZeroPositionOffsets();
 
   /**
    * @brief Synchronizes joint commands with the joint states.

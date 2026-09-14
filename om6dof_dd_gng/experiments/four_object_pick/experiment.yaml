@@ -1,0 +1,92 @@
+experiment:
+  id: om6dof_four_object_semantic_topology_v1
+  mode: preview_only
+  protocol_version: 2
+  trial_manifest: trial_manifest.csv
+  scene_resets: 12
+  target_opportunities_per_reset: 4
+  fresh_topology_process_per_reset: true
+  fixed_warmup_sec: 10
+  minimum_object_spacing_m: 0.12
+  yolo_period_sec: 0.5
+  yolo_rate_hz: 2.0
+  target_classes: "bottle,cup,banana,remote"
+  fixed_world_frame: world
+  physical_execution_enabled: false
+
+semantic_readiness:
+  mode_for_experiment: experiment
+  required_classes: [bottle, cup, banana, remote]
+  min_unique_nodes_per_class: 3
+  simultaneous_stable_duration_sec: 1.0
+  max_labels_message_gap_sec: 0.5
+  timeout_sec: 15.0
+
+objects:
+  - id: O1
+    name: bottle
+    coco_class: bottle
+    specimen: opaque_matte_plastic_250_500_ml
+    target_grasp_width_mm: [45, 55]
+    maximum_mass_g: 150
+    grasp: side_mid_body
+  - id: O2
+    name: cup
+    coco_class: cup
+    specimen: handleless_matte_paper_cup
+    target_grasp_width_mm: [50, 60]
+    maximum_mass_g: 80
+    grasp: side_below_rim
+  - id: O3
+    name: banana
+    coco_class: banana
+    specimen: firm_single_banana
+    target_grasp_width_mm: [30, 40]
+    maximum_mass_g: 180
+    grasp: top_or_oblique_mid_body
+  - id: O4
+    name: remote
+    coco_class: remote
+    specimen: high_contrast_remote_on_25_mm_pedestal
+    target_grasp_width_mm: [18, 25]
+    maximum_mass_g: 150
+    grasp: top_pinch
+
+positions:
+  reference: table_center_world
+  calibration_required: true
+  suggested_offsets_m:
+    P1: [-0.08,  0.08, 0.0]
+    P2: [ 0.08,  0.08, 0.0]
+    P3: [ 0.08, -0.08, 0.0]
+    P4: [-0.08, -0.08, 0.0]
+
+recording:
+  sample_period_sec: 0.5
+  outside_video_fps: 30
+  desktop_video_fps: 15
+  ros_topics:
+    - /tf
+    - /tf_static
+    - /joint_states
+    - /diagnostics
+    - /om6dof_topo_gng_v2/status
+    - /om6dof_topo_gng_v2/perception_metrics
+    - /om6dof_topo_gng_v2/labels
+    - /om6dof_topo_gng_v2/environment_graph
+    - /om6dof_topo_gng_v2/environment_graph_data
+    - /om6dof_topo_gng_v2/robot_graph
+    - /om6dof_topo_gng_v2/reachability_graph
+    - /om6dof_topo_gng_v2/reachability_graph_data
+    - /om6dof_topo_gng_v2/reachability_plan
+    - /om6dof_topo_gng_v2/reachability_path
+    - /om6dof_topo_gng_v2/debug_image/compressed
+
+readiness_gates:
+  - calibrated_world_camera_transform
+  - verified_gripper_opening_and_object_mass
+  - all_four_classes_stable_in_single_object_calibration
+  - instance_level_target_selector
+  - orientation_aware_grasp_and_pregrasp
+  - reviewed_arm_and_gripper_executor
+  - collision_recheck_abort_and_estop

@@ -1,0 +1,44 @@
+Running main() from /opt/ros/humble/src/gtest_vendor/src/gtest_main.cc
+[==========] Running 13 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from ReachabilityGeometry
+[ RUN      ] ReachabilityGeometry.PointAndSegmentDistancesAreFinite
+[       OK ] ReachabilityGeometry.PointAndSegmentDistancesAreFinite (0 ms)
+[ RUN      ] ReachabilityGeometry.CapsuleChecksPointsAndObstacleEdges
+[       OK ] ReachabilityGeometry.CapsuleChecksPointsAndObstacleEdges (0 ms)
+[----------] 2 tests from ReachabilityGeometry (0 ms total)
+
+[----------] 5 tests from ReachabilityGng
+[ RUN      ] ReachabilityGng.IsDeterministicFiniteAndHonorsNodeBudget
+[       OK ] ReachabilityGng.IsDeterministicFiniteAndHonorsNodeBudget (0 ms)
+[ RUN      ] ReachabilityGng.RejectsInconsistentTrainingSamples
+[       OK ] ReachabilityGng.RejectsInconsistentTrainingSamples (0 ms)
+[ RUN      ] ReachabilityGng.GuardIndicesAreDeterministicStratifiedAndUnique
+[       OK ] ReachabilityGng.GuardIndicesAreDeterministicStratifiedAndUnique (0 ms)
+[ RUN      ] ReachabilityGng.GuardIndicesClampToAvailableSamples
+[       OK ] ReachabilityGng.GuardIndicesClampToAvailableSamples (0 ms)
+[ RUN      ] ReachabilityGng.NodeBudgetExcludesFixedAnchors
+[       OK ] ReachabilityGng.NodeBudgetExcludesFixedAnchors (0 ms)
+[----------] 5 tests from ReachabilityGng (0 ms total)
+
+[----------] 1 test from ReachabilitySampling
+[ RUN      ] ReachabilitySampling.DigitScrambledHaltonIsDeterministicAndBijective
+[       OK ] ReachabilitySampling.DigitScrambledHaltonIsDeterministicAndBijective (0 ms)
+[----------] 1 test from ReachabilitySampling (0 ms total)
+
+[----------] 5 tests from ReachabilityGraph
+[ RUN      ] ReachabilityGraph.JointRankingUsesNormalizedJointSpace
+[       OK ] ReachabilityGraph.JointRankingUsesNormalizedJointSpace (0 ms)
+[ RUN      ] ReachabilityGraph.ObstacleBlocksNodeAndCrossingEdge
+[       OK ] ReachabilityGraph.ObstacleBlocksNodeAndCrossingEdge (0 ms)
+[ RUN      ] ReachabilityGraph.DijkstraChoosesClosestReachableIntersection
+[       OK ] ReachabilityGraph.DijkstraChoosesClosestReachableIntersection (0 ms)
+[ RUN      ] ReachabilityGraph.BlockedRouteAndOutOfRangeTargetFailCleanly
+[       OK ] ReachabilityGraph.BlockedRouteAndOutOfRangeTargetFailCleanly (0 ms)
+[ RUN      ] ReachabilityGraph.IntersectionRadiusIncludesBoundary
+[       OK ] ReachabilityGraph.IntersectionRadiusIncludesBoundary (0 ms)
+[----------] 5 tests from ReachabilityGraph (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 13 tests from 4 test suites ran. (0 ms total)
+[  PASSED  ] 13 tests.

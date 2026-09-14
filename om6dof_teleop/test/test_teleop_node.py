@@ -183,15 +183,19 @@ def test_cartesian_and_cylindrical_modes_have_distinct_second_coordinate():
     assert cylindrical == pytest.approx([0.05, 0.25, 0.05, 0.5, 0.5, 0.5])
 
 
-def test_f3_requests_joint_then_waits_for_confirmed_remote_state(monkeypatch):
+def test_f3_is_always_a_release_request_even_while_autonomous(monkeypatch):
+    """No ownership handshake any more: F3 only ever releases to autonomous.
+
+    Acquiring remote control happens automatically on real manual input
+    (handled by om6dof_controller), not through this button.
+    """
     monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
     node = _adapter(remote_enabled=False)
 
     _sample(node, BTN_F3)
 
-    assert [msg.data for msg in node.operation_pub.messages] == [MODE_JOINT]
+    assert [msg.data for msg in node.operation_pub.messages] == [MODE_AUTONOMOUS]
     assert node.remote_enabled is False
-    assert node.mode_request_pending_until == pytest.approx(102.0)
 
     node._on_remote_state(Bool(data=True))
     assert node.remote_enabled is True
@@ -207,7 +211,7 @@ def test_duplicate_f3_from_both_unitree_sources_is_one_request(monkeypatch):
     _sample(node, BTN_F3, "lowstate")
     _sample(node, BTN_F3, "event")
 
-    assert [msg.data for msg in node.operation_pub.messages] == [MODE_JOINT]
+    assert [msg.data for msg in node.operation_pub.messages] == [MODE_AUTONOMOUS]
 
 
 def test_f3_has_priority_over_mode_buttons_pressed_in_same_sample(monkeypatch):
@@ -258,13 +262,18 @@ def test_f1_alternates_from_ready_to_startup_and_back_after_confirmation(
     assert node.control_mode == MODE_JOINT
 
 
-def test_confirmed_autonomous_state_disables_remote_output():
+def test_confirmed_autonomous_state_clears_the_pending_request():
+    """AUTONOMOUS no longer takes anything away from the operator.
+
+    The offset channel this node feeds is always live; the controller reads
+    AUTONOMOUS as "zero my offset", so the only state to settle here is the
+    debounce on the button that asked for it.
+    """
     node = _adapter(remote_enabled=True)
     node.mode_request_pending_until = 123.0
 
     node._on_operation_state(String(data=MODE_AUTONOMOUS.lower()))
 
-    assert node.remote_enabled is False
     assert node.mode_request_pending_until == 0.0
 
 
@@ -339,13 +348,39 @@ def test_gamepad_back_requests_rest_without_releasing_ownership_early():
     assert node.remote_waiting_for_neutral is True
 
 
+def test_gamepad_start_sends_the_arm_to_ready():
+    """Start used to acquire ownership, and the controller moved the arm to
+    READY as part of that handshake. With ownership gone it must still do the
+    half operators actually press it for, or the button goes silently dead."""
+    class _Stick:
+        def __init__(self):
+            self.buttons = set()
+
+        def snapshot(self):
+            return True, [0.0] * 8, self.buttons
+
+    node = _adapter(remote_enabled=True)
+    node.input_source = "gamepad"
+    node.gamepad = _Stick()
+
+    node._stick_velocity_locked()  # Prime baseline input state.
+    node.gamepad.buttons = {7}  # F710 Start in XInput mode.
+    _, operation, _ = node._stick_velocity_locked()
+
+    assert operation == MODE_READY
+    assert node.control_mode == MODE_JOINT
+    assert node.remote_waiting_for_neutral is True
+
+
 def test_keyboard_uses_canonical_mode_and_velocity_commands(monkeypatch):
     monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
     node = _adapter(remote_enabled=False)
     node.input_source = "keyboard"
 
+    # 'g' is now a release-to-autonomous panic key, not an acquire toggle;
+    # ownership auto-acquires on the jog key below instead.
     node._handle_keyboard_key("g")
-    assert node.operation_pub.messages[-1].data == MODE_JOINT
+    assert node.operation_pub.messages[-1].data == MODE_AUTONOMOUS
 
     node._on_remote_state(Bool(data=True))
     node._handle_keyboard_key("1")

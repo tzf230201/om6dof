@@ -37,6 +37,15 @@ The two canonical arm-command topics are:
 The command stream expires after 0.3 seconds. On timeout the target is reseeded
 from measured joint feedback, so an old velocity never continues moving.
 
+For OM6DOF v2, `READY` is the all-zero joint pose. The YAML parameters
+`ready_pose_degrees` and `transition_pose_degrees` are expressed in degrees;
+the controller converts them to radians internally. Guarded READY/STARTUP/rest
+moves first pass through the transition pose, whose default is all zero except
+joint 3 at -90 degrees, before continuing to the requested target.
+The controller's FK, IK, and joint-limit loading use
+`urdf/om6dof_v2.urdf.xacro`; therefore target feedback and commands share the
+same v2 mounting geometry.
+
 Joint limits for teleop are read at controller startup from the rendered
 `om6dof_description` URDF, then reduced by `joint_limit_margin` (default
 0.02 rad). There is no duplicate controller YAML limit table.

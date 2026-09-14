@@ -1,0 +1,25 @@
+{
+  "description": "Native DD-GNG and DBL-GNG algorithm cores copied unchanged from the local TopoVLA checkout. The ROS-independent comparison adapter supplies metric world-coordinate XYZ points before either original core learns.",
+  "snapshot_date": "2026-09-11",
+  "ddgng_source_resolution": "TopoVLA/native_ddgng/src/main.cpp includes ddgng.hpp from ../native_depth_yolo/src, configured by native_ddgng/CMakeLists.txt.",
+  "files": {
+    "ddgng_core.hpp": {
+      "source": "TopoVLA/native_depth_yolo/src/ddgng.hpp",
+      "sha256": "d8aa355e02f28c89b1d7235a4d2256fa4a3bc833d75717f4e75307237c81f9d9",
+      "copied_byte_for_byte": true
+    },
+    "dblgng_core.hpp": {
+      "source": "TopoVLA/native_dblgng/include/dblgng_core.hpp",
+      "sha256": "7879274d72f6c86abeb180aa569a1fb1f86c227df5ebedc157d758a96bdd3bfc",
+      "copied_byte_for_byte": true
+    }
+  },
+  "adapter_notes": [
+    "comparison_mapper.hpp performs depth backprojection, proper rigid world transformation, bounded input sampling, optional voxel memory/replay, and optional exported surface-support filtering outside the original cores.",
+    "DD-GNG preserves its original fixed random seed 7 and 500 stochastic updates per epoch by default.",
+    "DBL-GNG preserves its initialization, pruning and distributed growth rules. The ROS streaming adapter accumulates edge strength and invokes edge cutting periodically after the graph has first reached node capacity; the default period is 10 valid depth frames.",
+    "DBL-GNG exports array indices for graph IDs because the copied core does not expose persistent node identity. These indices must not be tracked as persistent landmarks.",
+    "Memory mode world adds the same observation memory used by F-GNG. Memory mode current supplies only the current bounded world-coordinate point cloud while retaining the original learned graph across frames. Neither mode applies foveation to the baseline algorithms.",
+    "Baseline graph() optionally filters exported edges by observed surface support; rawGraph() always exposes original baseline connectivity. With zero support radius, graph() equals rawGraph()."
+  ]
+}

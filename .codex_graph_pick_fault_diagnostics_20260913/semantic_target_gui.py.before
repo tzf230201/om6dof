@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+"""Desktop semantic-target selector with fail-closed planning status."""
+
+import json
+import threading
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from std_srvs.srv import Trigger
+
+
+COCO_CLASSES = [
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
+    "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog",
+    "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella",
+    "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite",
+    "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
+    "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich",
+    "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+    "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote",
+    "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book",
+    "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush",
+]
+
+
+def friendly_blocker(value):
+    exact = {
+        "execution_disabled_at_launch": "Eksekusi tidak diaktifkan saat launch",
+        "frozen_plan_stale": "Preview kedaluwarsa; buat Preview baru",
+        "motion_faulted": "Coordinator motion sedang fault",
+        "dynamixel_failure_counter_advanced_since_preview":
+            "Ada kegagalan komunikasi Dynamixel setelah Preview",
+        "dynamixel_health_missing_or_stale": "Status Dynamixel hilang atau stale",
+    }
+    if value in exact:
+        return exact[value]
+    if value.startswith("camera_calibration_not_verified:"):
+        reasons = {
+            "artifact_not_configured": "file kalibrasi hand-eye belum dipasang",
+            "camera_serial_mismatch": "serial file kalibrasi tidak cocok dengan kamera",
+            "camera_model_mismatch": "model file kalibrasi tidak cocok dengan kamera",
+            "validation_quality_failed": "residual kalibrasi melewati batas",
+            "parent_frame_mismatch": "parent frame kalibrasi tidak cocok",
+            "transform_invalid": "transform kalibrasi tidak valid",
+            "quaternion_not_normalized": "rotasi kalibrasi tidak valid",
+        }
+        reason = value.split(":", 1)[1]
+        return "Kalibrasi kamera belum diverifikasi: " + reasons.get(reason, reason)
+    if value.startswith("operation_mode_not_autonomous:"):
+        return f"Mode robot masih {value.split(':', 1)[1]}"
+    if value.startswith("remote_control_not_disabled:"):
+        return "Remote control masih aktif"
+    if value.startswith("dynamixel_bus_not_healthy:"):
+        reason = value.split(":", 1)[1]
+        if reason == "torque is not enabled on every actuator":
+            return "Torque actuator belum semuanya ON"
+        return f"Bus Dynamixel tidak sehat: {reason}"
+    return value.replace("_", " ")
+
+
+def summarize_graph_status(payload):
+    """Return headline, details and whether Execute may be enabled."""
+    if not isinstance(payload, dict) or not payload:
+        return "Menunggu status planning", "", False
+    message = str(payload.get("message", ""))
+    if not payload.get("plan_ready", False):
+        return message or str(payload.get("state", "Menunggu Preview")), "", False
+    target = str(payload.get("target_class", "object"))
+    track_id = payload.get("target_track_id", "?")
+    points = payload.get("trajectory_points", 0)
+    age = float(payload.get("plan_age_sec", 0.0))
+    headline = f"Preview: {target} track #{track_id} | {points} titik | umur {age:.1f}s"
+    blockers = [friendly_blocker(str(item))
+                for item in payload.get("execution_blockers", [])]
+    if blockers:
+        return headline, "Belum bisa Execute: " + "; ".join(blockers), False
+    executable = bool(payload.get("executable", False)) and not bool(payload.get("busy", False))
+    detail = "Siap dieksekusi" if executable else message
+    return headline, detail, executable
+
+
+class SemanticTargetGui(Node):
+    def __init__(self):
+        super().__init__("semantic_target_gui")
+        self.publisher = self.create_publisher(
+            String, "/om6dof_topo_gng_v2/set_target_classes", 1)
+        self.create_subscription(
+            String, "/om6dof_topo_gng_v2/object_clusters", self._clusters, 2)
+        self.create_subscription(
+            String, "/om6dof_topo_gng_v2/graph_pick/status", self._graph_pick_status, 2)
+        self.plan_client = self.create_client(Trigger, "/plan_graph_pick")
+        self.execute_client = self.create_client(Trigger, "/execute_graph_pick")
+        self.visible_classes = set()
+        self.graph_status = {}
+        self.service_notice = ""
+        self.previewed_target = None
+        self.selected_target = "all"
+        self._lock = threading.Lock()
+
+    def _clusters(self, message):
+        try:
+            clusters = json.loads(message.data)
+            classes = {entry["class"] for entry in clusters
+                       if entry.get("class") in COCO_CLASSES}
+        except (json.JSONDecodeError, TypeError, KeyError):
+            return
+        with self._lock:
+            self.visible_classes = classes
+
+    def _graph_pick_status(self, message):
+        try:
+            payload = json.loads(message.data)
+            if not isinstance(payload, dict):
+                return
+        except (json.JSONDecodeError, TypeError):
+            return
+        with self._lock:
+            self.graph_status = payload
+
+    def choose(self, value):
+        target = "all" if value == "All detected classes" else value
+        message = String()
+        message.data = target
+        self.publisher.publish(message)
+        with self._lock:
+            self.selected_target = target
+            self.previewed_target = None
+            self.service_notice = (
+                "Target diubah ke semua kelas; tekan Preview" if target == "all"
+                else f"Target diubah ke {target}; tekan Preview")
+
+    def preview_path(self):
+        if not self.plan_client.wait_for_service(timeout_sec=0.2):
+            with self._lock:
+                self.service_notice = "Service planning belum siap"
+            return
+        with self._lock:
+            self.service_notice = "Menghitung preview EoE ke object..."
+        future = self.plan_client.call_async(Trigger.Request())
+
+        def completed(done):
+            try:
+                response = done.result()
+                text = response.message
+                payload = json.loads(text) if response.success else None
+            except (Exception, json.JSONDecodeError) as error:
+                response = None
+                payload = None
+                text = f"Planning request gagal: {error}"
+            self.get_logger().info(text)
+            with self._lock:
+                if response is not None and response.success and isinstance(payload, dict):
+                    self.graph_status = payload
+                    self.previewed_target = self.selected_target
+                    self.service_notice = "Preview baru diterima"
+                else:
+                    self.previewed_target = None
+                    self.service_notice = text
+
+        future.add_done_callback(completed)
+
+    def execute_path(self):
+        if not self.execute_client.wait_for_service(timeout_sec=0.2):
+            with self._lock:
+                self.service_notice = "Service execution belum siap"
+            return
+        with self._lock:
+            self.service_notice = "Memeriksa ulang semua interlock..."
+        future = self.execute_client.call_async(Trigger.Request())
+
+        def completed(done):
+            try:
+                response = done.result()
+                text = response.message
+            except Exception as error:
+                text = f"Execution request gagal: {error}"
+            self.get_logger().info(text)
+            with self._lock:
+                self.service_notice = text
+
+        future.add_done_callback(completed)
+
+    def run(self):
+        import tkinter as tk
+        from tkinter import ttk
+
+        root = tk.Tk()
+        root.title("DD-GNG Planning Target")
+        root.geometry("570x390")
+        root.resizable(False, False)
+        ttk.Label(
+            root, text="Object target for EoE planning",
+            font=("Sans", 13, "bold")).pack(pady=(18, 6))
+        ttk.Label(
+            root, text="Preview dibekukan dan divalidasi ulang sebelum robot bergerak.").pack()
+        selected = tk.StringVar(value="All detected classes")
+        menu = ttk.Combobox(root, textvariable=selected, state="readonly", width=40)
+        menu["values"] = ["All detected classes"] + COCO_CLASSES
+        menu.pack(pady=12)
+        headline = tk.StringVar(value="Menunggu valid DD-GNG object track")
+        detail = tk.StringVar(value="")
+        notice = tk.StringVar(value="")
+        ttk.Label(
+            root, textvariable=headline, font=("Sans", 10, "bold"),
+            wraplength=530, justify="center").pack(pady=(4, 2))
+        ttk.Label(
+            root, textvariable=detail, foreground="#9b3d00",
+            wraplength=530, justify="center").pack(pady=2)
+        ttk.Label(
+            root, textvariable=notice, wraplength=530,
+            justify="center").pack(pady=(2, 8))
+        ttk.Button(
+            root, text="Set planning target",
+            command=lambda: self.choose(selected.get())).pack(pady=4)
+        ttk.Button(
+            root, text="Preview EoE path in RViz",
+            command=self.preview_path).pack(pady=4)
+        execute_button = ttk.Button(
+            root, text="Execute planned motion", command=self.execute_path)
+        execute_button.pack(pady=4)
+        execute_button.state(["disabled"])
+
+        def refresh_visible():
+            with self._lock:
+                visible = sorted(self.visible_classes)
+                payload = dict(self.graph_status)
+                service_notice = self.service_notice
+                selected_target = self.selected_target
+                previewed_target = self.previewed_target
+            if visible:
+                menu["values"] = ["All detected classes"] + visible + [
+                    item for item in COCO_CLASSES if item not in visible]
+            status_headline, status_detail, executable = summarize_graph_status(payload)
+            target_matches = previewed_target == selected_target
+            if selected_target != "all" and payload.get("target_class") != selected_target:
+                target_matches = False
+            headline.set(status_headline)
+            detail.set(status_detail)
+            notice.set(service_notice)
+            if executable and target_matches:
+                execute_button.state(["!disabled"])
+            else:
+                execute_button.state(["disabled"])
+            root.after(250, refresh_visible)
+
+        root.protocol("WM_DELETE_WINDOW", lambda: (root.destroy(), rclpy.shutdown()))
+        refresh_visible()
+        root.mainloop()
+
+
+def main():
+    rclpy.init()
+    node = SemanticTargetGui()
+    spinner = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    spinner.start()
+    try:
+        node.run()
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+        spinner.join(timeout=1)
+
+
+if __name__ == "__main__":
+    main()

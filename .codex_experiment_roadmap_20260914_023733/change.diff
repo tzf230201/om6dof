@@ -1,0 +1,632 @@
+--- before/om6dof_dd_gng/src/reachability_graph_node.cpp
++++ after/om6dof_dd_gng/src/reachability_graph_node.cpp
+@@ -13,6 +13,7 @@
+ #include <cmath>
+ #include <cstdint>
+ #include <functional>
++#include <fstream>
+ #include <limits>
+ #include <memory>
+ #include <optional>
+@@ -52,6 +53,7 @@
+ #include "shape_msgs/msg/solid_primitive.hpp"
+ 
+ #include "om6dof_dd_gng/msg/environment_graph.hpp"
++#include "om6dof_dd_gng/workspace_samples.hpp"
+ #include "om6dof_dd_gng/msg/reachability_graph.hpp"
+ #include "om6dof_dd_gng/msg/reachability_plan.hpp"
+ #include "om6dof_dd_gng/msg/reachability_query.hpp"
+@@ -266,6 +268,8 @@
+     declare_parameter<bool>("exact_collision_enabled", true);
+     declare_parameter<bool>("include_target_in_collision", false);
+     declare_parameter<bool>("target_refinement_enabled", false);
++    declare_parameter<std::string>("workspace_samples_file", "");
++    declare_parameter<std::string>("workspace_samples_sha256", "");
+     declare_parameter<double>("exact_collision_step", 0.05);
+     declare_parameter<double>("exact_environment_point_radius", 0.012);
+     declare_parameter<double>("exact_environment_edge_radius", 0.006);
+@@ -390,10 +394,10 @@
+     scene_validation_service_name_ = get_parameter("scene_validation_service").as_string();
+ 
+     if (graph_method_ != "halton_prm" && graph_method_ != "gng" &&
+-      graph_method_ != "guarded_gng")
++      graph_method_ != "guarded_gng" && graph_method_ != "workspace_samples")
+     {
+       throw std::runtime_error(
+-              "graph_method must be 'halton_prm', 'gng', or 'guarded_gng'");
++              "graph_method must be halton_prm, gng, guarded_gng, or workspace_samples");
+     }
+     if (!validSha256Hex(expanded_urdf_sha256_) || !validSha256Hex(srdf_sha256_) ||
+       !validSha256Hex(reachability_parameters_sha256_))
+@@ -742,6 +746,7 @@
+     last_candidate_attempts_ = 0U;
+     last_requested_guard_node_count_ = 0U;
+ 
++    if (graph_method_ != "workspace_samples") {
+     moveit::core::RobotState seed_state(robot_model_);
+     seed_state.setToDefaultValues();
+     std::vector<double> seed;
+@@ -757,10 +762,13 @@
+     if (const auto measured = currentJoints()) {
+       appendNodeIfValid(*measured);
+     }
++    }
+     last_anchor_node_count_ = nodes_.size();
+ 
+     int attempts = 0;
+-    if (graph_method_ == "gng") {
++    if (graph_method_ == "workspace_samples") {
++      attempts = sampleWorkspaceNodes();
++    } else if (graph_method_ == "gng") {
+       attempts = sampleGngNodes(0.0, false);
+     } else if (graph_method_ == "guarded_gng") {
+       attempts = sampleGngNodes(gng_guard_fraction_, true);
+@@ -780,19 +788,19 @@
+     if (edges_.empty()) {
+       return false;
+     }
+-    cacheBodySweeps();
++    if (graph_method_ != "workspace_samples") {cacheBodySweeps();}
+     exact_blocked_edges_.assign(edges_.size(), false);
+     RCLCPP_INFO(
+       get_logger(),
+       "Built method=%s with %zu/%d nodes (%zu anchors, %zu prototypes, %zu/%zu guards, "
+-      "%zu fill samples) after %d candidate attempts; retained %zu validated edges in %zu "
++      "%zu fill samples) after %d candidate attempts; retained %zu %s edges in %zu "
+       "components and cached %zu full-body edge sweeps",
+       graph_method_.c_str(), nodes_.size(), sample_count_, last_anchor_node_count_,
+       last_prototype_node_count_, last_guard_node_count_, last_requested_guard_node_count_,
+       last_fill_sample_node_count_, attempts, edges_.size(),
+-      connectedComponentCount(), edge_body_sweeps_.size());
+-    const bool valid_cache = node_body_sweeps_.size() == nodes_.size() &&
+-      edge_body_sweeps_.size() == edges_.size();
++      graph_method_ == "workspace_samples" ? "candidate" : "validated", connectedComponentCount(), edge_body_sweeps_.size());
++    const bool valid_cache = graph_method_ == "workspace_samples" ||
++      (node_body_sweeps_.size() == nodes_.size() && edge_body_sweeps_.size() == edges_.size());
+     last_build_time_ms_ = std::chrono::duration<double, std::milli>(
+       std::chrono::steady_clock::now() - build_started).count();
+     if (valid_cache) {
+@@ -921,8 +929,56 @@
+     return final_attempts;
+   }
+ 
++  int sampleWorkspaceNodes()
++  {
++    if (!exact_collision_enabled_ || !include_target_in_collision_) {
++      throw std::runtime_error("workspace_samples requires exact collision including target geometry");
++    }
++    const std::vector<std::string> expected{"joint1", "joint2", "joint3", "joint4", "joint5", "joint6"};
++    if (joint_names_ != expected) {
++      throw std::runtime_error("workspace CSV joint order does not match active robot group");
++    }
++    const auto path = get_parameter("workspace_samples_file").as_string();
++    std::ifstream file(path);
++    if (!file) {throw std::runtime_error("cannot open workspace_samples_file: " + path);}
++    const auto samples = reach::readWorkspaceSamples(file);
++    std::set<std::vector<double>> seen;
++    std::size_t rejected = 0;
++    double maximum_error = 0.0;
++    for (const auto & sample : samples) {
++      auto node = nodeFromJoints(static_cast<std::uint32_t>(nodes_.size()), sample.joints);
++      const double error = reach::distance(node.position, sample.requested_position);
++      maximum_error = std::max(maximum_error, error);
++      // Scanner tolerance is 1 mm; reject a different kinematic model rather
++      // than placing old XYZ onto the current robot's joint configurations.
++      if (!std::isfinite(error) || error > 0.005) {
++        throw std::runtime_error("workspace FK/model mismatch exceeds 5 mm");
++      }
++      if (!stateIsValid(sample.joints) || !seen.insert(sample.joints).second) {
++        ++rejected;
++        continue;
++      }
++      nodes_.push_back(std::move(node));
++    }
++    last_fill_sample_node_count_ = nodes_.size();
++    RCLCPP_INFO(get_logger(),
++      "Workspace CSV: %zu witnesses, %zu accepted, %zu collision/bounds/duplicate rejected; "
++      "max FK error=%.6f m; SHA256=%s. Edges are candidates until path collision validation.",
++      samples.size(), nodes_.size(), rejected, maximum_error,
++      get_parameter("workspace_samples_sha256").as_string().c_str());
++    return static_cast<int>(samples.size());
++  }
++
+   void connectRoadmapEdges()
+   {
++    if (graph_method_ == "workspace_samples") {
++      edges_ = reach::workspaceCandidateEdges(nodes_, joint_ranges_,
++        max_cartesian_edge_length_, max_normalized_joint_distance_, neighbors_);
++      for (std::size_t i = 0; i < edges_.size(); ++i) {
++        edge_index_by_key_[edgeKey(edges_[i].a, edges_[i].b)] = i;
++      }
++      return;
++    }
+     std::set<std::uint64_t> seen_edges;
+     for (std::size_t i = 0; i < nodes_.size(); ++i) {
+       std::vector<std::pair<double, std::size_t>> candidates;
+@@ -1163,6 +1219,12 @@
+   std::vector<bool> fullBodyBlockedEdges(const std::vector<bool> & blocked_nodes) const
+   {
+     std::vector<bool> blocked(edges_.size(), false);
++    if (graph_method_ == "workspace_samples") {
++      for (std::size_t i = 0; i < edges_.size(); ++i) {
++        blocked[i] = blocked_nodes[edges_[i].a] || blocked_nodes[edges_[i].b];
++      }
++      return blocked;
++    }
+     for (std::size_t i = 0U; i < edge_body_sweeps_.size(); ++i) {
+       const reach::Edge & edge = edges_[i];
+       blocked[i] =
+@@ -1672,7 +1734,9 @@
+           last_plan_.success = false;
+           return;
+         }
+-        if (!exactTransitionIsValid(nodes_[a].joints, nodes_[b].joints)) {
++        const bool capsule_valid = graph_method_ != "workspace_samples" ||
++          !bodySweepBlocked(bodySweepForTransition(nodes_[a].joints, nodes_[b].joints));
++        if (!capsule_valid || !exactTransitionIsValid(nodes_[a].joints, nodes_[b].joints)) {
+           failed_edge = found->second;
+           break;
+         }
+@@ -1698,7 +1762,7 @@
+ 
+   bool refineTargetRoadmap()
+   {
+-    if (!target_refinement_enabled_ || !include_target_in_collision_ ||
++    if (graph_method_ == "workspace_samples" || !target_refinement_enabled_ || !include_target_in_collision_ ||
+       !exact_collision_enabled_ || targets_.empty() || nodes_.empty() ||
+       refinement_node_count_ >= 128U)
+     {
+@@ -1800,7 +1864,8 @@
+     if (include_target_in_collision_ && exact_collision_enabled_) {
+       for (std::size_t i = 0; i < nodes_.size(); ++i) {
+         if (intersection_nodes_[i] && !blocked_nodes_[i] &&
+-          !exactStateIsValid(nodes_[i].joints))
++          ((graph_method_ == "workspace_samples" && bodySweepBlocked(bodySweepForState(nodes_[i].joints))) ||
++          !exactStateIsValid(nodes_[i].joints)))
+         {
+           blocked_nodes_[i] = true;
+         }
+@@ -2018,7 +2083,8 @@
+ 
+     visualization_msgs::msg::Marker edge_marker;
+     edge_marker.header = node_marker.header;
+-    edge_marker.ns = "reachability_edges";
++    edge_marker.ns = graph_method_ == "workspace_samples" ?
++      "workspace_candidate_edges" : "reachability_edges";
+     edge_marker.id = 1;
+     edge_marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+     edge_marker.action = visualization_msgs::msg::Marker::ADD;
+--- before/om6dof_dd_gng/CMakeLists.txt
++++ after/om6dof_dd_gng/CMakeLists.txt
+@@ -263,6 +263,10 @@
+   ament_add_pytest_test(test_web_launch test/test_web_launch.py TIMEOUT 30)
+   ament_add_pytest_test(test_camera_input realsense_ddgng/test/test_camera_input.py TIMEOUT 30)
+   ament_add_pytest_test(test_dd_gng_yolo realsense_ddgng/test/test_dd_gng_yolo.py TIMEOUT 30)
++  ament_add_gtest(test_workspace_samples test/test_workspace_samples.cpp)
++  target_include_directories(test_workspace_samples PRIVATE include)
++  ament_add_pytest_test(test_experiment_launch test/test_experiment_launch.py TIMEOUT 30)
++
+   ament_add_gtest(test_reachability_graph
+     test/test_reachability_graph.cpp
+   )
+--- before/om6dof_dd_gng/include/om6dof_dd_gng/workspace_samples.hpp
++++ after/om6dof_dd_gng/include/om6dof_dd_gng/workspace_samples.hpp
+@@ -0,0 +1,120 @@
++#pragma once
++
++#include <array>
++#include <fstream>
++#include <map>
++#include <sstream>
++#include <string>
++#include <unordered_map>
++#include "om6dof_dd_gng/reachability_graph.hpp"
++
++namespace om6dof_dd_gng::reachability
++{
++struct WorkspaceSample {Point3 requested_position; std::vector<double> joints;};
++
++inline std::vector<std::string> workspaceCsvFields(std::string line)
++{
++  if (!line.empty() && line.back() == '\r') {line.pop_back();}
++  if (line.find('"') != std::string::npos) {
++    throw std::runtime_error("workspace CSV must use the scanner's unquoted numeric format");
++  }
++  std::vector<std::string> out;
++  std::stringstream input(line);
++  std::string field;
++  while (std::getline(input, field, ',')) {out.push_back(field);}
++  if (!line.empty() && line.back() == ',') {out.emplace_back();}
++  return out;
++}
++
++inline double workspaceNumber(const std::string & text)
++{
++  std::size_t consumed = 0;
++  const double value = std::stod(text, &consumed);
++  if (consumed != text.size() || !std::isfinite(value)) {
++    throw std::runtime_error("workspace CSV contains an invalid numeric value");
++  }
++  return value;
++}
++
++inline std::vector<WorkspaceSample> readWorkspaceSamples(std::istream & input)
++{
++  std::string line;
++  if (!std::getline(input, line)) {throw std::runtime_error("empty workspace CSV");}
++  const auto header = workspaceCsvFields(line);
++  std::map<std::string, std::size_t> columns;
++  for (std::size_t i = 0; i < header.size(); ++i) {
++    if (!columns.emplace(header[i], i).second) {throw std::runtime_error("duplicate workspace column");}
++  }
++  for (const std::string key : {"x_mm", "y_mm", "z_mm", "position_found",
++      "q1_rad", "q2_rad", "q3_rad", "q4_rad", "q5_rad", "q6_rad"})
++  {
++    if (!columns.count(key)) {throw std::runtime_error("missing workspace column: " + key);}
++  }
++  std::vector<WorkspaceSample> samples;
++  std::size_t row = 1;
++  while (std::getline(input, line)) {
++    ++row;
++    if (line.empty() || line == "\r") {continue;}
++    const auto fields = workspaceCsvFields(line);
++    if (fields.size() != header.size()) {
++      throw std::runtime_error("workspace column count mismatch at row " + std::to_string(row));
++    }
++    const auto & found = fields[columns.at("position_found")];
++    if (found == "0") {continue;}
++    if (found != "1") {throw std::runtime_error("invalid position_found at row " + std::to_string(row));}
++    WorkspaceSample sample;
++    sample.requested_position = {
++      workspaceNumber(fields[columns.at("x_mm")]) * 0.001,
++      workspaceNumber(fields[columns.at("y_mm")]) * 0.001,
++      workspaceNumber(fields[columns.at("z_mm")]) * 0.001};
++    for (int j = 1; j <= 6; ++j) {
++      sample.joints.push_back(workspaceNumber(fields[columns.at("q" + std::to_string(j) + "_rad")]));
++    }
++    samples.push_back(std::move(sample));
++  }
++  if (samples.empty()) {throw std::runtime_error("workspace CSV has no position-found witnesses");}
++  return samples;
++}
++
++// Spatial buckets only accelerate candidate discovery. Ranking uses joint-space
++// distance, retaining distinct IK configurations even at coincident XYZ.
++inline std::vector<Edge> workspaceCandidateEdges(
++  const std::vector<Node> & nodes, const std::vector<double> & ranges,
++  double cartesian_limit, double joint_limit, std::size_t neighbors)
++{
++  if (!std::isfinite(cartesian_limit) || cartesian_limit <= 0.0 ||
++    !std::isfinite(joint_limit) || joint_limit <= 0.0 || neighbors == 0)
++  {throw std::invalid_argument("invalid workspace edge limits");}
++  using Cell = std::array<int, 3>;
++  auto cell = [cartesian_limit](const Point3 & p) -> Cell {
++    return {static_cast<int>(std::floor(p.x / cartesian_limit)),
++      static_cast<int>(std::floor(p.y / cartesian_limit)),
++      static_cast<int>(std::floor(p.z / cartesian_limit))};
++  };
++  std::map<Cell, std::vector<std::size_t>> buckets;
++  for (std::size_t i = 0; i < nodes.size(); ++i) {buckets[cell(nodes[i].position)].push_back(i);}
++  std::map<std::pair<std::size_t, std::size_t>, double> unique;
++  for (std::size_t i = 0; i < nodes.size(); ++i) {
++    const auto c = cell(nodes[i].position);
++    std::vector<std::pair<double, std::size_t>> ranked;
++    for (int x = -1; x <= 1; ++x) {for (int y = -1; y <= 1; ++y) {for (int z = -1; z <= 1; ++z) {
++      auto it = buckets.find({c[0] + x, c[1] + y, c[2] + z});
++      if (it == buckets.end()) {continue;}
++      for (auto j : it->second) {
++        if (i == j || distance(nodes[i].position, nodes[j].position) > cartesian_limit) {continue;}
++        const double d = normalizedJointDistance(nodes[i].joints, nodes[j].joints, ranges);
++        if (d > 1.0e-9 && d <= joint_limit) {ranked.emplace_back(d, j);}
++      }
++    }}}
++    const auto count = std::min(neighbors, ranked.size());
++    std::partial_sort(ranked.begin(), ranked.begin() + count, ranked.end());
++    for (std::size_t k = 0; k < count; ++k) {
++      const auto j = ranked[k].second;
++      unique[std::minmax(i, j)] = jointPathCost(nodes[i].joints, nodes[j].joints);
++    }
++  }
++  std::vector<Edge> edges;
++  for (const auto & entry : unique) {edges.push_back({entry.first.first, entry.first.second, entry.second});}
++  return edges;
++}
++}  // namespace om6dof_dd_gng::reachability
+--- before/om6dof_dd_gng/launch/ddgng_experiment_reachability.launch.py
++++ after/om6dof_dd_gng/launch/ddgng_experiment_reachability.launch.py
+@@ -0,0 +1,99 @@
++"""YOLO/DD-GNG environment + recorded V2 workspace nodes + RViz target GUI."""
++import csv
++import hashlib
++import io
++from pathlib import Path
++import shutil
++import tempfile
++
++import yaml
++from ament_index_python.packages import get_package_share_directory
++from launch import LaunchDescription
++from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
++                            OpaqueFunction, RegisterEventHandler, SetEnvironmentVariable)
++from launch.event_handlers import OnShutdown
++from launch.launch_description_sources import PythonLaunchDescriptionSource
++from launch.substitutions import LaunchConfiguration
++from launch_ros.actions import Node
++
++
++DEFAULT_DATASET = (Path.home() / 'ros2_ws/src/om6dof/experiments/cartesian_workspace/results/'
++                   'comparison_v1_v2_25mm_20260909/v2/points.csv')
++
++
++def prepare_config(base_path, dataset_path, directory):
++    """Freeze dataset bytes for this launch; change only reachability settings."""
++    data = Path(dataset_path).expanduser().resolve(strict=True).read_bytes()
++    reader = csv.DictReader(io.StringIO(data.decode('utf-8')))
++    required = {'x_mm', 'y_mm', 'z_mm', 'position_found'} | {f'q{i}_rad' for i in range(1, 7)}
++    if not required.issubset(reader.fieldnames or []):
++        raise ValueError('Dataset must contain XYZ and q1_rad through q6_rad')
++    witnesses = sum(row['position_found'] == '1' for row in reader)
++    if not witnesses:
++        raise ValueError('Dataset has no position-found joint configurations')
++    directory = Path(directory)
++    snapshot = directory / 'workspace_samples.csv'
++    snapshot.write_bytes(data)
++    document = yaml.safe_load(Path(base_path).read_text())
++    parameters = document['reachability_graph_node']['ros__parameters']
++    parameters.update({
++        'graph_method': 'workspace_samples',
++        'workspace_samples_file': str(snapshot),
++        'workspace_samples_sha256': hashlib.sha256(data).hexdigest(),
++        'sample_count': witnesses,
++        'target_refinement_enabled': False,
++        'gng_debug_publish_training_samples': False,
++        'exact_collision_enabled': True,
++        'include_target_in_collision': True,
++    })
++    config = directory / 'experiment_topology.yaml'
++    config.write_text(yaml.safe_dump(document, sort_keys=False))
++    return config
++
++
++def setup(context):
++    share = Path(get_package_share_directory('om6dof_dd_gng'))
++    pick_share = Path(get_package_share_directory('om6dof_pick_and_place'))
++    directory = tempfile.mkdtemp(prefix='ddgng_experiment_')
++    try:
++        config = prepare_config(share / 'config/topo_gng_v2.yaml',
++                                LaunchConfiguration('workspace_samples_file').perform(context), directory)
++    except Exception:
++        shutil.rmtree(directory)
++        raise
++
++    def cleanup(_context):
++        shutil.rmtree(directory, ignore_errors=True)
++        return []
++
++    return [
++        RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])),
++        IncludeLaunchDescription(
++            PythonLaunchDescriptionSource(str(share / 'launch/topo_gng_v2.launch.py')),
++            launch_arguments={
++                'params_file': str(config),
++                'launch_reachability': 'true',
++                'launch_rviz': LaunchConfiguration('launch_rviz'),
++                'camera_calibration_file': LaunchConfiguration('camera_calibration_file'),
++            }.items()),
++        IncludeLaunchDescription(
++            PythonLaunchDescriptionSource(str(pick_share / 'launch/graph_pick.launch.py')),
++            launch_arguments={
++                'execution_enabled': LaunchConfiguration('execution_enabled'),
++                'rmw_implementation': LaunchConfiguration('rmw_implementation'),
++            }.items()),
++        Node(package='om6dof_dd_gng', executable='semantic_target_gui.py',
++             name='semantic_target_gui', output='screen'),
++    ]
++
++
++def generate_launch_description():
++    return LaunchDescription([
++        DeclareLaunchArgument('workspace_samples_file', default_value=str(DEFAULT_DATASET)),
++        DeclareLaunchArgument('camera_calibration_file', default_value=''),
++        DeclareLaunchArgument('execution_enabled', default_value='false', choices=['true', 'false']),
++        DeclareLaunchArgument('launch_rviz', default_value='true', choices=['true', 'false']),
++        DeclareLaunchArgument('rmw_implementation', default_value='rmw_fastrtps_cpp'),
++        SetEnvironmentVariable('RMW_IMPLEMENTATION', LaunchConfiguration('rmw_implementation')),
++        OpaqueFunction(function=setup),
++    ])
+--- before/om6dof_dd_gng/test/test_workspace_samples.cpp
++++ after/om6dof_dd_gng/test/test_workspace_samples.cpp
+@@ -0,0 +1,59 @@
++#include <set>
++#include <gtest/gtest.h>
++#include "om6dof_dd_gng/workspace_samples.hpp"
++namespace reach = om6dof_dd_gng::reachability;
++const std::string header = "x_mm,y_mm,z_mm,position_found,q1_rad,q2_rad,q3_rad,q4_rad,q5_rad,q6_rad\n";
++TEST(WorkspaceSamples, KeepsPositionWitnessesAndConvertsMillimeters)
++{
++  std::istringstream input(header + "100,200,300,1,0,0.1,0.2,0.3,0.4,0.5\n0,0,0,0,,,,,,\n");
++  auto rows = reach::readWorkspaceSamples(input);
++  ASSERT_EQ(rows.size(), 1U);
++  EXPECT_DOUBLE_EQ(rows[0].requested_position.x, .1);
++  EXPECT_DOUBLE_EQ(rows[0].requested_position.z, .3);
++  EXPECT_DOUBLE_EQ(rows[0].joints[5], .5);
++}
++TEST(WorkspaceSamples, RejectsMalformedAndNonfiniteWitnesses)
++{
++  for (const auto & row : {"0,0,0,1,nan,0,0,0,0,0\n", "0,0,0,1,0,0,0\n",
++    "0,0,0,2,0,0,0,0,0,0\n", "0,0,0,1,1junk,0,0,0,0,0\n"})
++  {
++    std::istringstream input(header + row);
++    EXPECT_THROW(reach::readWorkspaceSamples(input), std::exception);
++  }
++  std::istringstream missing("x_mm,y_mm\n0,0\n");
++  EXPECT_THROW(reach::readWorkspaceSamples(missing), std::runtime_error);
++}
++TEST(WorkspaceSamples, SpatialBucketsMatchBruteForceJointNeighbors)
++{
++  std::vector<reach::Node> nodes(60);
++  for (std::size_t i = 0; i < nodes.size(); ++i) {
++    nodes[i].position = {double(i % 5) * .03 - .07, double(i % 7) * .02 - .09, double(i % 3) * .02};
++    nodes[i].joints = {double(i) * .01, double(i % 8) * .08};
++  }
++  const std::vector<double> ranges{1, 1};
++  auto actual = reach::workspaceCandidateEdges(nodes, ranges, .08, .3, 3);
++  std::set<std::pair<std::size_t, std::size_t>> expected;
++  for (std::size_t i = 0; i < nodes.size(); ++i) {
++    std::vector<std::pair<double, std::size_t>> ranked;
++    for (std::size_t j = 0; j < nodes.size(); ++j) {
++      double d = reach::normalizedJointDistance(nodes[i].joints, nodes[j].joints, ranges);
++      if (i != j && reach::distance(nodes[i].position, nodes[j].position) <= .08 && d > 1e-9 && d <= .3) {
++        ranked.emplace_back(d, j);
++      }
++    }
++    std::sort(ranked.begin(), ranked.end());
++    for (std::size_t k = 0; k < std::min<std::size_t>(3, ranked.size()); ++k) {
++      expected.insert(std::minmax(i, ranked[k].second));
++    }
++  }
++  std::set<std::pair<std::size_t, std::size_t>> found;
++  for (const auto & edge : actual) {found.insert({edge.a, edge.b}); EXPECT_GT(edge.cost, 0);}
++  EXPECT_EQ(found, expected);
++}
++TEST(WorkspaceSamples, CoincidentXyzDoesNotMergeDifferentJointConfigurations)
++{
++  std::vector<reach::Node> nodes(2);
++  nodes[0].joints = {0.0}; nodes[1].joints = {.1};
++  EXPECT_EQ(reach::workspaceCandidateEdges(nodes, {1.0}, .05, .5, 1).size(), 1U);
++  EXPECT_THROW(reach::workspaceCandidateEdges(nodes, {1.0}, 0, .5, 1), std::invalid_argument);
++}
+--- before/om6dof_dd_gng/test/test_experiment_launch.py
++++ after/om6dof_dd_gng/test/test_experiment_launch.py
+@@ -0,0 +1,52 @@
++import hashlib
++import importlib.util
++from pathlib import Path
++
++import pytest
++import yaml
++
++PACKAGE = Path(__file__).resolve().parents[1]
++spec = importlib.util.spec_from_file_location('experiment_launch', PACKAGE / 'launch/ddgng_experiment_reachability.launch.py')
++launch = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(launch)
++
++
++def test_separate_launch_preserves_environment_and_freezes_dataset(tmp_path):
++    base = PACKAGE / 'config/topo_gng_v2.yaml'
++    dataset = tmp_path / 'points.csv'
++    data = ('x_mm,y_mm,z_mm,position_found,q1_rad,q2_rad,q3_rad,q4_rad,q5_rad,q6_rad\n'
++            '100,0,200,1,0,0,0,0,0,0\n0,0,0,0,,,,,,\n').encode()
++    dataset.write_bytes(data)
++    run = tmp_path / 'run'
++    run.mkdir()
++    config = launch.prepare_config(base, dataset, run)
++    document = yaml.safe_load(config.read_text())
++    original = yaml.safe_load(base.read_text())
++    for key in original:
++        if key != 'reachability_graph_node':
++            assert document[key] == original[key]
++    p = document['reachability_graph_node']['ros__parameters']
++    assert p['graph_method'] == 'workspace_samples'
++    assert p['sample_count'] == 1
++    assert p['exact_collision_enabled'] and p['include_target_in_collision']
++    assert not p['target_refinement_enabled']
++    assert p['workspace_samples_sha256'] == hashlib.sha256(data).hexdigest()
++    dataset.write_text('changed after launch')
++    assert Path(p['workspace_samples_file']).read_bytes() == data
++
++
++def test_invalid_dataset_fails_before_launching_nodes(tmp_path):
++    dataset = tmp_path / 'points.csv'
++    dataset.write_text('x_mm,y_mm,z_mm\n1,2,3\n')
++    with pytest.raises(ValueError, match='q1_rad'):
++        launch.prepare_config(PACKAGE / 'config/topo_gng_v2.yaml', dataset, tmp_path)
++
++
++def test_execution_is_opt_in(tmp_path, monkeypatch):
++    monkeypatch.setenv("ROS_LOG_DIR", str(tmp_path / "ros_log"))
++    from launch.actions import DeclareLaunchArgument
++    args = {a.name: a for a in launch.generate_launch_description().entities
++            if isinstance(a, DeclareLaunchArgument)}
++    from launch import LaunchContext
++    from launch.utilities import perform_substitutions
++    assert perform_substitutions(LaunchContext(), args['execution_enabled'].default_value) == 'false'
+--- before/om6dof_dd_gng/docs/experiment_workspace_roadmap.md
++++ after/om6dof_dd_gng/docs/experiment_workspace_roadmap.md
+@@ -0,0 +1,76 @@
++# Experiment workspace roadmap (separate V2 launch)
++
++Run from an AGX desktop terminal, after stopping any existing planning/camera launch:
++
++```bash
++source /opt/ros/humble/setup.bash
++source /home/kublab/ros2_ws/install/setup.bash
++ros2 launch om6dof_dd_gng ddgng_experiment_reachability.launch.py \
++  camera_calibration_file:=/home/kublab/.config/om6dof/d435_hand_eye.yaml \
++  execution_enabled:=false
++```
++
++This opens YOLO + DD-GNG environment processing, the experiment-derived robot
++roadmap, RViz, and the target GUI. It does not start hardware controllers, enable
++torque, publish synthetic joints, or automatically move the robot. Actual
++`/joint_states` and the existing controller stack are needed. The camera has one
++owner. This launch replaces the previous perception/planning launch for the session.
++
++Choose the object, Set planning target, then Preview EoE path in RViz. The default
++coordinator task is move_to_target: a measured-start connector followed by robot
++graph edges, ending near a target environment node. It does not operate the gripper.
++Execution remains opt-in with `execution_enabled:=true` plus the explicit GUI button
++and existing validation gates. Launching with true alone does not send motion.
++
++## Data and model
++
++Default source:
++`~/ros2_ws/src/om6dof/experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/v2/points.csv`.
++Override with `workspace_samples_file:=/absolute/path/points.csv`.
++
++The launch copies the CSV into its temporary session directory and records its
++SHA256 in the generated reachability configuration. Original experiment files are
++never modified. Environment parameters are copied unchanged from `topo_gng_v2.yaml`;
++only the reachability block is overridden. Existing launch defaults are unchanged.
++Session files are removed on launch shutdown.
++
++- Read rows with position_found=1, including orientation-unresolved witnesses.
++- Each row must supply finite XYZ in mm and q1_rad through q6_rad in robot order.
++- Recompute each node's full EoE pose using current URDF FK; CSV XYZ are checks,
++  not the runtime node coordinates. Reject the dataset if FK differs by >5 mm
++  from a requested grid point (the original scanner tolerance was 1 mm).
++- Recheck current joint limits and strict self-collision. Remove duplicate joint
++  configurations; coincident XYZ with different joint configurations remain distinct.
++- Use every accepted recorded configuration. No GNG quantization or new local
++  samples are added in this backend; current EoE connects via a validated start edge.
++
++## Edges and collision
++
++Cartesian spatial buckets accelerate neighbor discovery. Sparse edges are ranked
++by normalized joint-space distance, within the existing Cartesian/joint connection
++limits. These edges are **candidates**, not an assertion of collision-free travel.
++RViz uses the `workspace_candidate_edges` namespace for them.
++
++During planning, collision-invalid intersection goals are excluded. Dijkstra finds
++the nearest reachable target intersection, then the start connector and selected
++edges undergo body-capsule and full robot-mesh FCL checks against environment
++nodes (spheres) and edges (cylinders), including target geometry. Failed edges are
++blocked and the search retries within the existing replan budget. Only a completely
++validated path is published as valid. The imported backend avoids preallocating
++large swept-body caches for all candidate edges.
++
++The dataset stores selected IK witnesses, not every IK branch. Sparse environmental
++observations, collision-model accuracy and finite edge-check spacing remain relevant;
++this is not a physical pickup certification or a guarantee of connectivity everywhere.
++
++## Checked on the saved bottle scene
++
++15,175 position-found input rows; 15,064 accepted current-model nodes; 111 rejected
++by current limits/self-collision/duplicate filtering. Maximum FK discrepancy was
++1 mm. The graph had 93,355 candidate edges and 13 connected components.
++
++A snapshot replay found an 8-edge path ending 35.92 mm from the target, with 124
++exact state checks in an approximately 83 ms planning cycle. Coordinator replay
++accepted 10 trajectory points (measured start plus 9 recorded graph nodes).
++An injected obstacle at the initial EoE correctly rejected the path. All replay
++traffic used isolated ROS domain 71; no arm/gripper action was called.

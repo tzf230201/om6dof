@@ -1,0 +1,9 @@
+[INFO] [1789322258.961182592] [reachability_graph_node]: Reachability node started in preview-only mode; it has no controller publisher or action client.
+[INFO] [1789322259.466551008] [moveit_robot_model.robot_model]: Loading robot model 'om6dof_v2'...
+[INFO] [1789322259.466642304] [moveit_robot_model.robot_model]: No root/virtual joint specified in SRDF. Assuming fixed joint
+[WARN] [1789322259.466686368] [moveit_robot_model.robot_model]: Link base_link has visual geometry but no collision geometry. Collision geometry will be left empty. Fix your URDF file by explicitly specifying collision geometry.
+[INFO] [1789322260.373251168] [reachability_graph_node]: Strict self-collision matrix admits direct parent-child pairs and 10 SRDF Adjacent pairs; SRDF Never pairs remain collision-checked
+[INFO] [1789322260.453355936] [reachability_graph_node]: Workspace CSV: 3198 witnesses, 3198 accepted, 0 collision/bounds/duplicate rejected; max FK error=0.001000 m; SHA256=. Edges are candidates until path collision validation.
+[INFO] [1789322260.532588832] [reachability_graph_node]: Built method=workspace_samples with 3198/3198 nodes (0 anchors, 0 prototypes, 0/0 guards, 3198 fill samples) after 3198 candidate attempts; retained 18554 candidate edges in 1 components and cached 0 full-body edge sweeps
+[INFO] [1789322260.574911840] [reachability_graph_node]: Reachability graph ready: method=workspace_samples, 3198 nodes, 18554 edges, group=arm, tip=end_effector_link, strict_collision=true, exact_collision=true
+[INFO] [1789322348.967664960] [rclcpp]: signal_handler(SIGINT/SIGTERM)

@@ -1300,18 +1300,50 @@ def test_pick_launches_expose_the_fail_closed_gripper_calibration(filename):
     assert launch.count('default_value="-1.0"') >= 2
 
 
-def test_srdf_attaches_the_gripper_group_to_its_real_parent_link():
+def test_srdf_attaches_the_gripper_group_to_the_tcp_control_frame():
     path = (Path(__file__).parents[2] / "om6dof_moveit_config" /
             "config" / "om6dof.srdf")
     root = ET.parse(path).getroot()
     end_effector = root.find("./end_effector[@name='linear_gripper']")
     assert end_effector is not None
-    assert end_effector.attrib["parent_link"] == "link7"
+    assert end_effector.attrib["parent_link"] == "end_effector_link"
+
+
+def test_v2_gripper_is_kinematically_attached_to_the_tcp_without_moving_it():
+    path = (Path(__file__).parents[2] / "om6dof_description" /
+            "urdf" / "om6dof_v2.urdf.xacro")
+    root = ET.parse(path).getroot()
+    tcp_joint = root.find("./joint[@name='end_effector_joint']")
+    assert tcp_joint is not None
+    assert tcp_joint.find("parent").attrib["link"] == "link7"
+    assert float(tcp_joint.find("origin").attrib["xyz"].split()[2]) == \
+        pytest.approx(0.115)
+
+    for name in ("gripper_left_joint", "gripper_right_joint"):
+        joint = root.find(f"./joint[@name='{name}']")
+        assert joint is not None
+        assert joint.find("parent").attrib["link"] == "end_effector_link"
+        finger_z = float(joint.find("origin").attrib["xyz"].split()[2])
+        assert 0.115 + finger_z == pytest.approx(0.0707)
+
+
+def test_srdf_allows_only_the_d435_parent_mount_contact():
+    path = (Path(__file__).parents[2] / "om6dof_moveit_config" /
+            "config" / "om6dof.srdf")
+    root = ET.parse(path).getroot()
+    payload_exemptions = {
+        frozenset((entry.attrib["link1"], entry.attrib["link2"]))
+        for entry in root.findall("./disable_collisions")
+        if "d405_payload_link" in (entry.attrib["link1"], entry.attrib["link2"])
+    }
+    assert payload_exemptions == {
+        frozenset(("d405_payload_link", "link7"))
+    }
 
 
 def test_tcp_frame_has_no_unmeasured_visual_or_collision_cube():
     path = (Path(__file__).parents[2] / "om6dof_description" /
-            "urdf" / "om6dof.urdf.xacro")
+            "urdf" / "om6dof_v2.urdf.xacro")
     root = ET.parse(path).getroot()
     link = root.find("./link[@name='end_effector_link']")
     assert link is not None

@@ -45,13 +45,15 @@ from om6dof_perception.realsense_low_light import (
 
 import rclpy
 from rclpy.node import Node
+from rcl_interfaces.msg import ParameterDescriptor
 from std_msgs.msg import Float64, Float64MultiArray, String
 from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import CompressedImage
 
 from .yolox_detector import YoloXDetector, resolve_coco_class
-
-CAMERA_FRAME = "camera_color_optical_frame"
+from .camera_model import (
+    camera_model_for, color_point_map, resolve_ee_mode, select_camera, select_stream_fps,
+)
 
 
 def _clamp_quality(value, default=80):
@@ -101,7 +103,7 @@ def associated_detection(detections, class_name, reference_bbox=None,
 def estimate_bbox3d(depth, intr, depth_scale, bbox, *, roi_fraction=0.9,
                     foreground_quantile=0.2, depth_band_m=0.05,
                     depth_ratio=1.0, min_thickness_m=0.025,
-                    max_thickness_m=0.12, min_points=30):
+                    max_thickness_m=0.12, min_points=30, points_xyz=None):
     """Estimate an axis-aligned 3D box from depth pixels inside a 2D box.
 
     A single wrist RGB-D view cannot observe the object's back face.  We
@@ -125,7 +127,9 @@ def estimate_bbox3d(depth, intr, depth_scale, bbox, *, roi_fraction=0.9,
         return None
 
     raw = depth[y0:y1, x0:x1].astype(np.float64)
-    valid = raw > 0
+    valid = np.isfinite(raw) & (raw > 0)
+    if points_xyz is not None:
+        valid &= np.isfinite(points_xyz[y0:y1, x0:x1]).all(axis=2)
     if int(np.count_nonzero(valid)) < int(min_points):
         return None
     z_all = raw[valid] * float(depth_scale)
@@ -137,8 +141,15 @@ def estimate_bbox3d(depth, intr, depth_scale, bbox, *, roi_fraction=0.9,
     z = raw[rows, cols] * float(depth_scale)
     u = cols.astype(np.float64) + x0
     v = rows.astype(np.float64) + y0
-    px = (u - float(intr.ppx)) / float(intr.fx) * z
-    py = (v - float(intr.ppy)) / float(intr.fy) * z
+    if points_xyz is None:
+        # Legacy D405 rectified aligned-depth path.
+        px = (u - float(intr.ppx)) / float(intr.fx) * z
+        py = (v - float(intr.ppy)) / float(intr.fy) * z
+    else:
+        # D435 uses SDK-calibrated native depth -> color XYZ, including
+        # sensor translation/rotation and RGB distortion, not a pinhole guess.
+        points = points_xyz[y0:y1, x0:x1][rows, cols]
+        px, py, z = points.T
 
     xmin, xmax = np.quantile(px, [0.03, 0.97])
     ymin, ymax = np.quantile(py, [0.03, 0.97])
@@ -180,6 +191,10 @@ def project_bbox3d(box, intr):
         (xmin, ymin, zb), (xmax, ymin, zb),
         (xmax, ymax, zb), (xmin, ymax, zb),
     ]
+    if hasattr(intr, "model"):
+        return [tuple(int(round(value)) for value in
+                      rs.rs2_project_point_to_pixel(intr, list(point)))
+                for point in corners]
     return [
         (int(round(float(intr.fx) * x / z + float(intr.ppx))),
          int(round(float(intr.fy) * y / z + float(intr.ppy))))
@@ -206,13 +221,26 @@ class Entity:
 class PerceptionNode(Node):
     def __init__(self):
         super().__init__("om6dof_perception")
+        startup_only = ParameterDescriptor(read_only=True,
+                                           description="Restart perception to change camera geometry")
+        self.declare_parameter("model_version", "v1", startup_only)
+        self.declare_parameter("camera_model", "auto", startup_only)
+        self.camera_profile = camera_model_for(
+            str(self.get_parameter("model_version").value),
+            str(self.get_parameter("camera_model").value))
+        self.camera_frame = self.camera_profile.optical_frame
+        self.declare_parameter("camera_serial", "", startup_only)
+        self.declare_parameter("camera_width", 640, startup_only)
+        self.declare_parameter("camera_height", 480, startup_only)
+        self.declare_parameter("camera_fps", 30, startup_only)
+        self.declare_parameter("ee_pixels_calibrated", False, startup_only)
         self.declare_parameter("target_description",
                                "glass jar with a black lid on the floor")
         self.declare_parameter("target_class", "bottle")
-        self.declare_parameter("ee_mode", "fixed_jaw_pixels")
+        self.declare_parameter("ee_mode", "auto", startup_only)
         self.declare_parameter("ee_class", "")
-        self.declare_parameter("ee_left_pixel", [200, 430])
-        self.declare_parameter("ee_right_pixel", [540, 400])
+        self.declare_parameter("ee_left_pixel", [200, 430], startup_only)
+        self.declare_parameter("ee_right_pixel", [540, 400], startup_only)
         self.declare_parameter("ee_depth_window_px", 10)
         self.declare_parameter("bbox3d_roi_fraction", 0.9)
         self.declare_parameter("bbox3d_foreground_quantile", 0.2)
@@ -245,6 +273,16 @@ class PerceptionNode(Node):
         # 480 costs about 16 kB per frame.
         self.declare_parameter("web_stream_max_width", 0)
 
+        # Resolve the model/EE contract before loading a network or a device.
+        self.ee_mode = resolve_ee_mode(
+            self.camera_profile, str(self.get_parameter("ee_mode").value),
+            bool(self.get_parameter("ee_pixels_calibrated").value))
+        self.camera_serial = str(self.get_parameter("camera_serial").value)
+        self.camera_width = int(self.get_parameter("camera_width").value)
+        self.camera_height = int(self.get_parameter("camera_height").value)
+        self.camera_fps = int(self.get_parameter("camera_fps").value)
+        if min(self.camera_width, self.camera_height, self.camera_fps) <= 0:
+            raise ValueError("Camera dimensions and FPS must be positive")
         self.model_path = str(self.get_parameter("yolo_model_path").value)
         self.yolo = YoloXDetector(
             self.model_path,
@@ -256,6 +294,8 @@ class PerceptionNode(Node):
         self.reacquire = float(self.get_parameter("reacquire_period_sec").value)
         self.debug_on = bool(self.get_parameter("publish_debug_image").value)
         self.rate = float(self.get_parameter("frame_rate_hz").value)
+        if not np.isfinite(self.rate) or self.rate <= 0:
+            raise ValueError("frame_rate_hz must be finite and positive")
         self.web_stream_topic = str(
             self.get_parameter("web_stream_topic").value).strip()
         self.debug_quality = _clamp_quality(
@@ -281,11 +321,15 @@ class PerceptionNode(Node):
             self.get_parameter("ee_class").value
         )) or ""
         self.ee = Entity("ee", "end effector", ee_class)
-        self.ee_mode = str(self.get_parameter("ee_mode").value).strip().lower()
         self.ee_left_pixel = tuple(int(value) for value in
                                    self.get_parameter("ee_left_pixel").value)
         self.ee_right_pixel = tuple(int(value) for value in
                                     self.get_parameter("ee_right_pixel").value)
+        for pixel in (self.ee_left_pixel, self.ee_right_pixel):
+            if len(pixel) != 2 or not (0 <= pixel[0] < self.camera_width and
+                                      0 <= pixel[1] < self.camera_height):
+                if self.ee_mode == "fixed_jaw_pixels":
+                    raise ValueError("Calibrated jaw pixels must be inside the image")
         self.ee_depth_window = max(
             2, int(self.get_parameter("ee_depth_window_px").value)
         )
@@ -307,7 +351,7 @@ class PerceptionNode(Node):
         self.distance_m = None
         if self.ee_mode == "fixed_jaw_pixels":
             self.ee.state = "acquiring"
-        elif not self.ee.class_name:
+        elif self.ee_mode == "disabled" or not self.ee.class_name:
             self.ee.state = "disabled"
 
         self.pub_target = self.create_publisher(
@@ -334,10 +378,17 @@ class PerceptionNode(Node):
         self.depth = None
         self.intr = None
         self.depth_scale = None
+        self.points_xyz = None
+        self.capture_stamp = None
+        self.camera_metadata = {"connected": False}
+        self.camera_epoch = 0
+        self.stop_event = threading.Event()
 
-        threading.Thread(target=self._camera_loop, daemon=True).start()
+        self.camera_thread = threading.Thread(target=self._camera_loop, daemon=True)
+        self.camera_thread.start()
         self.get_logger().info(
-            f"perception up: target={self.target.description!r} "
+            f"perception {self.camera_profile.version}/{self.camera_profile.camera_model}: "
+            f"frame={self.camera_frame} target={self.target.description!r} "
             f"target_class={self.target.class_name!r} "
             f"ee_mode={self.ee_mode!r} "
             f"ee_class={self.ee.class_name or '-'} "
@@ -365,75 +416,190 @@ class PerceptionNode(Node):
         )
 
     # ----------------------------------------------------------- camera
+    def _camera_disconnected(self, error):
+        # Forget the old image/tracker/point together on reconnect. A detector
+        # finishing late must not restore observations from the previous unit.
+        with self.frame_lock:
+            self.camera_epoch += 1
+            self.rgb = self.depth = self.intr = self.points_xyz = None
+            for ent in (self.target, self.ee):
+                ent.tracker = ent.bbox = ent.bbox3d = ent.point = None
+                ent.confidence = None
+                ent.last_acquire = 0.0
+                ent.state = ("disabled" if ent is self.ee and
+                             (self.ee_mode == "disabled" or
+                              (self.ee_mode == "yolo" and not ent.class_name))
+                             else "acquiring")
+            self.camera_metadata = {"connected": False, "error": str(error)}
+        if not self.stop_event.is_set():
+            self._publish(self.get_clock().now().to_msg())
+
     def _camera_loop(self):
         pipe = None
         align = rs.align(rs.stream.color)
         period = 1.0 / self.rate
-        while rclpy.ok():
+        while rclpy.ok() and not self.stop_event.is_set():
             if pipe is None:
                 try:
-                    pipe = rs.pipeline()
+                    context = rs.context()
+                    devices = list(context.query_devices())
+                    cameras = [
+                        {"name": dev.get_info(rs.camera_info.name),
+                         "serial": dev.get_info(rs.camera_info.serial_number)}
+                        for dev in devices
+                    ]
+                    selected = select_camera(
+                        cameras, self.camera_profile.camera_model, self.camera_serial)
+                    # Pin a discovered unit across reconnects, not just its model.
+                    self.camera_serial = selected["serial"]
+                    pipe = rs.pipeline(context)
                     cfg = rs.config()
+                    cfg.enable_device(self.camera_serial)
                     low_light_config = load_low_light_config()
-                    camera_fps = 5 if low_light_config["enabled"] else 30
-                    cfg.enable_stream(rs.stream.color, 640, 480,
+                    device = next(dev for dev in devices if
+                                  dev.get_info(rs.camera_info.serial_number) == self.camera_serial)
+                    color_rates, depth_rates = set(), set()
+                    for sensor in device.query_sensors():
+                        for stream in sensor.get_stream_profiles():
+                            if not stream.is_video_stream_profile():
+                                continue
+                            video = stream.as_video_stream_profile()
+                            if (video.width(), video.height()) != (self.camera_width, self.camera_height):
+                                continue
+                            if stream.stream_type() == rs.stream.color and stream.format() == rs.format.rgb8:
+                                color_rates.add(stream.fps())
+                            elif stream.stream_type() == rs.stream.depth and stream.format() == rs.format.z16:
+                                depth_rates.add(stream.fps())
+                    camera_fps = select_stream_fps(color_rates, depth_rates, self.camera_fps,
+                                                   low_light_config["enabled"])
+                    cfg.enable_stream(rs.stream.color, self.camera_width, self.camera_height,
                                       rs.format.rgb8, camera_fps)
-                    cfg.enable_stream(rs.stream.depth, 640, 480,
+                    cfg.enable_stream(rs.stream.depth, self.camera_width, self.camera_height,
                                       rs.format.z16, camera_fps)
                     profile = pipe.start(cfg)
-                    depth_low_light = configure_depth_sensor(
-                        profile, rs, low_light_config
-                    )
+                    if self.stop_event.is_set():
+                        break
+                    # D435 is an active-stereo camera: do not inherit the old
+                    # low-light helper's unconditional emitter-off setting.
+                    # In normal V2 mode retain the device's configured default.
+                    if self.camera_profile.version == "v2" and not low_light_config["enabled"]:
+                        depth_low_light = "D435 depth emitter: device setting retained"
+                    else:
+                        depth_low_light = configure_depth_sensor(profile, rs, low_light_config)
                     color_low_light = configure_color_sensor(
                         profile, rs, low_light_config
                     )
-                    self.depth_scale = (profile.get_device()
-                                        .first_depth_sensor()
-                                        .get_depth_scale())
+                    scale = profile.get_device().first_depth_sensor().get_depth_scale()
+                    color_profile = profile.get_stream(rs.stream.color).as_video_stream_profile()
+                    depth_profile = profile.get_stream(rs.stream.depth).as_video_stream_profile()
+                    extrinsics = depth_profile.get_extrinsics_to(color_profile)
+                    color_intr = color_profile.get_intrinsics()
+                    cloud = rs.pointcloud()
+                    self.camera_metadata = {
+                        "connected": True, **selected, "fps": camera_fps,
+                        "depth_scale_m": scale,
+                        "color_intrinsics": {
+                            "width": color_intr.width, "height": color_intr.height,
+                            "fx": color_intr.fx, "fy": color_intr.fy,
+                            "ppx": color_intr.ppx, "ppy": color_intr.ppy,
+                            "model": str(color_intr.model), "coeffs": list(color_intr.coeffs),
+                        },
+                        "depth_to_color": {
+                            "rotation_column_major": list(extrinsics.rotation),
+                            "translation_m": list(extrinsics.translation),
+                            "source": "device_sdk",
+                        },
+                        "point_registration": ("sdk_depth_to_color_pointcloud"
+                                               if self.camera_profile.version == "v2"
+                                               else "legacy_aligned_depth"),
+                    }
                     self.get_logger().info(
-                        "realsense started; "
+                        f"{selected['name']} started; "
                         f"{camera_fps} FPS; {depth_low_light}; "
                         f"{color_low_light}"
                     )
                 except Exception as e:
-                    self.get_logger().warn(f"camera open failed: {e}")
+                    if not self.stop_event.is_set():
+                        self.get_logger().warn(f"camera open failed: {e}")
+                    if pipe is not None:
+                        try:
+                            pipe.stop()
+                        except Exception:
+                            pass
                     pipe = None
-                    time.sleep(5)
+                    self._camera_disconnected(e)
+                    self.stop_event.wait(5)
                     continue
-            t0 = time.time()
+            t0 = time.monotonic()
             try:
-                frames = align.process(pipe.wait_for_frames(timeout_ms=2000))
+                frames = pipe.wait_for_frames(timeout_ms=2000)
+                if self.stop_event.is_set():
+                    break
+                # ROS host receipt time, before inference/registration. This is
+                # NOT a hardware-synchronized camera/encoder exposure stamp.
+                capture_stamp = self.get_clock().now().to_msg()
+                if self.camera_profile.version == "v1":
+                    frames = align.process(frames)
                 color, depth = frames.get_color_frame(), frames.get_depth_frame()
                 if not color or not depth:
-                    continue
+                    raise RuntimeError("Camera frame is missing color or depth")
                 rgb = np.asanyarray(color.get_data()).copy()
                 bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
                 bgr = enhance_low_light_bgr(bgr, low_light_config)
+                if self.camera_profile.version == "v2":
+                    cloud.map_to(color)
+                    points = cloud.calculate(depth)
+                    vertices = np.asanyarray(points.get_vertices()).view(np.float32).reshape(-1, 3)
+                    uv = np.asanyarray(points.get_texture_coordinates()).view(np.float32).reshape(-1, 2)
+                    xyz = color_point_map(vertices, uv, extrinsics.rotation,
+                                          extrinsics.translation, *rgb.shape[:2])
+                    registered_depth = np.nan_to_num(xyz[:, :, 2], nan=0.0)
+                    registered_scale = 1.0  # XYZ from the SDK is already metres.
+                    intr = color.profile.as_video_stream_profile().get_intrinsics()
+                else:
+                    xyz = None
+                    registered_depth = np.asanyarray(depth.get_data()).copy()
+                    registered_scale = scale
+                    intr = depth.profile.as_video_stream_profile().get_intrinsics()
                 with self.frame_lock:
                     self.rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-                    self.depth = np.asanyarray(depth.get_data()).copy()
-                    self.intr = (depth.profile.as_video_stream_profile()
-                                 .intrinsics)
+                    self.depth = registered_depth
+                    self.depth_scale = registered_scale
+                    self.points_xyz = xyz
+                    self.intr = intr
+                    self.capture_stamp = capture_stamp
+                if self.stop_event.is_set():
+                    break
                 self._step()
             except Exception as e:
-                self.get_logger().warn(f"camera error: {e}")
+                if not self.stop_event.is_set():
+                    self.get_logger().warn(f"camera error: {e}")
                 try:
                     pipe.stop()
                 except Exception:
                     pass
                 pipe = None
+                self._camera_disconnected(e)
+                self.stop_event.wait(0.5)
                 continue
-            time.sleep(max(0.0, period - (time.time() - t0)))
+            self.stop_event.wait(max(0.0, period - (time.monotonic() - t0)))
+        if pipe is not None:
+            try:
+                pipe.stop()
+            except Exception:
+                pass
 
     # ------------------------------------------------------- processing
     def _step(self):
         now = time.monotonic()
-        stamp = self.get_clock().now().to_msg()
+        stamp = self.capture_stamp
         with self.frame_lock:
             rgb = self.rgb
             bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
         for ent in (self.target, self.ee):
+            if ent is self.ee and self.ee_mode == "disabled":
+                continue
             if ent is self.ee and self.ee_mode == "fixed_jaw_pixels":
                 self._update_fixed_ee()
                 continue
@@ -444,7 +610,8 @@ class PerceptionNode(Node):
             if (ent.state in ("acquiring", "lost") or stale) and \
                     not self.detection_lock.locked():
                 ent.last_acquire = now
-                threading.Thread(target=self._acquire, args=(ent, rgb.copy()),
+                threading.Thread(target=self._acquire,
+                                 args=(ent, rgb.copy(), self.camera_epoch),
                                  daemon=True).start()
             # fast path: advance the tracker
             if ent.tracker is not None:
@@ -476,14 +643,22 @@ class PerceptionNode(Node):
 
     def _bbox_to_3d(self, bbox):
         with self.frame_lock:
-            depth, intr = self.depth, self.intr
+            depth, intr, xyz = self.depth, self.intr, self.points_xyz
         return estimate_bbox3d(
-            depth, intr, self.depth_scale, bbox, **self.bbox3d_options)
+            depth, intr, self.depth_scale, bbox, points_xyz=xyz, **self.bbox3d_options)
 
     def _pixel_to_point(self, cx, cy, radius):
-        cx, cy = max(0, min(639, cx)), max(0, min(479, cy))
         with self.frame_lock:
-            depth, intr = self.depth, self.intr
+            depth, intr, xyz = self.depth, self.intr, self.points_xyz
+        if depth is None or intr is None:
+            return None
+        if not (0 <= cx < depth.shape[1] and 0 <= cy < depth.shape[0]):
+            return None
+        if xyz is not None:
+            win = xyz[max(0, cy - radius):cy + radius + 1,
+                      max(0, cx - radius):cx + radius + 1].reshape(-1, 3)
+            valid = win[np.isfinite(win).all(axis=1) & (win[:, 2] > 0)]
+            return np.median(valid, axis=0).tolist() if len(valid) else None
         win = depth[
             max(0, cy - radius):cy + radius + 1,
             max(0, cx - radius):cx + radius + 1,
@@ -516,12 +691,14 @@ class PerceptionNode(Node):
         self.ee.state = "tracking"
 
     # ------------------------------------------------------- YOLO (detect)
-    def _acquire(self, ent, rgb):
+    def _acquire(self, ent, rgb, epoch):
         bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
         reference_bbox = (ent.bbox if ent.tracker is not None
                           and ent.state == "tracking" else None)
         with self.detection_lock:
             detections = self.yolo.detect(bgr)
+        if self.stop_event.is_set() or epoch != self.camera_epoch:
+            return
         detection = associated_detection(
             detections, ent.class_name, reference_bbox)
         if detection is None:
@@ -536,13 +713,18 @@ class PerceptionNode(Node):
             return
         x, y, w, h = detection.bbox
         with self.frame_lock:
+            if self.rgb is None or epoch != self.camera_epoch:
+                return
             cur = cv2.cvtColor(self.rgb, cv2.COLOR_RGB2BGR)
         tracker = cv2.TrackerCSRT_create()
         tracker.init(cur, (x, y, w, h))
-        ent.tracker = tracker
-        ent.bbox = detection.bbox
-        ent.confidence = detection.score
-        ent.state = "tracking"
+        with self.frame_lock:
+            if epoch != self.camera_epoch or self.stop_event.is_set():
+                return
+            ent.tracker = tracker
+            ent.bbox = detection.bbox
+            ent.confidence = detection.score
+            ent.state = "tracking"
         self.get_logger().info(
             f"{ent.name} acquired as {detection.class_name} "
             f"confidence={detection.score:.2f} bbox={detection.bbox}"
@@ -550,12 +732,14 @@ class PerceptionNode(Node):
 
     # ----------------------------------------------------------- output
     def _publish(self, stamp):
+        if self.stop_event.is_set():
+            return
         for ent, pub in ((self.target, self.pub_target),
                          (self.ee, self.pub_ee)):
             if ent.state == "tracking" and ent.point:
                 msg = PointStamped()
                 msg.header.stamp = stamp
-                msg.header.frame_id = CAMERA_FRAME
+                msg.header.frame_id = self.camera_frame
                 msg.point.x, msg.point.y, msg.point.z = ent.point
                 pub.publish(msg)
 
@@ -575,6 +759,14 @@ class PerceptionNode(Node):
                 data=[*box["center"], *box["size"]]))
 
         self.pub_status.publish(String(data=json.dumps({
+            "model_version": self.camera_profile.version,
+            "camera_model": self.camera_profile.camera_model,
+            "camera_frame": self.camera_frame,
+            "camera": self.camera_metadata,
+            "stamp_source": "ros_host_frame_receipt",
+            "arm_extrinsics": ("urdf_cad_nominal_not_hand_eye_calibrated"
+                               if self.camera_profile.version == "v2"
+                               else "legacy_external_picker_calibration"),
             "target": {"state": self.target.state,
                        "desc": self.target.description,
                        "class": self.target.class_name,
@@ -582,12 +774,15 @@ class PerceptionNode(Node):
                        "point": self.target.point,
                        "bbox3d": self.target.bbox3d},
             "ee": {"state": self.ee.state, "class": self.ee.class_name,
+                   "mode": self.ee_mode,
                    "confidence": self.ee.confidence,
                    "point": self.ee.point},
             "distance_m": self.distance_m,
         })))
 
     def _publish_debug(self, bgr, stamp):
+        if self.stop_event.is_set():
+            return
         if self.ee_mode == "fixed_jaw_pixels":
             left, right = self.ee_left_pixel, self.ee_right_pixel
             color = (60, 255, 60)
@@ -641,10 +836,11 @@ class PerceptionNode(Node):
         if (self.target.state == "tracking" and self.target.point and
                 self.ee.state == "tracking" and self.ee.point):
             d = np.linalg.norm(np.subtract(self.target.point, self.ee.point))
-            cv2.putText(bgr, f"object <-> EoE {d:.3f} m", (10, 470),
+            cv2.putText(bgr, f"object <-> EoE {d:.3f} m", (10, bgr.shape[0] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         cv2.putText(
             bgr,
+            f"{self.camera_profile.version.upper()} {self.camera_profile.camera_model} | "
             f"target: {self.target.state} | ee: {self.ee.state}",
             (10, 22),
             cv2.FONT_HERSHEY_SIMPLEX,
@@ -652,24 +848,45 @@ class PerceptionNode(Node):
             (255, 255, 255),
             2,
         )
-        ok, jpg = cv2.imencode(
-            ".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, self.debug_quality])
-        if not ok:
+        debug_subscribers = self.pub_debug.get_subscription_count()
+        web_subscribers = (self.pub_web.get_subscription_count()
+                           if self.pub_web is not None else 0)
+        if debug_subscribers == 0 and web_subscribers == 0:
             return
-        msg = self._compressed(jpg, stamp)
-        self.pub_debug.publish(msg)
-        if self.pub_web is not None:
-            self.pub_web.publish(self._web_frame(bgr, stamp, msg))
+
+        # Do not encode the 640 px quality-80 debug JPEG when only the browser
+        # consumes the resized quality-50 stream. On the CPU-only V2 stack that
+        # otherwise duplicated JPEG work on every tracked frame.
+        debug_msg = None
+        web_can_reuse_debug = (
+            not (0 < self.web_max_width < bgr.shape[1])
+            and self.web_quality == self.debug_quality
+        )
+        if debug_subscribers or (web_subscribers and web_can_reuse_debug):
+            ok, jpg = cv2.imencode(
+                ".jpg", bgr,
+                [cv2.IMWRITE_JPEG_QUALITY, self.debug_quality])
+            if not ok:
+                return
+            debug_msg = self._compressed(jpg, stamp)
+            if debug_subscribers:
+                self.pub_debug.publish(debug_msg)
+        if self.stop_event.is_set():
+            return
+        if web_subscribers:
+            self.pub_web.publish(
+                debug_msg if web_can_reuse_debug else
+                self._web_frame(bgr, stamp, None))
 
     def _compressed(self, jpg, stamp):
         msg = CompressedImage()
         msg.header.stamp = stamp
-        msg.header.frame_id = CAMERA_FRAME
+        msg.header.frame_id = self.camera_frame
         msg.format = "jpeg"
         msg.data = jpg.tobytes()
         return msg
 
-    def _web_frame(self, bgr, stamp, debug_msg):
+    def _web_frame(self, bgr, stamp, debug_msg=None):
         """Encode the annotated frame again, sized for the browser preview.
 
         The web monitor forwards whatever JPEG arrives, so the only place the
@@ -693,6 +910,11 @@ class PerceptionNode(Node):
         ok, jpg = cv2.imencode(
             ".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, self.web_quality])
         return self._compressed(jpg, stamp) if ok else debug_msg
+
+    def destroy_node(self):
+        self.stop_event.set()
+        self.camera_thread.join(timeout=3.0)
+        return super().destroy_node()
 
 
 def main(args=None):

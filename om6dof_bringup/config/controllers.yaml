@@ -20,6 +20,11 @@
       forward_position_controller:
         type: forward_command_controller/ForwardCommandController
 
+      # The operator's additive channel. Claims position_offset, not position,
+      # so it coexists with arm_controller instead of replacing it.
+      forward_offset_controller:
+        type: forward_command_controller/ForwardCommandController
+
       # Only usable with om6dof.ros2_control.current.xacro, which is the one
       # that exposes an effort command interface. Loading it against the
       # standard description fails at startup rather than doing anything
@@ -60,9 +65,11 @@
         stopped_velocity_tolerance: 0.01
         goal_time: 1.0
 
-  # ----- remote position controller (loaded inactive at boot) -----
-  # F3 switches this atomically with arm_controller. Both claim the same six
-  # position interfaces, so they can never be active at the same time.
+  # ----- legacy absolute-position controller (loaded inactive, unused) -----
+  # Superseded by forward_offset_controller below. It still claims the same six
+  # `position` interfaces as arm_controller, so it can never be active at the
+  # same time as arm_controller -- kept loaded-inactive only for older tools
+  # that expect the topic to exist.
   forward_position_controller:
     ros__parameters:
       joints:
@@ -73,6 +80,22 @@
         - joint5
         - joint6
       interface_name: position
+
+  # ----- operator's additive offset channel (active alongside arm_controller) -----
+  # Claims joint*/position_offset, which DynamixelHardware::write() adds to
+  # joint*/position before the motor write. Different interface name means no
+  # resource conflict with arm_controller, so autonomous motion and the human
+  # operator can both be live at once -- no ownership switching anywhere.
+  forward_offset_controller:
+    ros__parameters:
+      joints:
+        - joint1
+        - joint2
+        - joint3
+        - joint4
+        - joint5
+        - joint6
+      interface_name: position_offset
 
   # ----- OM-X prismatic gripper, driven by Dynamixel ID 37 -----
   gripper_controller:

@@ -7,13 +7,132 @@
 
 RealSense RGB-D perception for the OM6DOF arm. Local YOLOX-S detects a COCO
 target class, OpenCV CSRT tracks it between detections, and aligned depth
-produces its 3D position in `camera_color_optical_frame`. Ollama and a VLM are
-not used by this node.
+produces its 3D position in the selected camera's optical frame. Ollama and a
+VLM are not used by this node. V1 uses D405; the explicit V2 profile uses D435
+and the updated V2 arm/camera geometry for its optional coordinate preview.
 
 ![Camera depth converted to world coordinates](../docs/assets/perception-depth-to-world.jpg)
 
-The viewer shows both sides of the conversion: the pixel and its depth on the
-left, the same point in camera and world coordinates in the overlay.
+The screenshot records an earlier coordinate-debug view; the live perception
+overlay itself displays camera-space observations, not a calibrated world pose.
+
+## V2 / D435
+
+Build the updated description, perception, and legacy-picker input guard:
+
+```bash
+cd ~/ros2_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select \
+  om6dof_description om6dof_perception om6dof_pick_and_place
+source install/setup.bash
+ros2 launch om6dof_perception perception_v2.launch.py
+```
+
+Stop other camera-owning applications first. This launch starts **perception
+and a read-only coordinate projector only**: no hardware controller, MoveIt,
+pickup action, or robot motion. It requires the YOLOX model described below.
+Existing services and the generic `perception.launch.py` still default to V1;
+do not run a V1 service and the V2 launch simultaneously.
+
+If several D435 units are connected, select the wrist unit explicitly:
+
+```bash
+ros2 launch om6dof_perception perception_v2.launch.py camera_serial:=YOUR_SERIAL
+```
+
+The serial is treated as a string (including leading zeroes). Only the chosen
+model is opened; multiple matching devices require a serial. Reconnection
+stays on the same unit and discards old images, tracking results and points.
+D435i is supported by explicit selection:
+
+```bash
+ros2 launch om6dof_perception perception_v2.launch.py camera_model:=D435i
+```
+
+The [official D435i description](https://github.com/realsenseai/realsense-ros/blob/ros2-development/realsense2_description/urdf/_d435i.urdf.xacro)
+reuses D435 RGB/depth geometry and adds IMU frames. This perception node uses
+RGB/depth only, retains `d435_color_optical_frame`, and reports the actual
+selected model as `D435i` in status. Live sensor calibration still comes from
+the connected unit; arm extrinsics remain nominal. This option does not change
+the existing payload mass estimate or enable IMU streaming.
+D435i/D435f are not silently substituted for D435. Camera/model parameters are
+startup-only: restart the node to change them.
+
+| Output | V1 | V2 |
+|---|---|---|
+| `target_point` / `ee_point` frame | `camera_color_optical_frame` | `d435_color_optical_frame` |
+| Default EE mode | Legacy fixed jaw pixels | Disabled; D405 pixels are invalid for this mount |
+| Optional `target_point_world` | Not provided here; existing picker handles V1 | `base_link`, using **V2** URDF FK and camera frames |
+| Camera-to-arm transform | External legacy picker calibration | CAD/nominal mounting, **not hand-eye calibrated** |
+
+For V2 the SDK supplies native depth vertices, depth scale, color intrinsics,
+distortion and the device-calibrated depth-to-color transform. The vertices are
+transformed into the color optical frame and matched to color pixels with a
+nearest-depth buffer. Missing/occluded depth remains invalid, rather than
+being filled with fabricated coordinates. This follows the
+[RealSense projection and extrinsics conventions](https://dev.realsenseai.com/docs/projection-in-realsense-sdk-2-0/).
+Low-light mode chooses a common FPS advertised by the actual color and depth
+profiles; it does not reuse a hardcoded D405 frame rate. Normal D435 mode
+retains the device's emitter setting instead of forcibly disabling it.
+
+The coordinate projector reads `om6dof_v2.urdf.xacro` from the installed
+`om6dof_description`, including its changed joint origins/axes and
+[D435 camera-frame configuration](../om6dof_description/config/camera_d435.yaml).
+It does not reuse the controller/picker's V1 FK, consume an ambiguous existing
+TF tree, or broadcast competing TF. Mounting geometry and CoM are unchanged.
+
+`/om6dof_perception/target_point_world` is an **estimated base-frame observation**,
+not a ready-to-execute grasp command. It requires a complete `/joint_states`
+sample within 50 ms of the point's ROS host-receipt timestamp; both must be
+no older than 0.5 s. Missing, non-finite, future, stale, or wrong-frame data is
+rejected. There is no fallback to the latest joint positions. All publishers
+must use the same ROS domain and clock. Host receipt is **not** synchronized
+camera exposure/encoder timing; moving-arm precision still needs validation.
+
+```bash
+ros2 topic echo --once /om6dof_perception/target_point
+ros2 topic echo --once /om6dof_perception/projection_status
+ros2 topic echo --once /om6dof_perception/target_point_world
+```
+
+No joint feedback? Camera-space detection still works; the world topic stays
+silent and `projection_status` explains why. For camera-only operation:
+
+```bash
+ros2 launch om6dof_perception perception_v2.launch.py publish_world_point:=false
+```
+
+Status JSON includes `model_version`, `camera_model`, `camera_frame`, connection
+state, and live SDK geometry. Projection status separately reports the URDF
+hash, matching timestamps, `transform_source: urdf_nominal`, and
+`calibration_verified: false`. The web monitor continues to read the same
+image/status topics; the image overlay identifies the selected model.
+
+**Near-field limitation:** D435 cannot measure as close as D405. At 640×480,
+the manufacturer's nominal minimum depth is 175 mm; the current V2 TCP is
+approximately 59 mm ahead of the depth sensor. The gripper jaws, and even a
+target 80 mm ahead of the TCP, can therefore lie in its blind range. New jaw
+pixel calibration cannot recover unavailable depth. Keep EE mode disabled
+unless its geometry and measurable depth have been verified. See the
+[D400 datasheet, Table 4-11](https://www.realsenseai.com/wp-content/uploads/2023/03/Intel-RealSense-D400-Series-Datasheet-March-2023.pdf#page=85).
+
+If usable jaw pixels have actually been measured, explicitly opt in with
+`ee_mode:=fixed_jaw_pixels ee_pixels_calibrated:=true` and provide the new
+`ee_left_pixel` / `ee_right_pixel`; the old D405 values are not a V2 calibration.
+
+The direct picker now accepts only the matching V2 metadata and
+`d435_color_optical_frame` for perception-driven motion. D405/V1 observations
+are rejected, cached targets are cleared, and active perception work is
+cancelled through the existing cancellation path. Its D435 transform is the
+CAD/nominal V2 URDF transform; complete hand-eye calibration and near-field
+validation are still required before relying on it for precise physical picks.
+
+The V2 launch uses a 0.5 s YOLO refresh, a 15 Hz tracking loop, and a 480 px
+browser preview. YOLOX-S runs through CPU-only OpenCV on this host, so CSRT
+tracks between full detections. Override `reacquire_period_sec`,
+`frame_rate_hz`, or `web_stream_max_width` on the launch command when tuning;
+shortening the refresh below one inference time cannot increase throughput.
 
 ## Run
 
@@ -39,6 +158,8 @@ on `/application_web_monitor/image/compressed`.
 ## Sharing the camera with DD-GNG
 
 Perception and DD-GNG both own the same RealSense, so only one may run.
+The service definitions use the V2/D435i contract and the responsive defaults
+above. Do not run another camera-owning process at the same time.
 
 ```bash
 # perception
@@ -123,7 +244,7 @@ object family whose depth differs substantially from its visible width.
 The bundled model uses the 80 COCO classes. Free-form GUI text is reduced to a
 known class (`red cup` -> `cup`, `glass jar` -> `bottle`). Because a robot
 gripper is not a COCO class, EoE is estimated from two calibrated jaw pixels in
-the fixed camera view: left `(200, 430)` and right `(540, 400)`. Their aligned
+the **V1/D405** fixed camera view: left `(200, 430)` and right `(540, 400)`. Their aligned
 depth points are averaged in 3D. Override them with `ee_left_pixel` and
 `ee_right_pixel` after the camera mount or image crop changes.
 
@@ -131,6 +252,8 @@ The node opens the RealSense directly. Stop other camera-owning applications
 before starting it.
 
 ## Pickup from perception
+
+This section describes the **V1/D405 backend only**, not automatic V2 pickup.
 
 The perception-driven pickup backend consumes
 `/om6dof_perception/target_point`, rejects noisy depth clusters, transforms the
@@ -172,3 +295,18 @@ The Kublab dashboard exposes the guarded action as **Pickup object**. It also
 provides **Start searching state**: joint1 sweeps centre/left/right at low,
 medium, and high joint5 views. Detection is accepted only after 10 consecutive
 frames; any lost frame resets the counter.
+
+## Offline regression checks
+
+From the repository root, with ROS Humble sourced:
+
+```bash
+PYTHONPATH="$PWD/om6dof_perception:$PYTHONPATH" \
+  python3 -m pytest om6dof_perception/test -q
+python3 -m unittest discover -s om6dof_description/scripts -p test_d435_frames.py -v
+```
+
+These checks do not open a camera or command a robot. They cover model/serial
+selection, D435 registered XYZ, nominal URDF camera frames, V2 FK, and stale or
+incompatible inputs. Hardware calibration and dynamic accuracy remain separate
+physical validation tasks.

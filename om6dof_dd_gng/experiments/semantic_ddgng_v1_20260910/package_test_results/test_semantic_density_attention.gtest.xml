@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="17" failures="0" disabled="0" errors="0" time="0" timestamp="2026-09-11T17:44:51" name="AllTests">
+  <testsuite name="SemanticDensityAttention" tests="17" failures="0" disabled="0" errors="0" time="0" timestamp="2026-09-11T17:44:51">
+    <testcase name="ExpiresFromSourceCaptureNotInferenceCompletion" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="DuplicateResultDoesNotRefreshOrMoveAttention" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="NewUniqueResultReplacesAndEmptyResultClears" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="PoseMismatchClearsAndCannotResurrectSameResult" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="InvalidDuplicateClearsPreviousAttention" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="StaleUnknownAndFutureSourceClearAttention" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="SequenceZeroAndOutOfOrderFailClosed" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="NewSequenceWithRegressingCaptureTimeFailsClosed" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="InvalidOrRegressingReadClockClears" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="InvalidOrRegressingObservationClockConsumesResult" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="LengthMismatchClearsInsteadOfReadingOutOfBounds" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="RejectsInvalidPointsAndScoresAndClampsConfidence" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="ZeroDirectMatchesDoNotCreateAttention" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="GreedySelectionUsesScoreThenIndexAndHalfRadius" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="MaximumRegionBudgetIsBoundedAndDeterministic" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="ReturnedSnapshotCannotMutateInternalRegions" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+    <testcase name="ValidatesParameterBounds" status="run" result="completed" time="0" timestamp="2026-09-11T17:44:51" classname="om6dof_dd_gng.SemanticDensityAttention" />
+  </testsuite>
+</testsuites>

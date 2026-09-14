@@ -1,0 +1,500 @@
+--- before/om6dof_dd_gng/src/reachability_graph_node.cpp
++++ after/om6dof_dd_gng/src/reachability_graph_node.cpp
+@@ -264,6 +264,8 @@
+     declare_parameter<double>("body_collision_step", 0.08);
+     declare_parameter<int>("body_collision_first_edge", 1);
+     declare_parameter<bool>("exact_collision_enabled", true);
++    declare_parameter<bool>("include_target_in_collision", false);
++    declare_parameter<bool>("target_refinement_enabled", false);
+     declare_parameter<double>("exact_collision_step", 0.05);
+     declare_parameter<double>("exact_environment_point_radius", 0.012);
+     declare_parameter<double>("exact_environment_edge_radius", 0.006);
+@@ -356,6 +358,8 @@
+     body_collision_first_edge_ = static_cast<int>(
+       get_parameter("body_collision_first_edge").as_int());
+     exact_collision_enabled_ = get_parameter("exact_collision_enabled").as_bool();
++    include_target_in_collision_ = get_parameter("include_target_in_collision").as_bool();
++    target_refinement_enabled_ = get_parameter("target_refinement_enabled").as_bool();
+     exact_collision_step_ = get_parameter("exact_collision_step").as_double();
+     exact_environment_point_radius_ =
+       get_parameter("exact_environment_point_radius").as_double();
+@@ -726,6 +730,8 @@
+     edge_index_by_key_.clear();
+     node_body_sweeps_.clear();
+     edge_body_sweeps_.clear();
++    refinement_node_count_ = 0;
++    refinement_sample_sequence_ = 0;
+     exact_blocked_edges_.clear();
+     last_anchor_node_count_ = 0U;
+     last_prototype_budget_ = 0U;
+@@ -1289,6 +1295,20 @@
+       }
+     }
+ 
++    // Keep a complete scene for move-to-target planning. Semantic target status
++    // must not exempt the object or its surrounding geometry from FCL checks.
++    complete_environment_points_.clear();
++    complete_environment_segments_.clear();
++    for (const auto & node : message.nodes) {
++      complete_environment_points_.push_back({node.position.x, node.position.y, node.position.z});
++    }
++    for (const auto & edge : message.edges) {
++      const auto a = node_by_id.find(edge.source_id);
++      const auto b = node_by_id.find(edge.target_id);
++      if (a != node_by_id.end() && b != node_by_id.end()) {
++        complete_environment_segments_.push_back({a->second.first, b->second.first});
++      }
++    }
+     targets_ = std::move(targets);
+     obstacle_points_ = std::move(obstacle_points);
+     obstacle_segments_ = std::move(obstacle_segments);
+@@ -1464,14 +1484,18 @@
+       planning_scene_->processCollisionObjectMsg(remove);
+     }
+ 
++    const auto & scene_points = include_target_in_collision_ ?
++      complete_environment_points_ : obstacle_points_;
++    const auto & scene_segments = include_target_in_collision_ ?
++      complete_environment_segments_ : obstacle_segments_;
+     moveit_msgs::msg::CollisionObject environment;
+     environment.header.frame_id = world_frame_;
+     environment.id = kEnvironmentCollisionObjectId;
+     environment.operation = moveit_msgs::msg::CollisionObject::ADD;
+-    environment.primitives.reserve(obstacle_points_.size() + obstacle_segments_.size());
++    environment.primitives.reserve(scene_points.size() + scene_segments.size());
+     environment.primitive_poses.reserve(environment.primitives.capacity());
+ 
+-    for (const reach::Point3 & point : obstacle_points_) {
++    for (const reach::Point3 & point : scene_points) {
+       shape_msgs::msg::SolidPrimitive sphere;
+       sphere.type = shape_msgs::msg::SolidPrimitive::SPHERE;
+       sphere.dimensions.resize(1U);
+@@ -1483,7 +1507,7 @@
+       environment.primitives.push_back(std::move(sphere));
+       environment.primitive_poses.push_back(pose);
+     }
+-    for (const reach::Segment & segment : obstacle_segments_) {
++    for (const reach::Segment & segment : scene_segments) {
+       const Eigen::Vector3d a(segment.a.x, segment.a.y, segment.a.z);
+       const Eigen::Vector3d b(segment.b.x, segment.b.y, segment.b.z);
+       const Eigen::Vector3d direction = b - a;
+@@ -1655,7 +1679,9 @@
+       }
+       if (failed_edge == reach::kInvalidIndex) {
+         last_exact_collision_valid_ = true;
+-        plan_reason_ = "path_ready_exact_validated_preview_only";
++        plan_reason_ = include_target_in_collision_ ?
++          "path_ready_exact_validated_target_protected_preview_only" :
++          "path_ready_exact_validated_preview_only";
+         return;
+       }
+ 
+@@ -1668,6 +1694,88 @@
+     }
+     last_plan_.success = false;
+     plan_reason_ = "exact_collision_replan_exhausted";
++  }
++
++  bool refineTargetRoadmap()
++  {
++    if (!target_refinement_enabled_ || !include_target_in_collision_ ||
++      !exact_collision_enabled_ || targets_.empty() || nodes_.empty() ||
++      refinement_node_count_ >= 128U)
++    {
++      return false;
++    }
++    const auto began = std::chrono::steady_clock::now();
++    std::vector<std::pair<double, std::size_t>> seeds;
++    for (std::size_t i = 0; i < nodes_.size(); ++i) {
++      double d = std::numeric_limits<double>::infinity();
++      for (const auto & target : targets_) {
++        d = std::min(d, reach::distance(nodes_[i].position, target.position));
++      }
++      seeds.emplace_back(d, i);
++    }
++    std::sort(seeds.begin(), seeds.end());
++    seeds.resize(std::min<std::size_t>(16, seeds.size()));
++    const std::array<unsigned int, 6> bases{2, 3, 5, 7, 11, 13};
++    if (joint_names_.size() != bases.size()) {return false;}
++    std::size_t added = 0;
++    for (int attempt = 0; attempt < 256 && refinement_node_count_ < 128U; ++attempt) {
++      if (std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count() > 0.15) {
++        break;
++      }
++      const auto sequence = refinement_sample_sequence_++;
++      const auto seed_index = seeds[sequence % seeds.size()].second;
++      auto joints = nodes_[seed_index].joints;
++      for (std::size_t j = 0; j < joints.size(); ++j) {
++        const double u = reach::haltonRadicalInverse(
++          sequence / seeds.size() + 1, bases[j], reach::haltonDigitPermutation(bases[j], 0, j));
++        joints[j] = std::clamp(joints[j] + (2.0 * u - 1.0) * 0.45,
++          lower_bounds_[j], lower_bounds_[j] + joint_ranges_[j]);
++      }
++      auto candidate = nodeFromJoints(static_cast<std::uint32_t>(nodes_.size()), joints);
++      double distance = std::numeric_limits<double>::infinity();
++      for (const auto & target : targets_) {
++        distance = std::min(distance, reach::distance(candidate.position, target.position));
++      }
++      if (distance > target_intersection_radius_ * 1.5 || !stateIsValid(joints)) {continue;}
++      auto sweep = bodySweepForState(joints);
++      if (bodySweepBlocked(sweep) || !exactStateIsValid(joints)) {continue;}
++      const auto ranked = reach::rankNodesByJointDistance(nodes_, joints, joint_ranges_, blocked_nodes_);
++      std::vector<std::pair<std::size_t, BodySweep>> connections;
++      for (std::size_t rank = 0; rank < std::min<std::size_t>(24, ranked.size()); ++rank) {
++        const auto index = ranked[rank];
++        const double d = reach::normalizedJointDistance(nodes_[index].joints, joints, joint_ranges_);
++        if (d < 1.0e-6 || d > max_normalized_joint_distance_ ||
++          reach::distance(nodes_[index].position, candidate.position) > max_cartesian_edge_length_ ||
++          !edgeStateIsValid(nodes_[index].joints, joints)) {continue;}
++        auto edge_sweep = bodySweepForTransition(nodes_[index].joints, joints);
++        if (bodySweepBlocked(edge_sweep) || !exactTransitionIsValid(nodes_[index].joints, joints)) {
++          continue;
++        }
++        connections.emplace_back(index, std::move(edge_sweep));
++        if (connections.size() >= 3U) {break;}
++      }
++      if (connections.empty()) {continue;}
++      const auto new_index = nodes_.size();
++      nodes_.push_back(std::move(candidate));
++      node_body_sweeps_.push_back(std::move(sweep));
++      blocked_nodes_.push_back(false);
++      for (auto & connection : connections) {
++        edge_index_by_key_[edgeKey(connection.first, new_index)] = edges_.size();
++        edges_.push_back({connection.first, new_index,
++          reach::jointPathCost(nodes_[connection.first].joints, joints)});
++        edge_body_sweeps_.push_back(std::move(connection.second));
++        exact_blocked_edges_.push_back(false);
++        blocked_edges_.push_back(false);
++      }
++      ++added;
++      ++refinement_node_count_;
++    }
++    if (added != 0) {
++      ++graph_revision_;
++      intersection_nodes_ = reach::targetIntersectionMask(nodes_, targets_, target_intersection_radius_);
++      publishGraphData();
++    }
++    return added != 0;
+   }
+ 
+   void updatePlanAndMarkers()
+@@ -1687,6 +1795,17 @@
+     intersection_nodes_ = reach::targetIntersectionMask(
+       nodes_, targets_, target_intersection_radius_);
+ 
++    // Reject colliding goal states before Dijkstra. Otherwise lazy edge checks
++    // repeatedly route to the same colliding endpoint through another edge.
++    if (include_target_in_collision_ && exact_collision_enabled_) {
++      for (std::size_t i = 0; i < nodes_.size(); ++i) {
++        if (intersection_nodes_[i] && !blocked_nodes_[i] &&
++          !exactStateIsValid(nodes_[i].joints))
++        {
++          blocked_nodes_[i] = true;
++        }
++      }
++    }
+     last_plan_ = reach::PlanResult{};
+     plan_reason_.clear();
+     const auto measured = currentJoints();
+@@ -1698,6 +1817,8 @@
+       plan_reason_ = "current_joint_state_invalid_or_self_colliding";
+     } else if (bodySweepBlocked(bodySweepForState(*measured))) {
+       plan_reason_ = "current_full_body_intersects_environment";
++    } else if (include_target_in_collision_ && !exactStateIsValid(*measured)) {
++      plan_reason_ = "current_robot_mesh_intersects_environment_or_target";
+     } else {
+       const auto start = validatedStartNode(*measured, blocked_nodes_);
+       if (!start) {
+@@ -1712,6 +1833,9 @@
+         last_start_connection_cost_ = reach::jointPathCost(
+           *measured, nodes_[*start].joints);
+         planWithExactValidation(*start);
++        if (!last_plan_.success && refineTargetRoadmap()) {
++          planWithExactValidation(*start);
++        }
+       }
+     }
+ 
+@@ -1727,7 +1851,7 @@
+     om6dof_dd_gng::msg::ReachabilityGraph message;
+     message.header.stamp = now();
+     message.header.frame_id = world_frame_;
+-    message.graph_method = graph_method_;
++    message.graph_method = refinement_node_count_ ? graph_method_ + "+local_prm" : graph_method_;
+     message.graph_revision = graph_revision_;
+     message.expanded_urdf_sha256 = expanded_urdf_sha256_;
+     message.srdf_sha256 = srdf_sha256_;
+@@ -1781,7 +1905,7 @@
+     om6dof_dd_gng::msg::ReachabilityPlan message;
+     message.header.stamp = now();
+     message.header.frame_id = world_frame_;
+-    message.graph_method = graph_method_;
++    message.graph_method = refinement_node_count_ ? graph_method_ + "+local_prm" : graph_method_;
+     message.graph_revision = graph_revision_;
+     message.query_id = active_query_id_;
+     message.scene_id = active_scene_id_;
+@@ -2173,6 +2297,12 @@
+   int body_collision_first_edge_ = 1;
+   std::unordered_map<std::string, double> body_radii_;
+   bool exact_collision_enabled_ = true;
++  bool include_target_in_collision_ = false;
++  bool target_refinement_enabled_ = false;
++  std::size_t refinement_node_count_ = 0;
++  std::uint64_t refinement_sample_sequence_ = 0;
++  std::vector<reach::Point3> complete_environment_points_;
++  std::vector<reach::Segment> complete_environment_segments_;
+   double exact_collision_step_ = 0.05;
+   double exact_environment_point_radius_ = 0.012;
+   double exact_environment_edge_radius_ = 0.006;
+--- before/om6dof_dd_gng/config/topo_gng_v2.yaml
++++ after/om6dof_dd_gng/config/topo_gng_v2.yaml
+@@ -158,6 +158,12 @@
+     # nodes become spheres and DD-GNG edges become cylinders. A failed graph
+     # edge is disabled and Dijkstra is repeated up to exact_max_replans.
+     exact_collision_enabled: true
++    # Moving to a target does not authorize contact: FCL includes target nodes,
++    # target edges and nearby geometry that the legacy pickup scene excluded.
++    include_target_in_collision: true
++    # Bounded local joint-space sampling adds collision-checked roadmap nodes
++    # only when the existing graph cannot reach the selected target.
++    target_refinement_enabled: true
+     exact_collision_step: 0.05
+     exact_environment_point_radius: 0.012
+     exact_environment_edge_radius: 0.006
+--- before/om6dof_dd_gng/scripts/semantic_target_gui.py
++++ after/om6dof_dd_gng/scripts/semantic_target_gui.py
+@@ -28,6 +28,18 @@
+     exact = {
+         "controller_state_missing_or_stale": "Status dua controller belum tersedia atau kedaluwarsa",
+         "controller_snapshot_ambiguous": "Identitas dua controller ambigu",
++        "current_robot_mesh_intersects_environment_or_target":
++            "Posisi robot saat ini bertabrakan dengan model environment/target; periksa RViz dan posisi objek",
++        "target_intersection_blocked_or_disconnected":
++            "Belum ada jalur edge bebas collision ke irisan target",
++        "target_intersection_exact_blocked_or_disconnected":
++            "Jalur ke target terhalang collision pada model robot",
++        "target_outside_reachability_intersection":
++            "Target belum beririsan dengan area kerja graph robot",
++        "current_state_cannot_connect_to_roadmap":
++            "Posisi EoE saat ini belum terhubung ke graph dengan jalur bebas collision",
++        "planner_target_collision_check_required":
++            "Planner lama belum memeriksa collision objek target; jalankan ulang launch planning",
+         "execution_disabled_at_launch": "Eksekusi tidak diaktifkan saat launch",
+         "frozen_plan_stale": "Preview kedaluwarsa; buat Preview baru",
+         "motion_faulted": "Coordinator motion sedang fault",
+@@ -75,6 +87,10 @@
+         return "Menunggu status planning", "", False
+     message = str(payload.get("message", ""))
+     if not payload.get("plan_ready", False):
++        reason = message.rsplit(":", 1)[-1].strip()
++        explanation = friendly_blocker(reason)
++        if explanation != reason.replace("_", " "):
++            return explanation, "Periksa model environment dan graph robot di RViz", False
+         return message or str(payload.get("state", "Menunggu Preview")), "", False
+     target = str(payload.get("target_class", "object"))
+     track_id = payload.get("target_track_id", "?")
+@@ -94,6 +110,8 @@
+         return headline, "Belum bisa Execute: " + "; ".join(blockers), False
+     executable = bool(payload.get("executable", False)) and not bool(payload.get("busy", False))
+     detail = "Siap dieksekusi" if executable else message
++    if payload.get("task_mode") == "move_to_target":
++        detail += " | Menuju target melalui edge graph; gripper tidak dijepit"
+     return headline, detail, executable
+ 
+ 
+@@ -259,6 +277,9 @@
+                 menu["values"] = ["All detected classes"] + visible + [
+                     item for item in COCO_CLASSES if item not in visible]
+             status_headline, status_detail, executable = summarize_graph_status(payload)
++            execute_button.configure(text=(
++                "Gerakkan EoE ke target" if payload.get("task_mode") == "move_to_target"
++                else "Execute planned pickup"))
+             if self.preview_only:
+                 if payload.get("plan_ready", False):
+                     status_detail = "Preview gabungan: hijau = acuan; magenta = koreksi joystick."
+--- before/om6dof_pick_and_place/om6dof_pick_and_place/graph_pick_node.py
++++ after/om6dof_pick_and_place/om6dof_pick_and_place/graph_pick_node.py
+@@ -328,6 +328,14 @@
+     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+ 
+ 
++def validate_goal_alignment(task_mode, alignment, minimum_alignment):
++    if task_mode not in {"move_to_target", "pickup"}:
++        raise ValueError(f"unsupported_task_mode:{task_mode}")
++    if task_mode == "pickup" and alignment < minimum_alignment:
++        raise ValueError(
++            f"gripper_approach_misaligned:{alignment:.6f}<{minimum_alignment:.6f}")
++
++
+ @dataclass
+ class FrozenPickPlan:
+     created_monotonic: float
+@@ -349,12 +357,14 @@
+     blockers: List[str]
+     bus_read_failures: int
+     bus_write_failures: int
++    task_mode: str = "pickup"
+ 
+ 
+ class GraphPickNode(Node):
+     def __init__(self) -> None:
+         super().__init__("graph_pick")
+         self.declare_parameter("world_frame", "world")
++        self.declare_parameter("task_mode", "move_to_target")
+         self.declare_parameter(
+             "arm_joint_names",
+             ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"],
+@@ -409,6 +419,8 @@
+         self.declare_parameter("retreat_joint_velocity", 0.20)
+         self.declare_parameter("minimum_segment_time_sec", 0.10)
+ 
++        self.task_mode = str(self.get_parameter("task_mode").value)
++        validate_goal_alignment(self.task_mode, 1.0, 0.3)
+         self.world_frame = str(self.get_parameter("world_frame").value)
+         self.joint_names = [str(value) for value in
+                             self.get_parameter("arm_joint_names").value]
+@@ -752,7 +764,12 @@
+             raise ValueError(f"reachability_plan_invalid:{reachability.reason}")
+         if not bool(reachability.exact_collision_valid):
+             raise ValueError("reachability_plan_lacks_exact_collision_validation")
+-        if reachability.reason != "path_ready_exact_validated_preview_only":
++        if self.task_mode == "move_to_target" and reachability.reason != (
++                "path_ready_exact_validated_target_protected_preview_only"):
++            raise ValueError("planner_target_collision_check_required")
++        if reachability.reason not in {
++                "path_ready_exact_validated_preview_only",
++                "path_ready_exact_validated_target_protected_preview_only"}:
+             raise ValueError(f"unexpected_reachability_reason:{reachability.reason}")
+         target_id = int(reachability.target_environment_node_id)
+         environment = matching_environment_snapshot(
+@@ -815,9 +832,7 @@
+         alignment = approach_alignment(goal_pose, target_position, self.tool_axis)
+         minimum_alignment = float(
+             self.get_parameter("minimum_approach_alignment").value)
+-        if alignment < minimum_alignment:
+-            raise ValueError(
+-                f"gripper_approach_misaligned:{alignment:.6f}<{minimum_alignment:.6f}")
++        validate_goal_alignment(self.task_mode, alignment, minimum_alignment)
+         blockers = []
+         if bool(self.get_parameter("require_calibration_verified").value) \
+                 and not bool(perception.get("calibration_verified", False)):
+@@ -856,6 +871,7 @@
+             blockers=blockers,
+             bus_read_failures=bus_read_failures,
+             bus_write_failures=bus_write_failures,
++            task_mode=self.task_mode,
+         )
+ 
+     def _plan_payload(self, plan: Optional[FrozenPickPlan] = None) -> dict:
+@@ -869,6 +885,7 @@
+             fault_reason = self._fault_reason
+         payload = {
+             "schema": "om6dof.graph_pick_status.v1",
++            "task_mode": self.task_mode,
+             "state": state,
+             "message": message,
+             "execution_enabled": self.execution_enabled,
+@@ -902,6 +919,7 @@
+                 "component_nodes": plan.component_size,
+                 "target_distance_m": plan.target_distance,
+                 "approach_alignment": plan.alignment,
++                "grasp_orientation_required": plan.task_mode == "pickup",
+                 "trajectory_points": len(plan.trajectory.points),
+                 "reachability_edges_used": max(0, len(plan.trajectory.points) - 2),
+                 "execution_blockers": blockers,
+@@ -974,7 +992,7 @@
+                 self._message = str(error)
+             self._publish_status()
+             response.success = False
+-            response.message = f"graph pickup plan rejected: {error}"
++            response.message = f"graph trajectory rejected: {error}"
+             return response
+         with self._lock:
+             self._frozen = plan
+@@ -1119,6 +1137,20 @@
+     def _execute_worker(self, plan: FrozenPickPlan) -> None:
+         success = False
+         try:
++            if plan.task_mode == "move_to_target":
++                self._state = "following_graph_path"
++                self._message = "following robot graph edges to target; gripper unchanged"
++                self._publish_status()
++                if not self._execution_interlocks_ready(plan) or not self._send_arm(
++                        plan.trajectory, "graph move to target"):
++                    return
++                success = True
++                self._state = "target_reached"
++                self._message = (
++                    f"reached robot graph goal near {plan.target_class_name}; gripper unchanged")
++                return
++            if plan.task_mode != "pickup":
++                raise ValueError(f"unsupported_task_mode:{plan.task_mode}")
+             self._state = "opening_gripper"
+             self._message = "opening gripper before graph traversal"
+             self._publish_status()
+@@ -1166,7 +1198,7 @@
+                 self._gripper_goal_handle = None
+                 if not success and self._state not in {
+                         "retreat_failed_holding_object"}:
+-                    self._state = "pickup_failed"
++                    self._state = "motion_failed"
+             self._publish_status()
+ 
+     def _on_execute(self, _request, response):
+@@ -1190,7 +1222,7 @@
+             self._holding_object = False
+             self._cancel.clear()
+             self._state = "execution_starting"
+-            self._message = f"starting graph pickup plan {plan.fingerprint[:16]}"
++            self._message = f"starting {plan.task_mode} plan {plan.fingerprint[:16]}"
+         threading.Thread(
+             target=self._execute_worker, args=(plan,), daemon=True).start()
+         self._publish_status()
+--- before/om6dof_pick_and_place/config/graph_pick.yaml
++++ after/om6dof_pick_and_place/config/graph_pick.yaml
+@@ -1,6 +1,9 @@
+ graph_pick:
+   ros__parameters:
+     world_frame: world
++    # Follow robot graph edges to the nearest collision-valid target intersection.
++    # pickup is a separate task that also requires grasp orientation and gripper actions.
++    task_mode: move_to_target
+     arm_joint_names: [joint1, joint2, joint3, joint4, joint5, joint6]
+ 
+     # Inputs produced by the V2 semantic environment and ordinary reachability
+--- before/om6dof_pick_and_place/test/test_graph_pick_node.py
++++ after/om6dof_pick_and_place/test/test_graph_pick_node.py
+@@ -424,3 +424,33 @@
+     plan = SimpleNamespace(bus_read_failures=3, bus_write_failures=2)
+     assert "dynamixel_failure_counter_advanced_since_preview" in \
+         GraphPickNode._interlock_blockers(node, plan)
++
++
++def test_move_to_target_does_not_require_grasp_orientation():
++    from om6dof_pick_and_place.graph_pick_node import validate_goal_alignment
++    validate_goal_alignment("move_to_target", 0.208489, 0.3)
++    with pytest.raises(ValueError, match="gripper_approach_misaligned"):
++        validate_goal_alignment("pickup", 0.208489, 0.3)
++    with pytest.raises(ValueError, match="unsupported_task_mode"):
++        validate_goal_alignment("unknown", 1.0, 0.3)
++
++
++@pytest.mark.parametrize("allowed, arm_success", [(True, True), (False, True), (True, False)])
++def test_move_to_target_follows_frozen_trajectory_without_gripper_actions(allowed, arm_success):
++    node = object.__new__(GraphPickNode)
++    node._lock = threading.RLock()
++    node._busy = True
++    node._holding_object = False
++    node._publish_status = lambda: None
++    node._execution_interlocks_ready = lambda _: allowed
++    sent = []
++    def arm(trajectory, label):
++        sent.append(trajectory)
++        return arm_success
++    node._send_arm = arm
++    node._send_gripper = lambda *_: pytest.fail("move-to-target must not command gripper")
++    plan = SimpleNamespace(task_mode="move_to_target", trajectory=object(), target_class_name="bottle")
++    node._execute_worker(plan)
++    assert sent == ([plan.trajectory] if allowed else [])
++    assert node._state == ("target_reached" if allowed and arm_success else "motion_failed")
++    assert not node._busy and not node._holding_object

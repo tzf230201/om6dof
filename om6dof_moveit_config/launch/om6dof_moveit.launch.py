@@ -36,10 +36,12 @@ def generate_launch_description():
 
     moveit_config = (
         MoveItConfigsBuilder(
-            robot_name="om6dof", package_name="om6dof_moveit_config"
+            robot_name="om6dof_v2", package_name="om6dof_moveit_config"
         )
         .robot_description(
-            file_path=os.path.join(description_share, "urdf", "om6dof.urdf.xacro")
+            file_path=os.path.join(
+                description_share, "urdf", "om6dof_v2.urdf.xacro"
+            )
         )
         .robot_description_semantic(str(Path("config") / "om6dof.srdf"))
         .joint_limits(str(Path("config") / "joint_limits.yaml"))

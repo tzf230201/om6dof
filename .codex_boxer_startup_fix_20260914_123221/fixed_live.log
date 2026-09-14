@@ -1,0 +1,30 @@
+[INFO] [launch]: All log files can be found below /home/kublab/.ros/log/2026-09-14-12-40-37-238251-agx-413140
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [robot_state_publisher-1]: process started with pid [413146]
+[INFO] [python-2]: process started with pid [413148]
+[robot_state_publisher-1] [INFO] [1789357237.581985664] [boxer_orientation_state_publisher]: got segment base_link
+[robot_state_publisher-1] [INFO] [1789357237.582169472] [boxer_orientation_state_publisher]: got segment d405_payload_link
+[robot_state_publisher-1] [INFO] [1789357237.582194848] [boxer_orientation_state_publisher]: got segment d435_bottom_screw_frame
+[robot_state_publisher-1] [INFO] [1789357237.582211008] [boxer_orientation_state_publisher]: got segment d435_color_frame
+[robot_state_publisher-1] [INFO] [1789357237.582224448] [boxer_orientation_state_publisher]: got segment d435_color_optical_frame
+[robot_state_publisher-1] [INFO] [1789357237.582236960] [boxer_orientation_state_publisher]: got segment d435_depth_frame
+[robot_state_publisher-1] [INFO] [1789357237.582249440] [boxer_orientation_state_publisher]: got segment d435_depth_optical_frame
+[robot_state_publisher-1] [INFO] [1789357237.582261536] [boxer_orientation_state_publisher]: got segment d435_link
+[robot_state_publisher-1] [INFO] [1789357237.582273632] [boxer_orientation_state_publisher]: got segment end_effector_link
+[robot_state_publisher-1] [INFO] [1789357237.582285472] [boxer_orientation_state_publisher]: got segment gripper_left_link
+[robot_state_publisher-1] [INFO] [1789357237.582296736] [boxer_orientation_state_publisher]: got segment gripper_right_link
+[robot_state_publisher-1] [INFO] [1789357237.582308224] [boxer_orientation_state_publisher]: got segment link1
+[robot_state_publisher-1] [INFO] [1789357237.582320672] [boxer_orientation_state_publisher]: got segment link2
+[robot_state_publisher-1] [INFO] [1789357237.582332576] [boxer_orientation_state_publisher]: got segment link3
+[robot_state_publisher-1] [INFO] [1789357237.582344320] [boxer_orientation_state_publisher]: got segment link4
+[robot_state_publisher-1] [INFO] [1789357237.582356224] [boxer_orientation_state_publisher]: got segment link5
+[robot_state_publisher-1] [INFO] [1789357237.582367936] [boxer_orientation_state_publisher]: got segment link6
+[robot_state_publisher-1] [INFO] [1789357237.582379584] [boxer_orientation_state_publisher]: got segment link7
+[robot_state_publisher-1] [INFO] [1789357237.582391104] [boxer_orientation_state_publisher]: got segment world
+[python-2] Loading official BOXER + DINO. Manual prompt labels: ['bottle', 'keyboard']
+[python-2] Loading checkpoint from "/home/kublab/ros2_ws/src/.boxer_runtime/boxer/ckpts/boxernet_hw960in2x6d768-c88128f8.ckpt"
+[python-2] ==> Loaded checkpoint: 320/320 tensors, 85.81M/85.81M params (100.0%)
+[python-2] BOXER ready: cpu | CPU mode is an initial compatibility test, not real-time.
+[python-2] Gravity source: tf; advertised accelerometer rates: []
+[python-2] Depth preview: RGB/depth timestamps differ by >50ms; capture again
+[python-2] RGB preview opened; OpenCV visibility property: -1.0

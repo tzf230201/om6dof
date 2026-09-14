@@ -17,6 +17,8 @@ setup(
         ("share/" + package_name, ["package.xml", "README.md"]),
         ("share/" + package_name + "/config", glob("config/*.yaml")),
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
+        ("share/" + package_name + "/rviz", glob("config/*.rviz")),
+        ("share/" + package_name, ["config/COMBINED_REFERENCE.md"]),
     ],
     install_requires=["setuptools"],
     tests_require=["pytest"],
@@ -28,6 +30,7 @@ setup(
     entry_points={
         "console_scripts": [
             "controller_node = om6dof_controller.controller_node:main",
+            "combined_preview_node = om6dof_controller.combined_preview_node:main",
         ],
     },
 )
