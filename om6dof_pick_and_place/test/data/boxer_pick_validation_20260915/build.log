@@ -1,0 +1,73 @@
+[3.110s] WARNING:colcon.colcon_core.package_selection:Some selected packages are already built in one or more underlay workspaces:
+	'om6dof_pick_and_place' is in: /home/kublab/ros2_ws/install/om6dof_pick_and_place
+If a package in a merged underlay workspace is overridden and it installs headers, then all packages in the overlay must sort their include directories by workspace order. Failure to do so may result in build failures or undefined behavior at run time.
+If the overridden package is used by another package in any underlay, then the overriding package in the overlay must be API and ABI compatible or undefined behavior at run time may occur.
+
+If you understand the risks and want to override a package anyways, add the following to the command line:
+	--allow-overriding om6dof_pick_and_place
+
+This may be promoted to an error in a future release of colcon-override-check.
+Starting >>> om6dof_boxer
+--- output: om6dof_boxer
+-- Install configuration: ""
+-- Execute custom install script
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/launch/__pycache__/boxer_only.launch.cpython-310.pyc
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/launch/__pycache__/yolox_boxer3d_onnx.launch.cpython-310.pyc
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/launch/boxer_only.launch.py
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/launch/yolox_boxer3d_onnx.launch.py
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/rviz/boxer.rviz
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/lib/om6dof_boxer/boxer_preview.py
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/lib/om6dof_boxer/barath_boxer3d_preview.py
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/lib/om6dof_boxer/boxer_adapter.py
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/lib/om6dof_boxer/barath_boxer3d_adapter.py
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/lib/om6dof_boxer/boxer_pick_geometry.py
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/ament_index/resource_index/package_run_dependencies/om6dof_boxer
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/ament_index/resource_index/parent_prefix_path/om6dof_boxer
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/environment/ament_prefix_path.sh
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/environment/ament_prefix_path.dsv
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/environment/path.sh
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/environment/path.dsv
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/local_setup.bash
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/local_setup.sh
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/local_setup.zsh
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/local_setup.dsv
+-- Symlinking: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/package.dsv
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/ament_index/resource_index/packages/om6dof_boxer
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/cmake/om6dof_boxerConfig.cmake
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/cmake/om6dof_boxerConfig-version.cmake
+-- Up-to-date symlink: /home/kublab/ros2_ws/install/om6dof_boxer/share/om6dof_boxer/package.xml
+---
+Finished <<< om6dof_boxer [0.24s]
+Starting >>> om6dof_pick_and_place
+--- output: om6dof_pick_and_place
+running develop
+running egg_info
+writing om6dof_pick_and_place.egg-info/PKG-INFO
+writing dependency_links to om6dof_pick_and_place.egg-info/dependency_links.txt
+writing entry points to om6dof_pick_and_place.egg-info/entry_points.txt
+writing requirements to om6dof_pick_and_place.egg-info/requires.txt
+writing top-level names to om6dof_pick_and_place.egg-info/top_level.txt
+reading manifest file 'om6dof_pick_and_place.egg-info/SOURCES.txt'
+writing manifest file 'om6dof_pick_and_place.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/python3.10/site-packages/om6dof-pick-and-place.egg-link (link to .)
+Installing apriltag_detector script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing boxer_pick_gui script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing boxer_pick_node script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing calib_gui script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing center_depth_urdf_check script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing coordinate_debug_node script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing ddgng_hand_eye_calibrate script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing direct_pick_node script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing graph_pick_node script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing pick_place_node script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing qr_follower_node script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing tag_calibrate script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+Installing tag_pick_place_node script to /home/kublab/ros2_ws/install/om6dof_pick_and_place/lib/om6dof_pick_and_place
+
+Installed /home/kublab/ros2_ws/build/om6dof_pick_and_place
+running symlink_data
+---
+Finished <<< om6dof_pick_and_place [3.01s]
+
+Summary: 2 packages finished [6.19s]

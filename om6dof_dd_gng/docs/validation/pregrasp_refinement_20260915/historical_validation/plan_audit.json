@@ -1,0 +1,61 @@
+{
+  "fixture_scope": "Historical complete scene, synthetic measured-state publishers. No physical execution.",
+  "model_sha256": "f6ad2c99449bb44b85405b91e8931c3d4824853fe06999b731aeb7d56f2bbc8c",
+  "target_center_m": [
+    0.30565008521080017,
+    0.0026136208325624466,
+    0.13925804570317268
+  ],
+  "graph_node_ids": [
+    1010,
+    1018
+  ],
+  "pregrasp_waypoint_count": 15,
+  "total_waypoint_count": 41,
+  "bridge_waypoint_count": 13,
+  "independent_fk": {
+    "pregrasp": {
+      "tcp_position_m": [
+        0.18047914279497185,
+        0.0020063349714500075,
+        0.13911082757213852
+      ],
+      "pinch_position_m": [
+        0.18047914279497185,
+        0.0020063349714500075,
+        0.13911082757213852
+      ],
+      "world_approach_axis": [
+        0.9999501059823155,
+        0.009793923572539746,
+        -0.001965860374299223
+      ],
+      "distance_to_target_m": 0.1251725021502799,
+      "absolute_vertical_axis": 0.001965860374299223,
+      "alignment_dot": 0.9999828499501973,
+      "alignment_angle_deg": 0.33556058565229135
+    },
+    "endpoint": {
+      "tcp_position_m": [
+        0.3055948296444191,
+        0.0026121797932857705,
+        0.13922502821330224
+      ],
+      "pinch_position_m": [
+        0.3055948296444191,
+        0.0026121797932857705,
+        0.13922502821330224
+      ],
+      "world_approach_axis": [
+        0.9999504278453055,
+        0.009786961310413993,
+        -0.0018322773531781447
+      ],
+      "distance_to_target_m": 6.438484951940495e-05,
+      "absolute_vertical_axis": 0.0018322773531781447
+    }
+  },
+  "reported_grasp_position_error_m": 6.438484951940493e-05,
+  "endpoint_residual_difference_m": 1.3552527156068805e-20,
+  "strictly_increasing_times": true
+}

@@ -1,0 +1,60 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ''
+  Global Options:
+    Background Color: 40; 40; 40
+    Fixed Frame: world
+    Frame Rate: 20
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 0.1
+      Plane Cell Count: 20
+    - Class: rviz_default_plugins/RobotModel
+      Name: Robot aktual
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /boxer3d/robot_description
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Visual Enabled: true
+      Collision Enabled: false
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Kotak Boxer3D di world
+      Enabled: true
+      Marker Topic:
+        Value: /boxer3d/world_boxes
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Pusat target
+      Enabled: true
+      Marker Topic:
+        Value: /boxer_pick/markers
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+    - Class: moveit_rviz_plugin/Trajectory
+      Name: Preview pickup
+      Enabled: true
+      Robot Description: robot_description
+      Trajectory Topic: /boxer_pick/display_planned_path
+      Loop Animation: true
+      State Display Time: 0.05 s
+      Trail: false
+      Robot Alpha: 0.6
+      Show Robot Visual: true
+      Show Robot Collision: false
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1.15
+      Focal Point: {X: 0.2, Y: 0.0, Z: 0.2}
+      Pitch: 0.35
+      Yaw: 0.8
+Window Geometry:
+  Width: 1200
+  Height: 800

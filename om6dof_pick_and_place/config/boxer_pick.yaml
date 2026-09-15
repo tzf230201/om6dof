@@ -1,0 +1,11 @@
+boxer_center_pick:
+  ros__parameters:
+    target_class: bottle
+    execution_enabled: false
+    pregrasp_distance: 0.075
+    max_detection_age_sec: 30.0
+    max_plan_hold_sec: 15.0
+    max_target_shift_m: 0.02
+    gripper_open: 0.019
+    gripper_close: -0.010
+    max_start_joint_error_rad: 0.02

@@ -1,0 +1,101 @@
+{
+  "run_directory": "/tmp/om6dof_grasp_execution_smoke_w4izrgk9",
+  "domain_id": 218,
+  "binary": "/home/kublab/ros2_ws/build/om6dof_dd_gng/reachability_graph_node",
+  "binary_mtime": 1789468914.892,
+  "subset_count": 89,
+  "hardware_access": false,
+  "action_clients_created": false,
+  "exclude_selected_target_from_collision": true,
+  "checks": [
+    {
+      "stage": "graph",
+      "environment_variant": "base",
+      "valid": true,
+      "reason": "grasp_execution_segment_validated",
+      "expected_valid": true,
+      "expected_reason_contains": "",
+      "passed": true
+    },
+    {
+      "stage": "approach_and_closure_sweep",
+      "environment_variant": "base",
+      "valid": true,
+      "reason": "grasp_execution_segment_validated",
+      "expected_valid": true,
+      "expected_reason_contains": "",
+      "passed": true
+    },
+    {
+      "stage": "closure_only",
+      "environment_variant": "base",
+      "valid": true,
+      "reason": "grasp_execution_segment_validated",
+      "expected_valid": true,
+      "expected_reason_contains": "",
+      "passed": true
+    },
+    {
+      "stage": "selected_component_at_open_finger",
+      "environment_variant": "selected_finger",
+      "valid": true,
+      "reason": "grasp_execution_segment_validated",
+      "expected_valid": true,
+      "expected_reason_contains": "",
+      "passed": true
+    },
+    {
+      "stage": "selected_component_at_wrist",
+      "environment_variant": "selected_wrist",
+      "valid": true,
+      "reason": "grasp_execution_segment_validated",
+      "expected_valid": true,
+      "expected_reason_contains": "",
+      "passed": true
+    },
+    {
+      "stage": "unknown_obstacle_at_open_finger",
+      "environment_variant": "unknown_finger",
+      "valid": false,
+      "reason": "grasp_execution_collision:dd_gng_grasp_obstacles__gripper_left_link",
+      "expected_valid": false,
+      "expected_reason_contains": "grasp_execution_collision:dd_gng_grasp_obstacles",
+      "passed": true
+    },
+    {
+      "stage": "disconnected_same_class_at_open_finger",
+      "environment_variant": "same_class_finger",
+      "valid": false,
+      "reason": "grasp_execution_collision:dd_gng_grasp_obstacles__gripper_left_link",
+      "expected_valid": false,
+      "expected_reason_contains": "grasp_execution_collision:dd_gng_grasp_obstacles",
+      "passed": true
+    },
+    {
+      "stage": "unknown_obstacle_at_wrist",
+      "environment_variant": "unknown_wrist",
+      "valid": false,
+      "reason": "grasp_execution_collision:dd_gng_grasp_obstacles__link7",
+      "expected_valid": false,
+      "expected_reason_contains": "grasp_execution_collision:dd_gng_grasp_obstacles",
+      "passed": true
+    }
+  ],
+  "own_subprocess_pid": 40,
+  "plan": {
+    "reason": "path_ready_exact_validated_grasp_preview_only",
+    "valid": true,
+    "grasp_approach_valid": true,
+    "pregrasp_waypoint_count": 15,
+    "trajectory_points": 30,
+    "grasp_position_error_m": 7.226674764331645e-05,
+    "target": [
+      0.295,
+      0.0,
+      0.15000000000000002
+    ],
+    "target_environment_node_id": 2,
+    "selected_target_excluded_from_collision": true
+  },
+  "passed": true
+}

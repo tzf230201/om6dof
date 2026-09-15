@@ -1,0 +1,190 @@
+{
+  "domain_id": 220,
+  "run_directory": "/tmp/om6dof_pregrasp_refinement_smoke_v337keks",
+  "binary": "/home/kublab/ros2_ws/build/om6dof_dd_gng/reachability_graph_node",
+  "binary_sha256": "b1e66adaf32da8bdcfdc07a47e4b7471b0bd199ae34182c9853d264773747ad7",
+  "hardware_access": false,
+  "action_clients_created": false,
+  "phases": [
+    {
+      "refinement_enabled": false,
+      "checks": [],
+      "passed": true,
+      "own_subprocess_pid": 45,
+      "seen_plan_reasons": [
+        "grasp_gripper_state_missing_or_stale",
+        "pregrasp_pose_unavailable_for_target"
+      ],
+      "archived_anchor_fk_checks": [
+        {
+          "node_id": 0,
+          "fk_position_m": [
+            0.22499999999197642,
+            -2.715018363868081e-07,
+            0.1500000000100536
+          ],
+          "world_tool_axis": [
+            0.9999999999993455,
+            1.1441189415901581e-06,
+            -7.28548332773471e-11
+          ],
+          "distance_m": 0.08062271219292938,
+          "alignment": 0.8682422591482236
+        },
+        {
+          "node_id": 1,
+          "fk_position_m": [
+            0.24999999999286238,
+            -2.434737576077875e-07,
+            0.15000000001654595
+          ],
+          "world_tool_axis": [
+            0.9999999999993691,
+            1.1235700251300563e-06,
+            -1.3366374673751125e-10
+          ],
+          "distance_m": 0.06020813465473144,
+          "alignment": 0.7474080572042346
+        },
+        {
+          "node_id": 2,
+          "fk_position_m": [
+            0.2750000000890836,
+            2.1061761011345795e-07,
+            0.1500000004669139
+          ],
+          "world_tool_axis": [
+            0.9999999999994288,
+            -1.068904190347557e-06,
+            -2.2876436300833802e-09
+          ],
+          "distance_m": 0.04472117112813803,
+          "alignment": 0.44721452167827386
+        }
+      ],
+      "direct_pregrasp_anchor_count": 0,
+      "reason": "pregrasp_pose_unavailable_for_target"
+    },
+    {
+      "refinement_enabled": true,
+      "checks": [
+        {
+          "stage": "graph_plus_pregrasp_bridge",
+          "valid": true,
+          "reason": "grasp_execution_segment_validated"
+        },
+        {
+          "stage": "forward_insertion_and_closure",
+          "valid": true,
+          "reason": "grasp_execution_segment_validated"
+        },
+        {
+          "stage": "closure_at_simulated_endpoint",
+          "valid": true,
+          "reason": "grasp_execution_segment_validated"
+        }
+      ],
+      "passed": true,
+      "own_subprocess_pid": 62,
+      "seen_plan_reasons": [
+        "grasp_gripper_state_missing_or_stale",
+        "path_ready_exact_validated_grasp_preview_only"
+      ],
+      "archived_anchor_fk_checks": [
+        {
+          "node_id": 0,
+          "fk_position_m": [
+            0.22499999999197642,
+            -2.715018363868081e-07,
+            0.1500000000100536
+          ],
+          "world_tool_axis": [
+            0.9999999999993455,
+            1.1441189415901581e-06,
+            -7.28548332773471e-11
+          ],
+          "distance_m": 0.08062271219292938,
+          "alignment": 0.8682422591482236
+        },
+        {
+          "node_id": 1,
+          "fk_position_m": [
+            0.24999999999286238,
+            -2.434737576077875e-07,
+            0.15000000001654595
+          ],
+          "world_tool_axis": [
+            0.9999999999993691,
+            1.1235700251300563e-06,
+            -1.3366374673751125e-10
+          ],
+          "distance_m": 0.06020813465473144,
+          "alignment": 0.7474080572042346
+        },
+        {
+          "node_id": 2,
+          "fk_position_m": [
+            0.2750000000890836,
+            2.1061761011345795e-07,
+            0.1500000004669139
+          ],
+          "world_tool_axis": [
+            0.9999999999994288,
+            -1.068904190347557e-06,
+            -2.2876436300833802e-09
+          ],
+          "distance_m": 0.04472117112813803,
+          "alignment": 0.44721452167827386
+        }
+      ],
+      "direct_pregrasp_anchor_count": 0,
+      "plan": {
+        "reason": "path_ready_exact_validated_grasp_preview_only",
+        "archived_node_ids": [
+          0,
+          1
+        ],
+        "pregrasp_waypoint_count": 14,
+        "trajectory_points": 30,
+        "bridge_points": 11,
+        "pregrasp_alignment": 0.999976383151305,
+        "planned_fk_endpoint_error_m": 8.8039878184526e-05,
+        "reported_endpoint_error_m": 8.80398781845386e-05
+      }
+    }
+  ],
+  "fixture": {
+    "green_xyz_mm": [
+      [
+        225,
+        0,
+        150
+      ],
+      [
+        250,
+        0,
+        150
+      ],
+      [
+        275,
+        0,
+        150
+      ]
+    ],
+    "target_center_m": [
+      0.295,
+      0.04,
+      0.15
+    ],
+    "initial_joint_positions": [
+      -9.057844840681427e-06,
+      -0.35901396687488113,
+      1.1563792149882628,
+      -1.4258152054127266e-05,
+      -0.7973652480913359,
+      1.0034966794594223e-05
+    ],
+    "subset_sha256": "fd8d791c60a166e33c79186c05743161974b4ff40d3085fd22805c3dc5b5ca6d"
+  },
+  "passed": true
+}

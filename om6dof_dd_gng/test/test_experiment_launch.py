@@ -31,10 +31,12 @@ def test_separate_launch_preserves_environment_and_freezes_dataset(tmp_path):
     assert p['graph_method'] == 'workspace_samples'
     assert p['sample_count'] == 1
     assert p['exact_collision_enabled'] and p['include_target_in_collision']
+    assert not p['exclude_selected_target_from_collision']
+    assert p['capsule_collision_veto']
     assert not p['target_refinement_enabled']
-    assert p['target_node_selection'] == 'component_center_neighborhood'
-    assert p['target_component_center_candidates'] == 12
+    assert p['target_node_selection'] == 'component_center'
     assert p['exact_max_replans'] == 80
+    assert p['allowed_self_collision_pairs'] == ['link2:link6']
     assert p['workspace_samples_sha256'] == hashlib.sha256(data).hexdigest()
     dataset.write_text('changed after launch')
     assert Path(p['workspace_samples_file']).read_bytes() == data
@@ -47,13 +49,14 @@ def test_invalid_dataset_fails_before_launching_nodes(tmp_path):
         launch.prepare_config(PACKAGE / 'config/topo_gng_v2.yaml', dataset, tmp_path)
 
 
-def test_center_candidate_count_must_be_positive(tmp_path):
+def test_legacy_center_candidate_argument_does_not_change_centre_mode(tmp_path):
     dataset = tmp_path / 'points.csv'
     dataset.write_text('x_mm,y_mm,z_mm,position_found,q1_rad,q2_rad,q3_rad,q4_rad,q5_rad,q6_rad\n'
                        '100,0,200,1,0,0,0,0,0,0\n')
-    with pytest.raises(ValueError, match='component_center_candidates'):
-        launch.prepare_config(PACKAGE / 'config/topo_gng_v2.yaml', dataset, tmp_path,
-                              sample_selection='all', center_candidates=0)
+    config = launch.prepare_config(PACKAGE / 'config/topo_gng_v2.yaml', dataset, tmp_path,
+                                   sample_selection='all', center_candidates=0)
+    assert yaml.safe_load(config.read_text())['reachability_graph_node']['ros__parameters'][
+        'target_node_selection'] == 'component_center'
     with pytest.raises(ValueError, match='exact_replan_budget'):
         launch.prepare_config(PACKAGE / 'config/topo_gng_v2.yaml', dataset, tmp_path,
                               sample_selection='all', exact_replan_budget=0)
@@ -92,6 +95,61 @@ def test_green_selection_excludes_blue_yellow_and_inconsistent_flags(tmp_path):
     assert manifest['sample_selection'] == 'green'
     assert manifest['selected_witnesses'] == 1
     assert dataset.read_bytes() == original
+
+
+def test_grasp_profile_adds_insertion_without_changing_perception(tmp_path):
+    dataset = tmp_path / 'points.csv'
+    dataset.write_text('x_mm,y_mm,z_mm,position_found,pose_found,status,q1_rad,q2_rad,q3_rad,q4_rad,q5_rad,q6_rad\n'
+                       '100,0,200,1,1,pose_found,0,0,0,0,0,0\n')
+    base = PACKAGE / 'config/topo_gng_v2.yaml'
+    document = yaml.safe_load(launch.prepare_config(
+        base, dataset, tmp_path, final_grasp=True).read_text())
+    original = yaml.safe_load(base.read_text())
+    for key in original:
+        if key != 'reachability_graph_node':
+            assert document[key] == original[key]
+    p = document['reachability_graph_node']['ros__parameters']
+    assert p['final_grasp_enabled'] and p['include_target_in_collision']
+    assert p['exclude_selected_target_from_collision']
+    assert p['exact_collision_enabled']
+    assert not p['capsule_collision_veto']
+    assert p['pregrasp_tool_approach_axis'] == [0., 0., 1.]
+    assert p['pregrasp_min_alignment'] == .95
+    assert p['grasp_tcp_to_pinch'] == [0., 0., 0.]
+    assert p['grasp_gripper_open'] > p['grasp_gripper_close']
+
+
+@pytest.mark.parametrize('pickup', [False, True])
+def test_launch_generated_planner_and_coordinator_target_policies_match(
+        tmp_path, monkeypatch, pickup):
+    from launch import LaunchContext
+    monkeypatch.setenv('ROS_LOG_DIR', str(tmp_path / 'ros_log'))
+    run = tmp_path / 'generated'
+    run.mkdir()
+    monkeypatch.setattr(launch.tempfile, 'mkdtemp', lambda **_: str(run))
+    monkeypatch.setattr(launch, 'get_package_share_directory',
+                        lambda package: str(PACKAGE.parent / package))
+    dataset = tmp_path / 'points.csv'
+    dataset.write_text('x_mm,y_mm,z_mm,position_found,pose_found,status,q1_rad,q2_rad,q3_rad,q4_rad,q5_rad,q6_rad\n'
+                       '100,0,200,1,1,pose_found,0,0,0,0,0,0\n')
+    context = LaunchContext()
+    context.launch_configurations.update({
+        'pickup': str(pickup).lower(), 'workspace_samples_file': str(dataset),
+        'sample_selection': 'green', 'component_center_candidates': '1',
+        'exact_replan_budget': '80',
+    })
+    # Builds launch actions and frozen YAML only; no nodes or hardware execute.
+    assert launch.setup(context)
+    planner = yaml.safe_load((run / 'experiment_topology.yaml').read_text())[
+        'reachability_graph_node']['ros__parameters']
+    pick_path = (run / 'graph_grasp.yaml' if pickup else
+                 PACKAGE.parent / 'om6dof_pick_and_place/config/graph_pick.yaml')
+    coordinator = yaml.safe_load(pick_path.read_text())['graph_pick']['ros__parameters']
+    assert planner['exclude_selected_target_from_collision'] is pickup
+    assert coordinator['selected_target_excluded_from_collision'] is pickup
+    assert planner['exact_collision_enabled'] and planner['include_target_in_collision']
+    assert coordinator['require_calibration_verified']
+    assert coordinator['task_mode'] == ('pickup' if pickup else 'move_to_target')
 
 
 @pytest.mark.parametrize('extra_header,extra_value,error', [

@@ -8,6 +8,17 @@ Memori voxel menyimpan observasi dunia agar peta dapat berkembang dari beberapa
 sudut pandang kamera. Foviasi mengatur kepadatan pembelajaran berdasarkan arah
 pandangan dan jarak fokus; fokus ini adalah fokus algoritma, bukan motor lensa.
 
+Rancangan algoritma baru dan paper sekarang disimpan bersama package ini:
+
+- [Rencana bio-inspired aktif](docs/design/BIO_INSPIRED_FOVEATION.md)
+- [Rancangan V2 lama yang sudah digantikan](docs/design/FOVEATION_V2_DESIGN.md)
+- [Paper WA-FGNG ICRA 2027](paper/icra2027_fgng/README.md)
+- [PDF paper](paper/icra2027_fgng/main.pdf)
+
+Angka pada paper berasal dari implementasi dan benchmark legacy yang direkam di
+`TopoVLA`; perubahan ROS terbaru harus dievaluasi ulang sebelum dimasukkan ke
+tabel atau klaim paper.
+
 ![RViz dengan robot, pengukuran dunia, graf F-GNG, dan arah fokus](docs/rviz_live.png)
 
 ## Build dan jalankan

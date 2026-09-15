@@ -1,0 +1,21 @@
+{
+  "scope": "Replay of the CURRENT screenshot failure; no motor action or physical grasp.",
+  "python_tests_passed": 142,
+  "cpp_tests_passed": 16,
+  "old_binary_sha256": "b1e66adaf32da8bdcfdc07a47e4b7471b0bd199ae34182c9853d264773747ad7",
+  "final_binary_sha256": "b545b8effbf1d3a0da663e4c9c625f78f28d93fea6c61b4032dde8f413f1f7a1",
+  "changes": [
+    "Adaptive Cartesian subdivision retains 0.15rad accepted-step bound",
+    "Grasp uses exact whole-robot/environment mesh validation; capsule-only overlap no longer vetoes",
+    "Grasp graph retry budget256, wallclock budget1.5s",
+    "GUI avoids attributing earlier capsule rejections to later IK failures"
+  ],
+  "counterfactuals_not_deployed": [
+    "Tiny capsule radii probe",
+    "Yaw-steered bridge prototype"
+  ],
+  "final_result": "final_result.json",
+  "obstacle_regression_checks_passed": 16,
+  "repository_scene_regression_passed": true,
+  "repository_scene_regression": "repository_regression_result.json"
+}

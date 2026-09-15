@@ -14,9 +14,12 @@ struct LabeledTarget
   int class_id;
 };
 
-// Select an observed surface node nearest the bounding-box center of each
-// same-class connected component. Never synthesize an interior grasp point or
-// average disconnected objects together. Geometry/collision data stay intact.
+// Select one target per same-class connected component.  The target position
+// is the component's 3-D bounding-box centre, while environment_node_id stays
+// an observed centre-nearest node solely as a stable identity for snapshots
+// and object tracking.  Collision geometry is built from every raw node
+// before this selection, so using the centre as the grasp reference never
+// makes the object disappear from collision checking.
 inline std::vector<Target> componentCenterTargets(
   const std::vector<LabeledTarget> & nodes,
   const std::vector<std::pair<std::uint32_t, std::uint32_t>> & edges)
@@ -61,7 +64,7 @@ inline std::vector<Target> componentCenterTargets(
         return da < db || (da == db &&
           nodes[a].target.environment_node_id < nodes[b].target.environment_node_id);
       });
-    selected.push_back(nodes[*best].target);
+    selected.push_back({nodes[*best].target.environment_node_id, center});
   }
   std::sort(selected.begin(), selected.end(), [](const Target & a, const Target & b) {
     return a.environment_node_id < b.environment_node_id;
@@ -69,11 +72,9 @@ inline std::vector<Target> componentCenterTargets(
   return selected;
 }
 
-// Retain several observed surface nodes nearest each component's bounding-box
-// center.  This is a target *set*, not a synthetic interior point: the planner
-// still accepts only a node and graph path that pass its full collision checks.
-// It gives exact validation alternatives around a grasp-height surface when one
-// centre-nearest node is blocked by the object's own geometry.
+// Compatibility mode for callers that want multiple centre-nearest identities.
+// Each identity deliberately references the same component centre: it must not
+// turn a top or side surface node into the physical grasp reference.
 inline std::vector<Target> componentCenterNeighborhoodTargets(
   const std::vector<LabeledTarget> & nodes,
   const std::vector<std::pair<std::uint32_t, std::uint32_t>> & edges,
@@ -121,7 +122,7 @@ inline std::vector<Target> componentCenterNeighborhoodTargets(
     });
     const auto count = std::min(candidates_per_component, component.size());
     for (std::size_t i = 0; i < count; ++i) {
-      selected.push_back(nodes[component[i]].target);
+      selected.push_back({nodes[component[i]].target.environment_node_id, center});
     }
   }
   std::sort(selected.begin(), selected.end(), [](const Target & a, const Target & b) {

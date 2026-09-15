@@ -1,0 +1,26 @@
+\begin{table*}[t]
+\centering
+\caption{Primary known-pose results with node cap $B=256$. Errors are in cm; values are mean $\pm$ sample standard deviation of three per-seed means on the fixed evaluation grid. $N_f$ is mean final node count; $t_{95}$ is mean per-run 95th-percentile update time (ms). All memory-based methods use $K=8000$ retained voxels and at most $S=1500$ replay samples. Equal node caps do not imply equal actual node counts or equal total memory.}
+\label{tab:main}
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{llrrrrr}
+\toprule
+Sequence & Method & $N_f$ & All observed $\downarrow$ & Off-screen $\downarrow$ & Focal $\downarrow$ & $t_{95}$ \\
+\midrule
+fr1/desk & Unregistered F-GNG & 222 & 62.80 $\pm$ 0.24 & 86.36 $\pm$ 0.58 & 57.36 $\pm$ 1.42 & 1.60 \\
+fr1/desk & World-only F-GNG & 170 & 62.61 $\pm$ 0.39 & 85.26 $\pm$ 0.68 & 56.29 $\pm$ 0.66 & 1.33 \\
+fr1/desk & \textbf{WA-FGNG} & 256 & 10.44 $\pm$ 0.06 & 11.55 $\pm$ 0.08 & 5.93 $\pm$ 0.12 & 2.76 \\
+fr1/desk & Replay, uniform field & 256 & 10.07 $\pm$ 0.09 & 11.17 $\pm$ 0.13 & 7.43 $\pm$ 0.14 & 2.75 \\
+fr1/desk & Replay + DBL-GNG & 256 & 9.61 $\pm$ 0.03 & 10.14 $\pm$ 0.04 & 7.44 $\pm$ 0.13 & 2.46 \\
+fr1/desk & Replay + FPS & 256 & 11.03 $\pm$ 0.01 & 11.27 $\pm$ 0.01 & 11.01 $\pm$ 0.32 & 1.58 \\
+\midrule
+fr1/xyz & Unregistered F-GNG & 224 & 57.47 $\pm$ 0.98 & 90.50 $\pm$ 1.11 & 10.55 $\pm$ 0.08 & 1.53 \\
+fr1/xyz & World-only F-GNG & 201 & 60.66 $\pm$ 1.25 & 92.19 $\pm$ 1.14 & 10.33 $\pm$ 0.20 & 1.44 \\
+fr1/xyz & \textbf{WA-FGNG} & 256 & 9.22 $\pm$ 0.03 & 11.38 $\pm$ 0.09 & 4.46 $\pm$ 0.04 & 2.70 \\
+fr1/xyz & Replay, uniform field & 256 & 8.47 $\pm$ 0.05 & 10.11 $\pm$ 0.07 & 5.47 $\pm$ 0.05 & 2.73 \\
+fr1/xyz & Replay + DBL-GNG & 256 & 8.20 $\pm$ 0.02 & 9.31 $\pm$ 0.05 & 5.75 $\pm$ 0.05 & 2.28 \\
+fr1/xyz & Replay + FPS & 256 & 9.29 $\pm$ 0.03 & 9.50 $\pm$ 0.02 & 8.96 $\pm$ 0.07 & 1.58 \\
+\bottomrule
+\end{tabular}
+\end{table*}

@@ -221,3 +221,40 @@ TEST(ReachabilityGraph, IntersectionRadiusIncludesBoundary)
   ASSERT_EQ(mask.size(), 1U);
   EXPECT_TRUE(mask[0]);
 }
+
+TEST(ReachabilityGraph, PregraspMaskRequiresStandoffAndToolAlignment)
+{
+  std::vector<reach::Node> nodes(3);
+  // Identity orientation: local +X is world +X.
+  nodes[0].position = {0.10, 0.0, 0.0};   // faces away from target at origin
+  nodes[1].position = {-0.10, 0.0, 0.0};  // +X faces target, correct standoff
+  nodes[2].position = {-0.03, 0.0, 0.0};  // too close despite correct orientation
+  const std::vector<reach::Target> targets{{7, {0.0, 0.0, 0.0}}};
+  reach::PregraspCriteria criteria;
+  criteria.enabled = true;
+  criteria.tool_approach_axis = {1.0, 0.0, 0.0};
+  criteria.min_standoff_m = 0.07;
+  criteria.max_standoff_m = 0.13;
+  criteria.min_alignment = 0.70;
+  const auto mask = reach::pregraspIntersectionMask(nodes, targets, criteria);
+  ASSERT_EQ(mask.size(), nodes.size());
+  EXPECT_FALSE(mask[0]);
+  EXPECT_TRUE(mask[1]);
+  EXPECT_FALSE(mask[2]);
+}
+
+TEST(ReachabilityGraph, PlannerHonoursExplicitPregraspEligibilityMask)
+{
+  std::vector<reach::Node> nodes(3);
+  nodes[0].position = {0.0, 0.0, 0.0};
+  nodes[1].position = {0.03, 0.0, 0.0};
+  nodes[2].position = {0.08, 0.0, 0.0};
+  const std::vector<reach::Edge> edges{{0, 1, 1.0}, {1, 2, 1.0}};
+  const std::vector<reach::Target> targets{{8, {0.0, 0.0, 0.0}}};
+  const auto result = reach::planToNearestTarget(
+    nodes, edges, {false, false, false}, {false, false}, 0U, targets, 0.10,
+    {false, false, true});
+  ASSERT_TRUE(result.success);
+  EXPECT_EQ(result.goal, 2U);
+  EXPECT_DOUBLE_EQ(result.target_distance, 0.08);
+}

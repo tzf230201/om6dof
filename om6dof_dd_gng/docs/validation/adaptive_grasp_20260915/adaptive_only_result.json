@@ -1,0 +1,398 @@
+{
+  "run_directory": "/tmp/om6dof_pregrasp_bridge_replay_xilappeu",
+  "binary": "/home/kublab/ros2_ws/build/om6dof_dd_gng/reachability_graph_node",
+  "domain": 219,
+  "obstacle_clearance": 0.035,
+  "actions_or_hardware": false,
+  "plans": [
+    {
+      "header": {
+        "stamp": {
+          "sec": 1789470613,
+          "nanosec": 546972000
+        },
+        "frame_id": "world"
+      },
+      "graph_method": "workspace_samples",
+      "graph_revision": 1,
+      "query_id": 0,
+      "scene_id": "",
+      "requested_target_environment_node_id": 4294967295,
+      "requested_target_position": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "valid": false,
+      "reason": "grasp_gripper_state_missing_or_stale",
+      "blocked_node_count": 14,
+      "blocked_edge_count": 0,
+      "planning_time_ms": 12.456928,
+      "exact_collision_valid": false,
+      "exact_state_checks": 16,
+      "exact_replans": 0,
+      "exact_validation_time_ms": 4.761824,
+      "start_node_id": 4294967295,
+      "goal_node_id": 4294967295,
+      "target_environment_node_id": 4294967295,
+      "target_distance": -1.0,
+      "graph_cost": -1.0,
+      "start_connection_cost": -1.0,
+      "total_joint_path_cost": -1.0,
+      "reachability_node_ids": [],
+      "joint_path_preview": {
+        "header": {
+          "stamp": {
+            "sec": 1789470613,
+            "nanosec": 546972000
+          },
+          "frame_id": "world"
+        },
+        "joint_names": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6"
+        ],
+        "points": [
+          {
+            "positions": [
+              -0.04141748127311917,
+              -2.0018449281909687,
+              1.4127963056424688,
+              -0.07516505860660327,
+              0.645805911699648,
+              0.07209709703041822
+            ],
+            "velocities": [],
+            "accelerations": [],
+            "effort": [],
+            "time_from_start": {
+              "sec": 0,
+              "nanosec": 0
+            }
+          }
+        ]
+      },
+      "end_effector_path": {
+        "header": {
+          "stamp": {
+            "sec": 1789470613,
+            "nanosec": 546972000
+          },
+          "frame_id": "world"
+        },
+        "poses": [
+          {
+            "header": {
+              "stamp": {
+                "sec": 1789470613,
+                "nanosec": 546972000
+              },
+              "frame_id": "world"
+            },
+            "pose": {
+              "position": {
+                "x": 0.1342448456282832,
+                "y": -0.012416449252895912,
+                "z": 0.1138918243945754
+              },
+              "orientation": {
+                "x": 0.03493328728976093,
+                "y": 0.7255595091914708,
+                "z": -0.026513628906596462,
+                "w": 0.686760578035145
+              }
+            }
+          }
+        ]
+      },
+      "grasp_approach_valid": false,
+      "pregrasp_waypoint_count": 0,
+      "grasp_target_position": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "grasp_position_error": 0.0,
+      "gripper_open_position": 0.0,
+      "gripper_close_position": 0.0,
+      "selected_target_excluded_from_collision": true
+    },
+    {
+      "header": {
+        "stamp": {
+          "sec": 1789470613,
+          "nanosec": 972115264
+        },
+        "frame_id": "world"
+      },
+      "graph_method": "workspace_samples",
+      "graph_revision": 1,
+      "query_id": 0,
+      "scene_id": "",
+      "requested_target_environment_node_id": 4294967295,
+      "requested_target_position": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "valid": false,
+      "reason": "grasp_approach_unavailable:pregrasp_bridge_collision:link3__link5",
+      "blocked_node_count": 14,
+      "blocked_edge_count": 0,
+      "planning_time_ms": 38.78912,
+      "exact_collision_valid": false,
+      "exact_state_checks": 75,
+      "exact_replans": 1,
+      "exact_validation_time_ms": 7.61696,
+      "start_node_id": 1010,
+      "goal_node_id": 4294967295,
+      "target_environment_node_id": 4294967295,
+      "target_distance": -1.0,
+      "graph_cost": -1.0,
+      "start_connection_cost": 0.30675750788460626,
+      "total_joint_path_cost": -1.0,
+      "reachability_node_ids": [],
+      "joint_path_preview": {
+        "header": {
+          "stamp": {
+            "sec": 1789470613,
+            "nanosec": 972115264
+          },
+          "frame_id": "world"
+        },
+        "joint_names": [
+          "joint1",
+          "joint2",
+          "joint3",
+          "joint4",
+          "joint5",
+          "joint6"
+        ],
+        "points": [
+          {
+            "positions": [
+              -0.04141748127311917,
+              -2.0018449281909687,
+              1.4127963056424688,
+              -0.07516505860660327,
+              0.645805911699648,
+              0.07209709703041822
+            ],
+            "velocities": [],
+            "accelerations": [],
+            "effort": [],
+            "time_from_start": {
+              "sec": 0,
+              "nanosec": 0
+            }
+          }
+        ]
+      },
+      "end_effector_path": {
+        "header": {
+          "stamp": {
+            "sec": 1789470613,
+            "nanosec": 972115264
+          },
+          "frame_id": "world"
+        },
+        "poses": [
+          {
+            "header": {
+              "stamp": {
+                "sec": 1789470613,
+                "nanosec": 972115264
+              },
+              "frame_id": "world"
+            },
+            "pose": {
+              "position": {
+                "x": 0.1342448456282832,
+                "y": -0.012416449252895912,
+                "z": 0.1138918243945754
+              },
+              "orientation": {
+                "x": 0.03493328728976093,
+                "y": 0.7255595091914708,
+                "z": -0.026513628906596462,
+                "w": 0.686760578035145
+              }
+            }
+          }
+        ]
+      },
+      "grasp_approach_valid": false,
+      "pregrasp_waypoint_count": 0,
+      "grasp_target_position": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "grasp_position_error": 0.0,
+      "gripper_open_position": 0.0,
+      "gripper_close_position": 0.0,
+      "selected_target_excluded_from_collision": true
+    }
+  ],
+  "diagnostics": [
+    {
+      "reason": "grasp_gripper_state_missing_or_stale",
+      "plan_valid": false,
+      "pregrasp_refinement_enabled": true,
+      "pregrasp_bridge_used": false,
+      "pregrasp_bridge_waypoints": 0,
+      "selected_target_excluded_from_collision": true,
+      "excluded_target_environment_node_id": 22360,
+      "frame_id": "world",
+      "graph_revision": 1,
+      "clearance_m": 0.035,
+      "goal_rejections": {
+        "capsule_only": 14,
+        "mesh_only": 0,
+        "both": 0
+      },
+      "edge_rejections": {
+        "capsule_only": 0,
+        "mesh_only": 0,
+        "both": 0
+      },
+      "cached_edge_rejections": {
+        "capsule_only": 0,
+        "mesh_only": 0,
+        "both": 0
+      },
+      "capsule_prefiltered_nodes": 0,
+      "capsule_prefiltered_edges": 0,
+      "last_rejection": {
+        "stage": "goal_state",
+        "node_a": 2361,
+        "node_b": -1,
+        "capsule_blocked": true,
+        "mesh_checked": true,
+        "mesh_blocked": false,
+        "capsule": {
+          "body_links": [
+            "link7",
+            "end_effector_link"
+          ],
+          "axis_start": [
+            0.16047228,
+            -0.014588093,
+            0.12499988
+          ],
+          "axis_end": [
+            0.27499999,
+            -0.024999809,
+            0.12499992
+          ],
+          "obstacle_kind": "point",
+          "filtered_obstacle_index": 0,
+          "obstacle_start": [
+            0.29731643,
+            -0.056884196,
+            0.1698945
+          ],
+          "obstacle_end": [
+            0.29731643,
+            -0.056884196,
+            0.1698945
+          ],
+          "distance_m": 0.059415158,
+          "threshold_m": 0.075
+        }
+      },
+      "grasp_candidate_attempts": []
+    },
+    {
+      "reason": "grasp_approach_unavailable:pregrasp_bridge_collision:link3__link5",
+      "plan_valid": false,
+      "pregrasp_refinement_enabled": true,
+      "pregrasp_bridge_used": false,
+      "pregrasp_bridge_waypoints": 0,
+      "selected_target_excluded_from_collision": true,
+      "excluded_target_environment_node_id": 22360,
+      "frame_id": "world",
+      "graph_revision": 1,
+      "clearance_m": 0.035,
+      "goal_rejections": {
+        "capsule_only": 14,
+        "mesh_only": 0,
+        "both": 0
+      },
+      "edge_rejections": {
+        "capsule_only": 0,
+        "mesh_only": 0,
+        "both": 0
+      },
+      "cached_edge_rejections": {
+        "capsule_only": 0,
+        "mesh_only": 0,
+        "both": 0
+      },
+      "capsule_prefiltered_nodes": 0,
+      "capsule_prefiltered_edges": 0,
+      "last_rejection": {
+        "stage": "goal_state",
+        "node_a": 2361,
+        "node_b": -1,
+        "capsule_blocked": true,
+        "mesh_checked": true,
+        "mesh_blocked": false,
+        "capsule": {
+          "body_links": [
+            "link7",
+            "end_effector_link"
+          ],
+          "axis_start": [
+            0.16047228,
+            -0.014588093,
+            0.12499988
+          ],
+          "axis_end": [
+            0.27499999,
+            -0.024999809,
+            0.12499992
+          ],
+          "obstacle_kind": "point",
+          "filtered_obstacle_index": 0,
+          "obstacle_start": [
+            0.29731643,
+            -0.056884196,
+            0.1698945
+          ],
+          "obstacle_end": [
+            0.29731643,
+            -0.056884196,
+            0.1698945
+          ],
+          "distance_m": 0.059415158,
+          "threshold_m": 0.075
+        }
+      },
+      "grasp_candidate_attempts": [
+        {
+          "node_id": 1010,
+          "target_center_m": [
+            0.29119441,
+            -0.030900648,
+            0.11449166
+          ],
+          "reason": "pregrasp_bridge_collision:link3__link5",
+          "bridge_subdivisions": 5,
+          "bridge_peak_attempted_joint_step_rad": 0.25602162,
+          "insertion_subdivisions": 0,
+          "insertion_peak_attempted_joint_step_rad": 0
+        }
+      ]
+    }
+  ],
+  "pregrasp_refinement_enabled": true,
+  "snapshot": "Current captured pregrasp_bridge_joint_jump scene, with measured arm values matching the retained failed-plan start. No physical execution.",
+  "execution_validation_checks": [],
+  "own_subprocess_pid": 1341757,
+  "complete": true
+}

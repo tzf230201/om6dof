@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="3" failures="0" disabled="0" errors="0" time="1.524" timestamp="2026-09-15T19:37:09" name="AllTests">
+  <testsuite name="FinalGraspRobot" tests="3" failures="0" disabled="0" errors="0" time="1.524" timestamp="2026-09-15T19:37:09">
+    <testcase name="WorldJacobianMatchesFiniteDifferencesWithRotatedBase" status="run" result="completed" time="0.591" timestamp="2026-09-15T19:37:09" classname="FinalGraspRobot" />
+    <testcase name="GreenWitnessSupportsSevenCentimeterHorizontalInsertionNumerically" status="run" result="completed" time="0.323" timestamp="2026-09-15T19:37:09" classname="FinalGraspRobot">
+<properties>
+<property name="selected_workspace_xyz_mm" value="225,0,150"/>
+<property name="requested_insertion_m" value="0.070000000000000007"/>
+<property name="final_position_error_m" value="7.2520263888382829e-05"/>
+<property name="final_orientation_error_rad" value="0.00011888582034369038"/>
+</properties>
+    </testcase>
+    <testcase name="GreenWitnessLateralBridgeAndInsertionWorkWithRotatedWorldBase" status="run" result="completed" time="0.61" timestamp="2026-09-15T19:37:10" classname="FinalGraspRobot" />
+  </testsuite>
+</testsuites>

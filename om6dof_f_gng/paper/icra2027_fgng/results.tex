@@ -1,0 +1,39 @@
+\input{tables.tex}
+
+\subsection{Registration and Historical Support}
+Table~\ref{tab:main} shows that world registration alone does not solve forgetting. With $B=256$, registered current-frame F-GNG has mean accumulated-surface distances of \DeskWorldSeen{}\,cm on \texttt{desk} and \XyzWorldSeen{}\,cm on \texttt{xyz}. Adding bounded replay reduces these to \DeskMemorySeen{} and \XyzMemorySeen{}\,cm, respectively. Off-screen error decreases from \DeskWorldHistory{} to \DeskMemoryHistory{}\,cm on \texttt{desk} and from \XyzWorldHistory{} to \XyzMemoryHistory{}\,cm on \texttt{xyz}. The off-screen curves in Fig.~\ref{fig:temporal} show that this distinction persists as the camera moves.
+
+The support failure also changes graph utilization. Current-frame methods retain fewer actual nodes despite sharing the same cap: registered F-GNG ends with approximately \DeskWorldNodes{} and \XyzWorldNodes{} nodes on the two sequences, while the memory methods reach 256. Persistent observation support both preserves old regions and sustains graph capacity. Registration also does not uniformly improve the accumulated metric relative to the unregistered diagnostic, because both current-frame variants forget historical support and differ in their transient prototype counts.
+
+\begin{figure*}[t]
+\centering\includegraphics[width=\textwidth]{qualitative_desk.pdf}
+\caption{Prespecified qualitative comparison on fr1/desk, selected frame 119, seed 1, node cap 256. Gray points are the causal held-out reference. All columns use the same world-coordinate orthographic projection onto the first camera's image axes; the bottom row magnifies the anchor region. Orange circles indicate the projected 0.30\,m attention scale, and crosses mark the world anchor. Current-frame learning concentrates on the latest view, while replay supports earlier surfaces. Foveation increases local prototype density relative to a constant attention field. FPS is a point-set comparison and has no learned edges. A projected circle does not imply that every enclosed point lies within the 3D focal sphere.}
+\label{fig:qualitative}
+\end{figure*}
+
+\subsection{Focal Accuracy and Global Cost}
+The matched uniform-field ablation is the relevant comparison for spatial attention: it shares the support memory, replay sequence, node cap, and reallocation gating. At $B=256$, foveation reduces mean focal error from \DeskUniformFocus{} to \DeskMemoryFocus{}\,cm on \texttt{desk} and from \XyzUniformFocus{} to \XyzMemoryFocus{}\,cm on \texttt{xyz}, improvements of \DeskFocusGain\% and \XyzFocusGain\%. Mean error over all observed surfaces increases by \DeskGlobalCost\% and \XyzGlobalCost\%, respectively. This is the intended redistribution trade-off: finite representational capacity is shifted toward the anchor at a measurable global cost.
+
+The qualitative graph in Fig.~\ref{fig:qualitative} shows this redistribution, while the lower curves in Fig.~\ref{fig:temporal} expose behavior through the prescribed A--B--A schedule. The curves do not establish an optimal switching policy or a settling-time guarantee. The anchors are selected geometrically, without object labels, and the attention sequence is fixed independently of graph quality.
+
+DBL-GNG with the same support achieves lower global error than \method{} on both primary sequences (\DeskDblSeen{} versus \DeskMemorySeen{}\,cm on \texttt{desk}; \XyzDblSeen{} versus \XyzMemorySeen{}\,cm on \texttt{xyz}), while \method{} achieves lower focal error. FPS yields focal errors of \DeskFpsFocus{} and \XyzFpsFocus{}\,cm with the same sample and output-point limits. These outcomes support targeted allocation as a trade-off, rather than dominance across all metrics. The budget sweep in Fig.~\ref{fig:cost} also makes clear that representation quality depends on the chosen node limit.
+
+\begin{figure*}[t]
+\centering\includegraphics[width=\textwidth]{temporal_results.pdf}
+\caption{Primary temporal results at $B=256$. Upper panels compare off-screen retention with and without historical replay. Lower panels compare focal accuracy among matched replay methods; the much larger world-only focal errors are reported in Table~\ref{tab:main} rather than compressing this plot's scale. Dashed vertical lines mark the prescribed attention switches at frames 40 and 80. Lines are means and shaded bands are sample standard deviations over three algorithm seeds on the same recorded sequence, not confidence intervals across environments.}
+\label{fig:temporal}
+\end{figure*}
+
+\subsection{Graph Support and Update Cost}
+Focal accuracy does not imply improved adjacency. The fraction of learned edges with an interior sample farther than 5\,cm from the observed reference is \DeskMemoryEdge{}\% for \method{} versus \DeskUniformEdge{}\% for the uniform-field ablation on \texttt{desk}; on \texttt{xyz}, these values are \XyzMemoryEdge{}\% and \XyzUniformEdge{}\%. DBL-GNG has lower values of \DeskDblEdge{}\% and \XyzDblEdge{}\%, respectively. This diagnostic reveals residual unsupported connections even when point-to-node coverage is useful. It should not be interpreted as a collision rate or an exact topological error rate.
+
+At $B=256$, mean per-run 95th-percentile update times for \method{} are \DeskMemoryTime{}\,ms on \texttt{desk} and \XyzMemoryTime{}\,ms on \texttt{xyz}. Corresponding FPS values are \DeskFpsTime{} and \XyzFpsTime{}\,ms, while DBL-GNG values are \DeskDblTime{} and \XyzDblTime{}\,ms. These include world transformation, support updates, replay, learning, and graph extraction, but exclude depth decoding, pose estimation, and evaluation. The measurements describe this CPU implementation under its recorded execution conditions; they are not end-to-end sensor-to-action latency. Current-frame learning is faster but represents substantially less historical geometry.
+
+\begin{figure*}[t]
+\centering\includegraphics[width=\textwidth]{accuracy_cost.pdf}
+\caption{Measured focal-error/update-cost trade-off among memory-based methods on the primary sequences. Circles denote a node cap of 128 and squares a cap of 256; lines connect the same method across the two caps. Each point averages three run summaries. The horizontal coordinate is the mean of per-run 95th-percentile update times. FPS is faster in these runs but allocates fewer samples to the prescribed focal region. CPU operating conditions were not fixed; small timing differences should not be overinterpreted.}
+\label{fig:cost}
+\end{figure*}
+
+\subsection{Pose Perturbations and Additional Rotation Sequence}
+\input{additional_results.tex}

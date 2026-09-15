@@ -1,0 +1,41 @@
+Arguments (pass arguments as '<name>:=<value>'):
+
+    'camera_calibration_file':
+        no description given
+        (default: '/home/kublab/.config/om6dof/d435_hand_eye.yaml')
+
+    'camera_serial':
+        no description given
+        (default: '')
+
+    'target_class':
+        no description given
+        (default: 'bottle')
+
+    'execution_enabled':
+        One of: ['true', 'false']
+        (default: 'false')
+
+    'launch_gui':
+        One of: ['true', 'false']
+        (default: 'true')
+
+    'launch_rviz':
+        One of: ['true', 'false']
+        (default: 'true')
+
+    'display_window':
+        One of: ['true', 'false']
+        (default: 'true')
+
+    'max_boxes':
+        no description given
+        (default: '3')
+
+    'onnx_threads':
+        no description given
+        (default: '8')
+
+    'rmw_implementation':
+        no description given
+        (default: 'rmw_fastrtps_cpp')

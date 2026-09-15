@@ -1,0 +1,10 @@
+{
+  "failure": "frozen_object_track_not_current",
+  "frozen_track_id": 54,
+  "current_track_id": 105,
+  "live_read_only_frames": 236,
+  "tests_passed": 158,
+  "physical_motion_commanded": false,
+  "scope": "Bounded unique same-class target reacquisition at pickup segment boundaries. Raw and smoothed centres remain within frozen 0.02m gate. The unchanged 3-D validator still checks unique component centre within 0.01m and collision before each segment.",
+  "limits": "No physical pickup completed by this check. Observations were captured after the stopped attempt, not a recording of the exact frame at failure. New launch and preview are required."
+}

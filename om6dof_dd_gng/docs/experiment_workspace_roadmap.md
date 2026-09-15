@@ -48,6 +48,11 @@ to the robot endpoint. All object geometry remains in collision checks.
 The separate launch uses `exact_replan_budget:=80` by default. This is a search
 budget only: every rejected edge remains rejected, and collision radii, mesh checks
 and target protection are unchanged. It can be reduced for faster diagnosis.
+
+At the verified folded ready pose, `link2` and `link6` make mechanical contact.
+FCL reports coplanar/zero-distance mesh contact as a collision, so this launch
+allows only the explicit pair `link2:link6`. It does not restore the SRDF's broad
+`Never` exemptions: every other non-adjacent pair remains collision-checked.
 This changes the approach destination; it does not validate grasp orientation,
 finger clearance or automatically close the gripper. Explicit atomic query targets
 and the other launches retain their existing selection behavior.

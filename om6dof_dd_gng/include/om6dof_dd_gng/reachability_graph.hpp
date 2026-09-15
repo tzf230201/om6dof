@@ -129,6 +129,19 @@ struct Target
   Point3 position;
 };
 
+// A pre-grasp goal is deliberately outside the object's collision geometry.
+// The tool's local approach axis must point from the TCP to the selected
+// semantic surface node.  This only filters recorded/reachable poses; it does
+// not synthesize IK, alter collision geometry, or permit contact.
+struct PregraspCriteria
+{
+  bool enabled = false;
+  Point3 tool_approach_axis{1.0, 0.0, 0.0};
+  double min_standoff_m = 0.0;
+  double max_standoff_m = 0.0;
+  double min_alignment = -1.0;
+};
+
 struct PlanResult
 {
   bool has_start = false;
@@ -171,6 +184,41 @@ inline double squaredDistance(const Point3 & a, const Point3 & b)
 inline double distance(const Point3 & a, const Point3 & b)
 {
   return std::sqrt(squaredDistance(a, b));
+}
+
+inline bool finitePoint(const Point3 & point)
+{
+  return std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z);
+}
+
+inline Point3 normalized(const Point3 & vector)
+{
+  const double length = std::sqrt(dot(vector, vector));
+  if (!finitePoint(vector) || !std::isfinite(length) || length <= 1.0e-12) {
+    return {};
+  }
+  return vector * (1.0 / length);
+}
+
+inline Point3 rotateByQuaternion(const Point3 & vector, const Quaternion & quaternion)
+{
+  const double norm = std::sqrt(
+    quaternion.x * quaternion.x + quaternion.y * quaternion.y +
+    quaternion.z * quaternion.z + quaternion.w * quaternion.w);
+  if (!finitePoint(vector) || !std::isfinite(norm) || norm <= 1.0e-12) {
+    return {};
+  }
+  const double x = quaternion.x / norm;
+  const double y = quaternion.y / norm;
+  const double z = quaternion.z / norm;
+  const double w = quaternion.w / norm;
+  const Point3 q{x, y, z};
+  const Point3 cross{q.y * vector.z - q.z * vector.y,
+    q.z * vector.x - q.x * vector.z, q.x * vector.y - q.y * vector.x};
+  const Point3 twice_cross = cross * 2.0;
+  const Point3 q_cross_twice{q.y * twice_cross.z - q.z * twice_cross.y,
+    q.z * twice_cross.x - q.x * twice_cross.z, q.x * twice_cross.y - q.y * twice_cross.x};
+  return vector + twice_cross * w + q_cross_twice;
 }
 
 inline double pointSegmentDistance(const Point3 & p, const Segment & segment)
@@ -548,6 +596,46 @@ inline std::vector<bool> targetIntersectionMask(
   return mask;
 }
 
+inline std::vector<bool> pregraspIntersectionMask(
+  const std::vector<Node> & nodes, const std::vector<Target> & targets,
+  const PregraspCriteria & criteria)
+{
+  if (!criteria.enabled) {
+    return {};
+  }
+  std::vector<bool> mask(nodes.size(), false);
+  const Point3 local_axis = normalized(criteria.tool_approach_axis);
+  if (!finitePoint(local_axis) || dot(local_axis, local_axis) <= 1.0e-16 ||
+    criteria.min_standoff_m <= 0.0 ||
+    criteria.max_standoff_m < criteria.min_standoff_m ||
+    criteria.min_alignment < -1.0 || criteria.min_alignment > 1.0)
+  {
+    return mask;
+  }
+  for (std::size_t node_index = 0; node_index < nodes.size(); ++node_index) {
+    const Point3 world_axis = normalized(rotateByQuaternion(local_axis, nodes[node_index].orientation));
+    if (!finitePoint(world_axis) || dot(world_axis, world_axis) <= 1.0e-16 ||
+      !finitePoint(nodes[node_index].position)) {
+      continue;
+    }
+    for (const Target & target : targets) {
+      const Point3 toward_target = target.position - nodes[node_index].position;
+      const double standoff = distance(target.position, nodes[node_index].position);
+      if (!finitePoint(target.position) || !std::isfinite(standoff) ||
+        standoff < criteria.min_standoff_m || standoff > criteria.max_standoff_m)
+      {
+        continue;
+      }
+      const Point3 direction = normalized(toward_target);
+      if (finitePoint(direction) && dot(world_axis, direction) >= criteria.min_alignment) {
+        mask[node_index] = true;
+        break;
+      }
+    }
+  }
+  return mask;
+}
+
 inline std::vector<bool> blockedNodes(
   const std::vector<Node> & nodes,
   const std::vector<Point3> & obstacle_points,
@@ -621,7 +709,8 @@ inline PlanResult planToNearestTarget(
   const std::vector<bool> & blocked_edges,
   std::size_t start,
   const std::vector<Target> & targets,
-  double intersection_radius)
+  double intersection_radius,
+  const std::vector<bool> & eligible_intersections = {})
 {
   PlanResult result;
   result.start = start;
@@ -669,8 +758,14 @@ inline PlanResult planToNearestTarget(
   }
 
   const double radius_squared = intersection_radius * intersection_radius;
+  if (!eligible_intersections.empty() && eligible_intersections.size() != nodes.size()) {
+    return result;
+  }
   for (std::size_t target_index = 0; target_index < targets.size(); ++target_index) {
     for (std::size_t node_index = 0; node_index < nodes.size(); ++node_index) {
+      if (!eligible_intersections.empty() && !eligible_intersections[node_index]) {
+        continue;
+      }
       const double d_squared = squaredDistance(nodes[node_index].position, targets[target_index].position);
       if (d_squared > radius_squared) {
         continue;

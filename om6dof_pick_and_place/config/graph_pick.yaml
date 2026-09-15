@@ -2,7 +2,7 @@ graph_pick:
   ros__parameters:
     world_frame: world
     # Follow robot graph edges to the nearest collision-valid target intersection.
-    # pickup is a separate task that also requires grasp orientation and gripper actions.
+    # pickup requires the planner's validated graph + final-insertion contract.
     task_mode: move_to_target
     arm_joint_names: [joint1, joint2, joint3, joint4, joint5, joint6]
 
@@ -31,7 +31,10 @@ graph_pick:
     max_joint_state_age_sec: 0.5
     max_plan_hold_sec: 5.0
     max_start_joint_error_rad: 0.08
-    max_target_distance_m: 0.055
+    arm_endpoint_verification_timeout_sec: 2.0
+    # The graph stops at a collision-free pre-grasp pose, 7--13 cm before the
+    # observed cluster center. Pickup adds a separately checked final approach.
+    max_target_distance_m: 0.13
     minimum_target_distance_m: 0.01
     minimum_target_component_nodes: 3
     # DD-GNG node IDs change during online learning. Bind the frozen preview
@@ -39,7 +42,15 @@ graph_pick:
     # moves more than 2 cm before execution.
     max_object_track_association_m: 0.08
     max_object_track_shift_m: 0.02
-    tool_approach_axis: [0.0, 0.0, 1.0]
+    target_reacquisition_timeout_sec: 1.0
+    max_grasp_target_snapshot_shift_m: 0.01
+    max_grasp_position_error_m: 0.005
+    grasp_tcp_to_pinch: [0.0, 0.0, 0.0]
+    # Must match the planner's policy; only the separate grasp launch enables it.
+    selected_target_excluded_from_collision: false
+    # Physical forward/grasp direction in the end_effector_link frame.
+    # It must point from the TCP toward the object, not along world Z.
+    tool_approach_axis: [1.0, 0.0, 0.0]
     minimum_approach_alignment: 0.30
     require_calibration_verified: true
 
@@ -51,10 +62,20 @@ graph_pick:
     gripper_open: 0.019
     gripper_close: -0.010
     gripper_max_effort: 0.0
+    # Aperture feedback, in the same units as gripper_open/gripper_close.
+    gripper_joint_name: gripper_left_joint
+    gripper_position_tolerance: 0.0015
+    gripper_result_match_tolerance: 0.002
+    gripper_contact_position_margin: 0.002
+    gripper_stationary_time_sec: 0.25
+    gripper_stationary_tolerance: 0.0005
+    gripper_verification_timeout_sec: 3.0
+    grasp_validation_service: /om6dof_topo_gng_v2/validate_grasp_execution
+    grasp_validation_timeout_sec: 30.0
     action_timeout_sec: 120.0
 
     # A payload-aware collision model is not yet available, so automatic
-    # reverse traversal while holding the object remains disabled by default.
+    # reverse traversal while holding the object is rejected for pickup.
     retreat_after_grasp: false
     retreat_joint_velocity: 0.20
     minimum_segment_time_sec: 0.10

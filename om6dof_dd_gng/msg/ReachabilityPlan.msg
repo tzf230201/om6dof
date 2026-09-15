@@ -24,3 +24,18 @@ float64 total_joint_path_cost
 uint32[] reachability_node_ids
 trajectory_msgs/JointTrajectory joint_path_preview
 nav_msgs/Path end_effector_path
+
+# Opt-in pickup contract. The full preview includes graph traversal followed
+# by a separately validated Cartesian insertion. Old graph-only plans leave
+# these fields at defaults and must never authorize closing at the pregrasp.
+bool grasp_approach_valid
+# Prefix through the actual aligned pregrasp, including a validated local
+# correction after the archived graph anchor when necessary.
+uint32 pregrasp_waypoint_count
+geometry_msgs/Point grasp_target_position
+float64 grasp_position_error
+float64 gripper_open_position
+float64 gripper_close_position
+# True only when the chosen connected target component was omitted from both
+# capsule and mesh environment collision checks. Other components stay checked.
+bool selected_target_excluded_from_collision

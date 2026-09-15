@@ -1,0 +1,149 @@
+{
+  "base_frame": "world",
+  "chain": [
+    {
+      "name": "world_fixed",
+      "type": "fixed"
+    },
+    {
+      "name": "base_to_link1",
+      "type": "fixed"
+    },
+    {
+      "name": "joint1",
+      "type": "revolute"
+    },
+    {
+      "name": "joint2",
+      "type": "revolute"
+    },
+    {
+      "name": "joint3",
+      "type": "revolute"
+    },
+    {
+      "name": "joint4",
+      "type": "revolute"
+    },
+    {
+      "name": "joint5",
+      "type": "revolute"
+    },
+    {
+      "name": "joint6",
+      "type": "revolute"
+    },
+    {
+      "name": "end_effector_joint",
+      "type": "fixed"
+    }
+  ],
+  "checks": {
+    "all_local_x_axes_within_half_degree_of_world_down": true,
+    "all_local_z_axes_within_half_degree_of_horizontal": true,
+    "orientation_residual_matches_saved_KDL_deg_tolerance_1e_minus_7": true,
+    "position_residual_matches_saved_KDL_mm_tolerance_1e_minus_7": true,
+    "rotation_orthogonality_error_below_1e_minus_12": true
+  },
+  "conclusion": "Every selected green witness actually has end_effector_link local +X nearly world-down; this bank does not provide horizontal local-+X approaches",
+  "largest_local_x_tilt_witness": {
+    "orientation_error_deg": "0.43960704770885839",
+    "q1_rad": "0",
+    "q2_rad": "0.68098772279773345",
+    "q3_rad": "0.87748119439465455",
+    "q4_rad": "0",
+    "q5_rad": "-1.5507963267948965",
+    "q6_rad": "0",
+    "x_mm": "275",
+    "y_mm": "0",
+    "z_mm": "75.000000000000014"
+  },
+  "limitations": [
+    "Saved-model FK is not physical pose measurement",
+    "Only the original 3198 green witnesses are tested",
+    "Collision geometry and current runtime model differences are not evaluated"
+  ],
+  "provenance": {
+    "model_sha256": "02e81b41d6c6643c4af1ddd75f444fc1cb5ebed99c56f35657cd480d28857339",
+    "numpy_version": "1.21.5",
+    "points_sha256": "ded51632edcd1b041cd3e3d07c9d9aa04dace55ef1624fdf80f6fb1ad636fa1b",
+    "verification_script_sha256": "3c1e6c3f9c96fc4c7b86f3005a32c4ecd106a3210f55c1fb14fc6f6bc3ab6e4b"
+  },
+  "scope": "Independent offline NumPy/XML forward kinematics of all selected stored joints; no ROS, IK, collision validation or hardware",
+  "statistics": {
+    "absolute_difference_vs_recorded_orientation_error_deg": {
+      "max": 2.3524734135520198e-14,
+      "mean": 4.515979664510042e-15,
+      "median": 3.4584456880346753e-15,
+      "min": 0.0,
+      "n": 3198,
+      "p95": 1.178371094277819e-14
+    },
+    "absolute_difference_vs_recorded_position_error_mm": {
+      "max": 1.2115780384167052e-13,
+      "mean": 1.5177538121155782e-14,
+      "median": 9.915909781645083e-15,
+      "min": 0.0,
+      "n": 3198,
+      "p95": 5.185831690283911e-14
+    },
+    "local_x_tilt_from_world_down_deg": {
+      "max": 0.4396070477088592,
+      "mean": 0.0018824498360744677,
+      "median": 2.046893228358129e-05,
+      "min": 9.019620072111524e-07,
+      "n": 3198,
+      "p95": 8.230027287456013e-05
+    },
+    "local_z_absolute_vertical_component": {
+      "max": 0.007672515118548271,
+      "mean": 3.24693364462026e-05,
+      "median": 3.3281668921369423e-07,
+      "min": 1.5553361903873473e-11,
+      "n": 3198,
+      "p95": 1.4354253721945344e-06
+    },
+    "local_z_angle_from_requested_radial_direction_deg": {
+      "max": 0.4396070477088587,
+      "mean": 0.0022034980212452863,
+      "median": 6.881393728727766e-05,
+      "min": 9.54005974691262e-07,
+      "n": 3198,
+      "p95": 0.00011725493716729228
+    },
+    "local_z_tilt_from_horizontal_deg": {
+      "max": 0.4396070477088587,
+      "mean": 0.0018603635435955898,
+      "median": 1.9068991643462224e-05,
+      "min": 8.911419943315088e-10,
+      "n": 3198,
+      "p95": 8.224381563277041e-05
+    },
+    "recomputed_orientation_error_deg": {
+      "max": 0.43960704770885894,
+      "mean": 0.0022173843253513762,
+      "median": 6.89125374813333e-05,
+      "min": 9.542618816114411e-07,
+      "n": 3198,
+      "p95": 0.00011762902232478375
+    },
+    "recomputed_position_error_mm": {
+      "max": 0.9996715799979663,
+      "mean": 0.005655425109881179,
+      "median": 0.00034080571788772183,
+      "min": 4.831114488508343e-05,
+      "n": 3198,
+      "p95": 0.0005220469190551311
+    },
+    "rotation_orthogonality_error_frobenius": {
+      "max": 8.713436927926796e-16,
+      "mean": 3.39643330910904e-16,
+      "median": 3.2923249905741443e-16,
+      "min": 1.767415176571462e-18,
+      "n": 3198,
+      "p95": 5.690449707766773e-16
+    }
+  },
+  "tip_frame": "end_effector_link",
+  "witness_count": 3198
+}

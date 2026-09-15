@@ -1,0 +1,17 @@
+getifaddrs: Operation not permitted
+getifaddrs: Operation not permitted
+getifaddrs: Operation not permitted
+getifaddrs: Operation not permitted
+[37;1m2026-09-15 19:43:56.959 [31;1m[[37;1mTRANSPORT[31;1m Error] [37mAll whitelist interfaces were filtered out[34;1m -> Function [36mUDPv4Transport[m
+[37;1m2026-09-15 19:43:56.959 [31;1m[[37;1mTRANSPORT_UDP[31;1m Error] [37mError creating socket: Operation not permitted[34;1m -> Function [36minit[m
+[37;1m2026-09-15 19:43:56.959 [31;1m[[37;1mRTPS_PARTICIPANT[31;1m Error] [37mUser transport failed to register.[34;1m -> Function [36mRTPSParticipantImpl[m
+[INFO] [1789469037.000669664] [reachability_graph_node]: Reachability node started in preview-only mode; it has no controller publisher or action client.
+[INFO] [1789469037.305905888] [moveit_robot_model.robot_model]: Loading robot model 'om6dof_v2'...
+[INFO] [1789469037.306000608] [moveit_robot_model.robot_model]: No root/virtual joint specified in SRDF. Assuming fixed joint
+[WARN] [1789469037.306055008] [moveit_robot_model.robot_model]: Link base_link has visual geometry but no collision geometry. Collision geometry will be left empty. Fix your URDF file by explicitly specifying collision geometry.
+[WARN] [1789469038.206399360] [reachability_graph_node]: Explicitly allowing mechanically verified self-contact pair link2 <-> link6
+[INFO] [1789469038.206536224] [reachability_graph_node]: Strict self-collision matrix admits direct parent-child pairs, 10 SRDF Adjacent pairs, and 1 configured mechanically verified contact pairs; SRDF Never pairs otherwise remain collision-checked
+[INFO] [1789469038.206971392] [reachability_graph_node]: Workspace CSV: 3 witnesses, 3 accepted, 0 collision/bounds/duplicate rejected; max FK error=0.000000 m; SHA256=aca90058893ca48e8d7d3f84c843f60de5a6f8bd7bc0823ab504ee9a633b70f8. Edges are candidates until path collision validation.
+[INFO] [1789469038.207038944] [reachability_graph_node]: Built method=workspace_samples with 3/3 nodes (0 anchors, 0 prototypes, 0/0 guards, 3 fill samples) after 3 candidate attempts; retained 3 candidate edges in 1 components and cached 0 full-body edge sweeps
+[INFO] [1789469038.207380608] [reachability_graph_node]: Reachability graph ready: method=workspace_samples, 3 nodes, 3 edges, group=arm, tip=end_effector_link, strict_collision=true, exact_collision=true
+[INFO] [1789469038.518079136] [rclcpp]: signal_handler(SIGINT/SIGTERM)

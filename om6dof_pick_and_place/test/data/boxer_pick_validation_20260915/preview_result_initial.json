@@ -1,0 +1,35 @@
+{
+  "valid": true,
+  "physical_execution": false,
+  "domain_id": 221,
+  "output_directory": "/tmp/boxer_pick_preview_smoke_jfli_l94",
+  "elapsed": 4.853090720018372,
+  "preview_service_success": true,
+  "preview_ready": true,
+  "execute_denied": true,
+  "pregrasp_points": 2,
+  "insertion_points": 12,
+  "center_error_m": 5.060932937370408e-10,
+  "status": {
+    "state": "preview_ready",
+    "message": "Preview siap: buka \u2192 pra-jepit \u2192 pusat kotak \u2192 jepit",
+    "busy": false,
+    "plan_ready": true,
+    "target_class": "bottle",
+    "execution_enabled": false,
+    "holding_object": false,
+    "motion_faulted": false,
+    "executable": false,
+    "target_center": [
+      0.2911944091320038,
+      -0.03090064819843974,
+      0.11449165642261505
+    ]
+  },
+  "arm_goals": 0,
+  "gripper_goals": 0,
+  "child_exit_codes": {
+    "rsp": 0,
+    "move_group": -11
+  }
+}

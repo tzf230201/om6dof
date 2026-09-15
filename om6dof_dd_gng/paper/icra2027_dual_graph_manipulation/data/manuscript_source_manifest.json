@@ -1,0 +1,49 @@
+{
+  "scope": "Source inspected for this manuscript, not a record of live runtime state",
+  "files": [
+    {
+      "repository_relative_path": "experiments/cartesian_workspace/cpp/scan.cpp",
+      "sha256": "c9eaf86ab68fbf77b85abb2e9ddb2ee99b2d38498a848ad85fa9da40f16d4d06"
+    },
+    {
+      "repository_relative_path": "om6dof_dd_gng/include/om6dof_dd_gng/dynamic_density_gng.hpp",
+      "sha256": "88d9a5a57729d973a70f61709569f963f5067be8e4c0a9b136e890cc28c04bf5"
+    },
+    {
+      "repository_relative_path": "om6dof_dd_gng/include/om6dof_dd_gng/semantic_target_selection.hpp",
+      "sha256": "0a310a89a4d4ab5253e8fa40a26fbebffb7276e73ea8b2abeecc3b00d9142310"
+    },
+    {
+      "repository_relative_path": "om6dof_dd_gng/include/om6dof_dd_gng/semantic_cluster_propagation.hpp",
+      "sha256": "d9e3b43097fb74c807dc238a4d9e486e973ac008939129f72da4c9d720dc823b"
+    },
+    {
+      "repository_relative_path": "om6dof_dd_gng/include/om6dof_dd_gng/reachability_graph.hpp",
+      "sha256": "0645ebd39dc9380bb21c10298eaab310df9fbd897e532d52cfc20e7d2635fea7"
+    },
+    {
+      "repository_relative_path": "om6dof_dd_gng/src/topo_gng_node.cpp",
+      "sha256": "a66d96b92f303145dba1dfbbc1a4a5307d904f053f8a58cc3a89b66b1ebd4a2f"
+    },
+    {
+      "repository_relative_path": "om6dof_dd_gng/src/reachability_graph_node.cpp",
+      "sha256": "094ddd36203b0c0cad55cf09d47ea098de83fec7e228c6831ec425a16743a557"
+    },
+    {
+      "repository_relative_path": "om6dof_dd_gng/launch/ddgng_experiment_reachability.launch.py",
+      "sha256": "4c3c79fe9aa04588c738a3d5cf5195af5c2002135572d979e79eaa3e03cfc746"
+    },
+    {
+      "repository_relative_path": "om6dof_dd_gng/config/topo_gng_v2.yaml",
+      "sha256": "d04f4886738735d02986eb51c5b209f93d232649423d74740b8824c52b4996fe"
+    },
+    {
+      "repository_relative_path": "om6dof_pick_and_place/om6dof_pick_and_place/graph_pick_node.py",
+      "sha256": "bb6ba03a78814387166af3c94d31b1e59b81564583d34e92f5ae72b826f95655"
+    },
+    {
+      "repository_relative_path": "om6dof_pick_and_place/config/graph_pick.yaml",
+      "sha256": "b491cdb775694b0e43cb2778f765465cff08099d9ea1aca17cc647cf83cf71e5"
+    }
+  ]
+}

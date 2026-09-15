@@ -394,6 +394,17 @@ public:
     gng_max_edge_age_ = declare_parameter<int>("gng_max_edge_age", 50);
     gng_updates_per_frame_ = declare_parameter<int>("gng_updates_per_frame", 150);
     gng_pixel_step_ = declare_parameter<int>("gng_pixel_step", 6);
+    // Library defaults (0.08 / 0.0008) were tuned for a static-camera
+    // world-frame map that only ever slowly accretes -- fine there, but it
+    // means a node needs dozens of "wins" to close any real gap, so the
+    // visible cluster visibly lags a moving object/camera by a beat or two.
+    // Nothing here costs extra CPU: same op count, just a bigger per-win
+    // step. Raised further (>~0.35) starts to jitter/overshoot near a sharp
+    // depth edge instead of settling.
+    gng_winner_learning_rate_ =
+      static_cast<float>(declare_parameter<double>("gng_winner_learning_rate", 0.25));
+    gng_neighbor_learning_rate_ =
+      static_cast<float>(declare_parameter<double>("gng_neighbor_learning_rate", 0.01));
     attention_strength_ = static_cast<float>(declare_parameter<double>("attention_strength", 6.0));
     attention_radius_margin_ =
       static_cast<float>(declare_parameter<double>("attention_radius_margin", 1.3));
@@ -428,6 +439,8 @@ public:
       gng_parameters.max_nodes = gng_max_nodes_;
       gng_parameters.insertion_interval = gng_insertion_interval_;
       gng_parameters.max_edge_age = gng_max_edge_age_;
+      gng_parameters.winner_learning_rate = gng_winner_learning_rate_;
+      gng_parameters.neighbor_learning_rate = gng_neighbor_learning_rate_;
       gng_ = std::make_unique<om6dof_dd_gng::DynamicDensityGrowingNeuralGas>(gng_parameters);
       if (publish_graph_markers_) {
         graph_markers_publisher_ =
@@ -510,6 +523,7 @@ private:
     SteadyClock::time_point fps_window_started = SteadyClock::now();
     double inference_ms_sum = 0.0;
     double loop_ms_sum = 0.0;
+    double gng_ms_sum = 0.0;
 
     while (running_ && rclcpp::ok()) {
       const auto loop_started = SteadyClock::now();
@@ -612,9 +626,12 @@ private:
       objects_msg.data = json.str();
       objects_publisher_->publish(objects_msg);
 
+      double gng_ms = 0.0;
       if (enable_dd_gng_) {
+        const auto gng_started = SteadyClock::now();
         updateAndPublishGraph(
           depth_data, depth_width, depth_height, detections, boxes, stamp, overlay);
+        gng_ms = elapsedMs(gng_started);
       }
 
       if (publish_overlay_) {
@@ -632,20 +649,24 @@ private:
       const double loop_ms = elapsedMs(loop_started);
       inference_ms_sum += inference_ms;
       loop_ms_sum += loop_ms;
+      gng_ms_sum += gng_ms;
       ++frame_count;
       const double window_s = std::chrono::duration<double>(
         SteadyClock::now() - fps_window_started).count();
       if (window_s >= 2.0) {
         RCLCPP_INFO(
           get_logger(),
-          "%.1f fps over %llu frames | avg inference %.1f ms | avg loop %.1f ms | %zu detections",
+          "%.1f fps over %llu frames | avg inference %.1f ms | avg gng %.1f ms | "
+          "avg loop %.1f ms | %zu detections",
           static_cast<double>(frame_count) / window_s,
           static_cast<unsigned long long>(frame_count),
           inference_ms_sum / static_cast<double>(frame_count),
+          gng_ms_sum / static_cast<double>(frame_count),
           loop_ms_sum / static_cast<double>(frame_count), detections.size());
         frame_count = 0;
         inference_ms_sum = 0.0;
         loop_ms_sum = 0.0;
+        gng_ms_sum = 0.0;
         fps_window_started = SteadyClock::now();
       }
     }
@@ -969,6 +990,8 @@ private:
   int gng_max_edge_age_ = 50;
   int gng_updates_per_frame_ = 150;
   int gng_pixel_step_ = 6;
+  float gng_winner_learning_rate_ = 0.25F;
+  float gng_neighbor_learning_rate_ = 0.01F;
   float attention_strength_ = 6.0F;
   float attention_radius_margin_ = 1.3F;
   float label_padding_m_ = 0.015F;

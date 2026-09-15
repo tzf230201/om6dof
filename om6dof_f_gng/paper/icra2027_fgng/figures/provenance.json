@@ -1,0 +1,7 @@
+{
+  "source": "TopoVLA/experiments/fgng_world/results",
+  "script": "scripts/make_figures.py",
+  "selection": "fr1/desk, frame119, seed1, budget256 fixed before inspecting outcomes",
+  "uncertainty": "temporal bands = mean \u00b1 sample SD across 3 algorithm seeds, not scene-population confidence intervals",
+  "qualitative_projection": "first camera image x/y axes, held fixed for all methods; projected anchor disk illustrates focus, not a geometric segmentation"
+}

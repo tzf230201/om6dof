@@ -1,0 +1,134 @@
+{
+  "source_sha256": "4a991e5e893b4e0d201c8a1fe8adee15b4b485280ca35a1b25ee129baeca18e9",
+  "aggregation": "primary summary.csv, three seeds,20uniform selected frames20:5:115",
+  "values": {
+    "Desk_camera": {
+      "seen_mean_m": 0.627958036411139,
+      "history_outside_frustum_mean_m": 0.8635539166301984,
+      "seen_roi_mean_m": 0.5735699706605769,
+      "seen_periphery_mean_m": 0.6331897622580008,
+      "current_mean_m": 0.0962027688161952,
+      "unsupported_edge_fraction_5cm": 0.1698668416480429,
+      "update_p95_ms": 1.6023674666666665,
+      "actual_nodes_final": 222.0
+    },
+    "Desk_world": {
+      "seen_mean_m": 0.6261220408854274,
+      "history_outside_frustum_mean_m": 0.8525659772210369,
+      "seen_roi_mean_m": 0.5628628353745845,
+      "seen_periphery_mean_m": 0.6320555346532953,
+      "current_mean_m": 0.1138411179033033,
+      "unsupported_edge_fraction_5cm": 0.038862304177806735,
+      "update_p95_ms": 1.3305461333333335,
+      "actual_nodes_final": 170.0
+    },
+    "Desk_memory": {
+      "seen_mean_m": 0.10444273159784534,
+      "history_outside_frustum_mean_m": 0.11547984627456043,
+      "seen_roi_mean_m": 0.05933905957236394,
+      "seen_periphery_mean_m": 0.10644170853159451,
+      "current_mean_m": 0.10097576404339116,
+      "unsupported_edge_fraction_5cm": 0.055821410579823004,
+      "update_p95_ms": 2.7632912,
+      "actual_nodes_final": 256.0
+    },
+    "Desk_memory_uniform": {
+      "seen_mean_m": 0.10073020493803773,
+      "history_outside_frustum_mean_m": 0.1117153379453703,
+      "seen_roi_mean_m": 0.07430784469528275,
+      "seen_periphery_mean_m": 0.10196324175391165,
+      "current_mean_m": 0.09607444094924507,
+      "unsupported_edge_fraction_5cm": 0.055853552634485215,
+      "update_p95_ms": 2.745560533333333,
+      "actual_nodes_final": 256.0
+    },
+    "Desk_memory_dbl": {
+      "seen_mean_m": 0.09605513183306992,
+      "history_outside_frustum_mean_m": 0.10143960260077045,
+      "seen_roi_mean_m": 0.074365605540339,
+      "seen_periphery_mean_m": 0.0969317587245861,
+      "current_mean_m": 0.08993573651041732,
+      "unsupported_edge_fraction_5cm": 0.04862536887656473,
+      "update_p95_ms": 2.4595146666666667,
+      "actual_nodes_final": 256.0
+    },
+    "Desk_memory_fps": {
+      "seen_mean_m": 0.11032361004981395,
+      "history_outside_frustum_mean_m": 0.11269641699277648,
+      "seen_roi_mean_m": 0.11007185107985377,
+      "seen_periphery_mean_m": 0.11036288501579893,
+      "current_mean_m": 0.10466471183828781,
+      "unsupported_edge_fraction_5cm": NaN,
+      "update_p95_ms": 1.579744,
+      "actual_nodes_final": 256.0
+    },
+    "DeskFocusGain": 20.144286493979102,
+    "DeskGlobalCost": 3.6856141234809403,
+    "DeskHistoryGain": 86.45502525787268,
+    "DeskSeenGain": 83.31910957005313,
+    "Xyz_camera": {
+      "seen_mean_m": 0.5747296627161371,
+      "history_outside_frustum_mean_m": 0.9050271159697756,
+      "seen_roi_mean_m": 0.10552986392217245,
+      "seen_periphery_mean_m": 0.6090140293590193,
+      "current_mean_m": 0.09806024983420952,
+      "unsupported_edge_fraction_5cm": 0.09897179374442848,
+      "update_p95_ms": 1.5334490666666667,
+      "actual_nodes_final": 223.66666666666666
+    },
+    "Xyz_world": {
+      "seen_mean_m": 0.606560414562956,
+      "history_outside_frustum_mean_m": 0.9219218152443404,
+      "seen_roi_mean_m": 0.10333727714549922,
+      "seen_periphery_mean_m": 0.6431796508222206,
+      "current_mean_m": 0.12997709721538928,
+      "unsupported_edge_fraction_5cm": 0.04857373998145397,
+      "update_p95_ms": 1.4400058666666666,
+      "actual_nodes_final": 201.0
+    },
+    "Xyz_memory": {
+      "seen_mean_m": 0.09220032498335635,
+      "history_outside_frustum_mean_m": 0.11375000626304482,
+      "seen_roi_mean_m": 0.04456537850502429,
+      "seen_periphery_mean_m": 0.09572855942100024,
+      "current_mean_m": 0.06670082292228117,
+      "unsupported_edge_fraction_5cm": 0.045327840385828044,
+      "update_p95_ms": 2.7014149333333335,
+      "actual_nodes_final": 256.0
+    },
+    "Xyz_memory_uniform": {
+      "seen_mean_m": 0.08471266035029183,
+      "history_outside_frustum_mean_m": 0.1011008858226234,
+      "seen_roi_mean_m": 0.05465820821608397,
+      "seen_periphery_mean_m": 0.0869551914096784,
+      "current_mean_m": 0.06883442257286528,
+      "unsupported_edge_fraction_5cm": 0.041589214673412374,
+      "update_p95_ms": 2.7262282666666664,
+      "actual_nodes_final": 256.0
+    },
+    "Xyz_memory_dbl": {
+      "seen_mean_m": 0.08203947381612504,
+      "history_outside_frustum_mean_m": 0.09311364798194512,
+      "seen_roi_mean_m": 0.0575496413978328,
+      "seen_periphery_mean_m": 0.08377932355887008,
+      "current_mean_m": 0.07081556529620765,
+      "unsupported_edge_fraction_5cm": 0.03392984853411418,
+      "update_p95_ms": 2.2811285333333333,
+      "actual_nodes_final": 256.0
+    },
+    "Xyz_memory_fps": {
+      "seen_mean_m": 0.09292428400345616,
+      "history_outside_frustum_mean_m": 0.09504309861633635,
+      "seen_roi_mean_m": 0.08962008574278595,
+      "seen_periphery_mean_m": 0.09318662845145309,
+      "current_mean_m": 0.08855501830901176,
+      "unsupported_edge_fraction_5cm": NaN,
+      "update_p95_ms": 1.5757338666666667,
+      "actual_nodes_final": 256.0
+    },
+    "XyzFocusGain": 18.465350476106025,
+    "XyzGlobalCost": 8.838896809641671,
+    "XyzHistoryGain": 87.66164284409548,
+    "XyzSeenGain": 84.79948200216967
+  }
+}

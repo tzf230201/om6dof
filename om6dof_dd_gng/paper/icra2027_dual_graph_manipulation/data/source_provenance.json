@@ -1,0 +1,55 @@
+{
+  "analysis_script_sha256": "4030d671163c8b41b775aca85c5494a96003ba04c94a4802444fbac866b6a8a8",
+  "derived_green_csv_sha256": "18fa82e0e8486923ffb174c74c08c751d21b4c7cb8d1f6f8427d6155351a23c0",
+  "historical_hash_checks": {
+    "model_snapshot_matches_saved_record": true,
+    "scanner_source_matches_saved_record": true
+  },
+  "inputs": [
+    {
+      "bytes": 6144716,
+      "repository_relative_path": "experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/v2/points.csv",
+      "sha256": "ded51632edcd1b041cd3e3d07c9d9aa04dace55ef1624fdf80f6fb1ad636fa1b"
+    },
+    {
+      "bytes": 1565,
+      "repository_relative_path": "experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/v2/summary.json",
+      "sha256": "012c6452908f3a3b9bd023390951bd62a4b3044618b691fa38595882374cfa6a"
+    },
+    {
+      "bytes": 23564,
+      "repository_relative_path": "experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/v2/model.urdf",
+      "sha256": "02e81b41d6c6643c4af1ddd75f444fc1cb5ebed99c56f35657cd480d28857339"
+    },
+    {
+      "bytes": 365414,
+      "repository_relative_path": "experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/v2/seed_bank.csv",
+      "sha256": "1a0cc2fa3c8ce243c74078fac0174cbec0706afe12723423eda1cf108a347baa"
+    },
+    {
+      "bytes": 968,
+      "repository_relative_path": "experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/v2/command.sh",
+      "sha256": "a59386d5017f231a7076891f2db8238528d982cd844db2112e45d0788816e5c9"
+    },
+    {
+      "bytes": 866,
+      "repository_relative_path": "experiments/cartesian_workspace/results/comparison_v1_v2_25mm_20260909/v2/SHA256SUMS",
+      "sha256": "4c83d2c3c4559bbc634e1e5a9215c968098944250d320c2add87a1274ea359b6"
+    },
+    {
+      "bytes": 19898,
+      "repository_relative_path": "experiments/cartesian_workspace/cpp/scan.cpp",
+      "sha256": "c9eaf86ab68fbf77b85abb2e9ddb2ee99b2d38498a848ad85fa9da40f16d4d06"
+    },
+    {
+      "bytes": 9058,
+      "repository_relative_path": "om6dof_dd_gng/launch/ddgng_experiment_reachability.launch.py",
+      "sha256": "4c3c79fe9aa04588c738a3d5cf5195af5c2002135572d979e79eaa3e03cfc746"
+    },
+    {
+      "bytes": 1306,
+      "repository_relative_path": "om6dof_dd_gng/experiments/four_object_pick/data/README.md",
+      "sha256": "5af7889fe28d90aa47585a9e61a9290948621f05f808760aa582b97009f21b46"
+    }
+  ]
+}

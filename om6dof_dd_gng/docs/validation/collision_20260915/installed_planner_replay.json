@@ -1,0 +1,66 @@
+{
+  "domain": 219,
+  "actions_or_hardware": false,
+  "complete": true,
+  "diagnostics_assertions_passed": true,
+  "edge_collision_diagnostics": {
+    "reason": "target_intersection_exact_blocked_or_disconnected",
+    "plan_valid": false,
+    "frame_id": "world",
+    "graph_revision": 1,
+    "clearance_m": 0.035,
+    "goal_rejections": {
+      "capsule_only": 0,
+      "mesh_only": 0,
+      "both": 0
+    },
+    "edge_rejections": {
+      "capsule_only": 0,
+      "mesh_only": 79,
+      "both": 0
+    },
+    "cached_edge_rejections": {
+      "capsule_only": 0,
+      "mesh_only": 79,
+      "both": 0
+    },
+    "capsule_prefiltered_nodes_without_mesh_classification": 0,
+    "capsule_prefiltered_edges_without_mesh_classification": 0,
+    "last_rejection": {
+      "stage": "graph_edge",
+      "node_a": 3083,
+      "node_b": 3157,
+      "capsule_blocked": false,
+      "mesh_checked": true,
+      "mesh_blocked": true,
+      "mesh": {
+        "body_a": "dd_gng_environment",
+        "body_b": "gripper_right_link",
+        "contact_world_m": [
+          0.31824357,
+          0.015106059,
+          0.18099972
+        ],
+        "penetration_m": -0.00017759497
+      }
+    }
+  },
+  "plan_summaries": [
+    {
+      "valid": false,
+      "reason": "target_intersection_exact_blocked_or_disconnected",
+      "blocked_edge_count": 79,
+      "exact_replans": 79,
+      "exact_state_checks": 6160,
+      "planning_time_ms": 645.793792
+    },
+    {
+      "valid": false,
+      "reason": "target_intersection_exact_blocked_or_disconnected",
+      "blocked_edge_count": 79,
+      "exact_replans": 79,
+      "exact_state_checks": 6160,
+      "planning_time_ms": 691.96768
+    }
+  ]
+}

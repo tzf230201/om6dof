@@ -1,0 +1,6 @@
+status,description,count,percent_of_grid
+pose_found,"Full pose, conditioning threshold satisfied (green)",3198,9.574563635819286
+pose_near_singular,"Full pose, near singular (blue)",334,0.9999700607766234
+orientation_unresolved,Position only; requested orientation unresolved,11643,34.858237777312056
+collision_candidates_only,Only colliding position candidates found,358,1.0718241968803328
+position_unresolved,Position unresolved within search budget,17868,53.4954043292117

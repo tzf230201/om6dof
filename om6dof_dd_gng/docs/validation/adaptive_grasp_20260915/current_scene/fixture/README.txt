@@ -1,0 +1,1 @@
+Environment is captured10.6ms before the chosen failed plan. Arm joint positions are copied from that plan's retained measured start, not the later streamed joint message; gripper values remain from the streamed joint message. Replay substitutes fresh timestamps only. Originals are preserved one directory above.

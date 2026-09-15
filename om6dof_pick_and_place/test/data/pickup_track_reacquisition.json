@@ -1,0 +1,251 @@
+{
+  "provenance": "Read-only capture 2026-09-15, frozen preview track 54, observed same-position bottle track 105. No robot commands.",
+  "frozen": {
+    "target_track_id": 54,
+    "target_class_id": 39,
+    "component_centroid": [
+      0.2925226894533357,
+      -0.031983669703344146,
+      0.17137510384763444
+    ],
+    "tracked_centroid": [
+      0.292633,
+      -0.0320853,
+      0.171046
+    ]
+  },
+  "frames": [
+    {
+      "received": 0.0,
+      "clusters": [
+        {
+          "instance": 0,
+          "track_id": 105,
+          "class_id": 39,
+          "class": "bottle",
+          "confidence": 0.775006,
+          "centroid": {
+            "x": 0.29203,
+            "y": -0.0326768,
+            "z": 0.171512
+          },
+          "tracked_centroid": {
+            "x": 0.291987,
+            "y": -0.0326691,
+            "z": 0.171446
+          },
+          "box": {
+            "x": 408,
+            "y": 228,
+            "w": 173,
+            "h": 244
+          },
+          "node_ids": []
+        }
+      ]
+    },
+    {
+      "received": 0.040035776008153334,
+      "clusters": [
+        {
+          "instance": 0,
+          "track_id": 105,
+          "class_id": 39,
+          "class": "bottle",
+          "confidence": 0.775006,
+          "centroid": {
+            "x": 0.292054,
+            "y": -0.0326337,
+            "z": 0.171305
+          },
+          "tracked_centroid": {
+            "x": 0.292011,
+            "y": -0.0326567,
+            "z": 0.171397
+          },
+          "box": {
+            "x": 408,
+            "y": 228,
+            "w": 173,
+            "h": 244
+          },
+          "node_ids": []
+        }
+      ]
+    },
+    {
+      "received": 0.05148016000748612,
+      "clusters": [
+        {
+          "instance": 0,
+          "track_id": 105,
+          "class_id": 39,
+          "class": "bottle",
+          "confidence": 0.775006,
+          "centroid": {
+            "x": 0.292069,
+            "y": -0.0326207,
+            "z": 0.171478
+          },
+          "tracked_centroid": {
+            "x": 0.292031,
+            "y": -0.0326441,
+            "z": 0.171425
+          },
+          "box": {
+            "x": 408,
+            "y": 228,
+            "w": 173,
+            "h": 244
+          },
+          "node_ids": []
+        }
+      ]
+    },
+    {
+      "received": 0.10417062399210408,
+      "clusters": [
+        {
+          "instance": 0,
+          "track_id": 105,
+          "class_id": 39,
+          "class": "bottle",
+          "confidence": 0.775006,
+          "centroid": {
+            "x": 0.292122,
+            "y": -0.0327784,
+            "z": 0.171492
+          },
+          "tracked_centroid": {
+            "x": 0.292063,
+            "y": -0.0326911,
+            "z": 0.171449
+          },
+          "box": {
+            "x": 408,
+            "y": 228,
+            "w": 173,
+            "h": 244
+          },
+          "node_ids": []
+        }
+      ]
+    },
+    {
+      "received": 0.10887615999672562,
+      "clusters": [
+        {
+          "instance": 0,
+          "track_id": 105,
+          "class_id": 39,
+          "class": "bottle",
+          "confidence": 0.796677,
+          "centroid": {
+            "x": 0.292073,
+            "y": -0.0326425,
+            "z": 0.171377
+          },
+          "tracked_centroid": {
+            "x": 0.292066,
+            "y": -0.0326741,
+            "z": 0.171423
+          },
+          "box": {
+            "x": 408,
+            "y": 228,
+            "w": 173,
+            "h": 244
+          },
+          "node_ids": []
+        }
+      ]
+    },
+    {
+      "received": 0.16019302399945445,
+      "clusters": [
+        {
+          "instance": 0,
+          "track_id": 105,
+          "class_id": 39,
+          "class": "bottle",
+          "confidence": 0.796677,
+          "centroid": {
+            "x": 0.291984,
+            "y": -0.0326687,
+            "z": 0.170831
+          },
+          "tracked_centroid": {
+            "x": 0.292038,
+            "y": -0.0326722,
+            "z": 0.171216
+          },
+          "box": {
+            "x": 408,
+            "y": 228,
+            "w": 173,
+            "h": 244
+          },
+          "node_ids": []
+        }
+      ]
+    },
+    {
+      "received": 0.2080036159895826,
+      "clusters": [
+        {
+          "instance": 0,
+          "track_id": 105,
+          "class_id": 39,
+          "class": "bottle",
+          "confidence": 0.796677,
+          "centroid": {
+            "x": 0.291982,
+            "y": -0.0326432,
+            "z": 0.170701
+          },
+          "tracked_centroid": {
+            "x": 0.292018,
+            "y": -0.0326621,
+            "z": 0.171036
+          },
+          "box": {
+            "x": 408,
+            "y": 228,
+            "w": 173,
+            "h": 244
+          },
+          "node_ids": []
+        }
+      ]
+    },
+    {
+      "received": 0.21605305600678548,
+      "clusters": [
+        {
+          "instance": 0,
+          "track_id": 105,
+          "class_id": 39,
+          "class": "bottle",
+          "confidence": 0.754405,
+          "centroid": {
+            "x": 0.291985,
+            "y": -0.0327124,
+            "z": 0.170683
+          },
+          "tracked_centroid": {
+            "x": 0.292007,
+            "y": -0.0326797,
+            "z": 0.170912
+          },
+          "box": {
+            "x": 408,
+            "y": 228,
+            "w": 173,
+            "h": 243
+          },
+          "node_ids": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "page_limit_8": true,
+  "pages": 7,
+  "no_undefined_citations": true,
+  "no_overfull_boxes": true,
+  "no_text_placeholders": true,
+  "anonymous_author_line": true,
+  "ai_disclosure": true,
+  "no_local_identity_in_pdf": true,
+  "pdf_sha256": "739891f1f16c7836695bbaa74d531c143010d804867142f235794205a07ff992",
+  "note": "Checks verify format and internal artifacts only. They do not establish scientific novelty, author approval, or conference acceptance."
+}

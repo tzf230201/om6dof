@@ -1,0 +1,11 @@
+{
+  "valid": true,
+  "elapsed": 4.154558112000814,
+  "pregrasp_points": 2,
+  "insertion_points": 12,
+  "position_error": 6.706294187334173e-10,
+  "duration_pregrasp": 19.645247559,
+  "duration_insertion": 9.839299393,
+  "blocking_obstacle_rejected": true,
+  "blocking_obstacle_reason": "state_collision_or_invalid:gripper_left_link__boxer_pick_box_obstacle,gripper_right_link__boxer_pick_box_obstacle"
+}

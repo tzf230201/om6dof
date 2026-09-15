@@ -138,6 +138,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ReachabilityPlan.msg"
   "msg/ReachabilityQuery.msg"
   "srv/ValidateReachabilityScene.srv"
+  "srv/ValidateGraspExecution.srv"
   DEPENDENCIES std_msgs geometry_msgs sensor_msgs trajectory_msgs nav_msgs
 )
 rosidl_get_typesupport_target(cpp_typesupport_target
@@ -287,6 +288,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_semantic_density_attention test/test_semantic_density_attention.cpp)
   target_include_directories(test_semantic_density_attention PRIVATE include)
   target_compile_features(test_semantic_density_attention PRIVATE cxx_std_17)
+  ament_add_gtest(test_semantic_cluster_propagation test/test_semantic_cluster_propagation.cpp)
+  target_include_directories(test_semantic_cluster_propagation PRIVATE include)
+  target_compile_features(test_semantic_cluster_propagation PRIVATE cxx_std_17)
   ament_add_gtest(test_camera_profile test/test_camera_profile.cpp)
   target_include_directories(test_camera_profile PRIVATE include)
   target_compile_features(test_camera_profile PRIVATE cxx_std_17)
@@ -299,6 +303,20 @@ if(BUILD_TESTING)
   ament_add_gtest(test_semantic_target_selection test/test_semantic_target_selection.cpp)
   target_include_directories(test_semantic_target_selection PRIVATE include)
   target_compile_features(test_semantic_target_selection PRIVATE cxx_std_17)
+  ament_add_gtest(test_final_grasp test/test_final_grasp.cpp)
+  target_include_directories(test_final_grasp PRIVATE include)
+  target_compile_features(test_final_grasp PRIVATE cxx_std_17)
+  ament_target_dependencies(test_final_grasp moveit_core)
+  ament_add_gtest(test_final_grasp_robot test/test_final_grasp_robot.cpp)
+  target_include_directories(test_final_grasp_robot PRIVATE include)
+  target_compile_features(test_final_grasp_robot PRIVATE cxx_std_17)
+  ament_target_dependencies(test_final_grasp_robot moveit_core moveit_ros_planning)
+  ament_add_gtest(test_grasp_collision_scene test/test_grasp_collision_scene.cpp)
+  target_include_directories(test_grasp_collision_scene PRIVATE include)
+  target_compile_features(test_grasp_collision_scene PRIVATE cxx_std_17)
+  ament_target_dependencies(test_grasp_collision_scene
+    moveit_core moveit_ros_planning moveit_msgs shape_msgs geometry_msgs)
+  target_link_libraries(test_grasp_collision_scene ${cpp_typesupport_target})
   ament_add_pytest_test(test_experiment_launch test/test_experiment_launch.py TIMEOUT 30)
 
   ament_add_gtest(test_reachability_graph

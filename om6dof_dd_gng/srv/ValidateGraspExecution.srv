@@ -1,0 +1,12 @@
+# Revalidate a frozen segment against the newest complete environment before
+# executing it. This service has no controller publisher or action client.
+trajectory_msgs/JointTrajectory trajectory
+geometry_msgs/Point target_position
+int32 target_class_id
+uint32 target_environment_node_id
+float64 gripper_open_position
+float64 gripper_close_position
+bool include_closure
+---
+bool valid
+string reason

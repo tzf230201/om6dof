@@ -1,0 +1,9 @@
+{
+  "scope": "Read-only identity check; no action/service commands sent",
+  "frames": 236,
+  "frozen_track_id": 54,
+  "matching_current_track_id": 105,
+  "rejection": null,
+  "original_strict_id_present_in_latest": false,
+  "capture_directory": "/tmp/om6dof_identity_audit_6zcyapxd"
+}

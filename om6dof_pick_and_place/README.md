@@ -535,3 +535,76 @@ approach (`grasp_pitch: 2.4` ≈ 45°) or move the tag closer to the arm.
 - [`om6dof_teleop`](../om6dof_teleop/) — JOINT/CARTESIAN/CYLINDRICAL remote
   control with an exclusive ros2_control switch between remote and autonomous
   arm ownership
+
+## Pickup sederhana YOLOX → Boxer3D → pusat kotak
+
+Launch terpisah yang baru memakai **Barath19 Boxer3D ONNX** dan YOLOX TensorRT.
+Tidak menjalankan DD-GNG atau graph reachability. Controller hardware yang
+sudah aktif tetap dipakai, termasuk dua jalur position dan position_offset.
+
+Hentikan launch kamera/planning sebelumnya dengan Ctrl+C (D435i hanya boleh
+memiliki satu pemilik), lalu:
+
+```bash
+source /opt/ros/humble/setup.bash
+source /home/kublab/ros2_ws/install/setup.bash
+ros2 launch om6dof_pick_and_place yolox_boxer3d_pickup.launch.py \
+  execution_enabled:=true
+```
+
+File kalibrasi default: `~/.config/om6dof/d435_hand_eye.yaml`. Ganti dengan
+`camera_calibration_file:=/path/hand_eye.yaml` bila diperlukan. Serial kamera
+mengikuti file tersebut. Target default `bottle`, dapat diubah dengan
+`target_class:=cup`. `launch_rviz:=false`, `launch_gui:=false`, dan
+`display_window:=false` tersedia untuk pemakaian headless. Tanpa
+`execution_enabled:=true`, hanya Preview yang tersedia.
+
+1. Tunggu hasil YOLO/Boxer3D. Kotak cyan berada di koordinat **world robot**.
+2. Klik **Preview**. Titik orange adalah **pusat OBB Boxer3D**; lintasan harus
+   sampai ke titik ini, bukan hanya berhenti di pregrasp atau node permukaan.
+3. Klik **Dekati dan jepit**: buka gripper → pose 7.5 cm di depan pusat → maju
+   lurus ke pusat pada ketinggian yang sama → tutup gripper. Tidak ada lift
+   atau retreat dengan benda. **Stop** membatalkan goal milik picker ini.
+
+Pusat kotak ditransformasikan dengan posisi world EoE pada **waktu pengambilan
+RGB-D**, ditambah transform hand-eye terukur. Posisi kamera saat inference
+selesai tidak dipakai untuk gambar lama. Boxer3D tetap menggunakan koreksi
+front-depth yang sudah ada; pusatnya adalah pusat OBB yang dikoreksi depth,
+bukan pusat massa benda atau centroid DD-GNG. Inference ONNX CPU masih memakan
+beberapa detik; umur sumber dibatasi 30 detik, umur Preview 15 detik.
+
+MoveIt pada namespace `/boxer_pick` hanya merencanakan dan memeriksa collision.
+Gerakan diteruskan oleh coordinator ke `arm_controller` dan `gripper_controller`
+dengan konfirmasi posisi encoder. Arah fisik depan gripper ialah +Z lokal
+`end_effector_link`; arah buka-tutup kedua jari ialah Y lokal, dibuat horizontal.
+Planner mencoba pendekatan horizontal dan kedua roll gripper simetris. Jalur
+Cartesian yang hanya tercapai sebagian ditolak. Bila target berubah atau
+validasi gagal, gripper tidak ditutup; status menyebut tahap dan penyebabnya.
+
+Kotak target yang dipilih dikecualikan dari obstacle agar pusatnya dapat
+dijangkau untuk menjepit. Kotak benda lain tetap diperiksa, bersama self-collision
+dan limit joint. Scene memakai **kotak objek yang berhasil dideteksi**, bukan
+rekonstruksi seluruh meja/ruangan; area dan benda yang tidak terdeteksi belum
+terwakili. Default memproses hingga tiga kotak YOLO (`max_boxes:=3`). Pemeriksaan
+collision diskret tidak membuktikan keselamatan terhadap objek yang tidak
+terlihat atau lintasan yang diubah offset joystick saat bergerak.
+
+Layanan alternatif GUI: `/boxer_pick/preview`, `/boxer_pick/execute`, dan
+`/boxer_pick/cancel` (`std_srvs/srv/Trigger`). Status: `/boxer_pick/status`.
+Launch tidak mengaktifkan torque, memulai controller, atau mengirim gerakan
+secara otomatis.
+
+Validasi 2026-09-15: 186 unit/regression tests lulus; uji node pickup + layanan
+MoveIt sungguhan pada domain ROS terpisah menghasilkan Preview lengkap sampai
+pusat, menolak Execute ketika dinonaktifkan, dan mengirim **0 goal arm/gripper**.
+Kotak penghalang tambahan ditolak pada uji collision. Sensor dan controller
+fisik tidak dijalankan oleh pengujian ini. Script:
+`test/boxer_pick_preview_smoke.py`; uji komunikasi latched Boxer ada di
+`../om6dof_boxer/test/boxer_pick_dds_smoke.py`.
+
+Keterbatasan library terpasang: binary MoveIt Humble 2.5.9 pada AGX mengeluarkan
+SIGSEGV saat destructor setelah SIGINT, meskipun Preview sudah selesai dan
+controller manager/action eksekusi MoveIt tidak digunakan. Ini direproduksi
+pada domain test tanpa hardware; tidak disembunyikan dengan SIGKILL dan belum
+mengubah library `/opt/ros`. Planning berhasil, tetapi penutupan MoveIt belum
+bersih. Hasilnya dicatat di `test/data/boxer_pick_validation_20260915/`.

@@ -1,0 +1,36 @@
+{
+  "page_count": 6,
+  "within_official_8_page_limit": true,
+  "page_size": "612 x 792 pts (letter)",
+  "undefined_citations_or_references": [],
+  "overfull_boxes": [],
+  "type3_fonts": false,
+  "identity_token_counts": {
+    "kublab": 0,
+    "om6dof": 0,
+    "/home/": 0,
+    "Anonymous Authors": 1
+  },
+  "reported_data_tokens_present": {
+    "33,401": true,
+    "15,175": true,
+    "3,198": true,
+    "9.57": true,
+    "21.07": true,
+    "0.439608": true,
+    "0.007673": true
+  },
+  "dataset_grid_rows": 33401,
+  "dataset_selected_rows": 3198,
+  "independent_fk_witness_count": 3198,
+  "independent_fk_checks": {
+    "all_local_x_axes_within_half_degree_of_world_down": true,
+    "all_local_z_axes_within_half_degree_of_horizontal": true,
+    "orientation_residual_matches_saved_KDL_deg_tolerance_1e_minus_7": true,
+    "position_residual_matches_saved_KDL_mm_tolerance_1e_minus_7": true,
+    "rotation_orthogonality_error_below_1e_minus_12": true
+  },
+  "pdf_sha256": "d2a5ffb99955648bf58e16b1ed265a1af80fa57c1d29f0cf731426c0d66e4786",
+  "scope": "Mechanical checks only; human scientific and submission review remains necessary.",
+  "scientific_status": "Offline model evidence; integrated physical task results not established."
+}

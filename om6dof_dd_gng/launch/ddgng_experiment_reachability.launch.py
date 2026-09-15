@@ -24,13 +24,13 @@ DEFAULT_DATASET = (Path.home() / 'ros2_ws/src/om6dof/experiments/cartesian_works
 
 
 def prepare_config(base_path, dataset_path, directory, sample_selection='green',
-                   center_candidates=12, exact_replan_budget=80):
+                   center_candidates=12, exact_replan_budget=80, final_grasp=False):
     """Freeze selected witnesses for this launch; change only reachability settings."""
     if sample_selection not in ('green', 'all'):
         raise ValueError('sample_selection must be green or all')
-    center_candidates = int(center_candidates)
-    if center_candidates < 1:
-        raise ValueError('component_center_candidates must be positive')
+    # Keep the argument accepted for saved commands.  Centre mode now produces
+    # exactly one physical target reference for each object component.
+    del center_candidates
     exact_replan_budget = int(exact_replan_budget)
     if exact_replan_budget < 1:
         raise ValueError('exact_replan_budget must be positive')
@@ -78,14 +78,37 @@ def prepare_config(base_path, dataset_path, directory, sample_selection='green',
         'gng_debug_publish_training_samples': False,
         'exact_collision_enabled': True,
         'include_target_in_collision': True,
-        # Several observed middle-surface nodes give exact collision validation
-        # alternatives without inventing a goal inside the object or falling
-        # back to its top surface.
-        'target_node_selection': 'component_center_neighborhood',
-        'target_component_center_candidates': center_candidates,
+        # Keep the earlier graph-only profile. Pickup explicitly uses TCP +Z:
+        # physical forward in the V2 CAD, called gripper-forward X by teleop.
+        # Only pickup excludes its selected object component from robot contact
+        # checks; other objects and robot self-collision remain checked.
+        'pregrasp_filter_enabled': True,
+        'final_grasp_enabled': bool(final_grasp),
+        'pregrasp_refinement_enabled': bool(final_grasp),
+        # In pickup the full robot mesh validates every graph/bridge segment,
+        # matching the final insertion and execution validator. Conservative
+        # capsule envelopes remain diagnostic; they do not veto mesh-clear poses.
+        'capsule_collision_veto': not bool(final_grasp),
+        'exclude_selected_target_from_collision': bool(final_grasp),
+        'pregrasp_tool_approach_axis': [0.0, 0.0, 1.0] if final_grasp else [1.0, 0.0, 0.0],
+        'pregrasp_min_standoff_m': 0.07,
+        'pregrasp_max_standoff_m': 0.13,
+        'pregrasp_min_alignment': 0.95 if final_grasp else 0.70,
+        'grasp_gripper_open': 0.019,
+        'grasp_gripper_close': -0.010,
+        'grasp_tcp_to_pinch': [0.0, 0.0, 0.0],
+        'grasp_joint_velocity': 0.15,
+        # One physical grasp reference: the 3-D centre of the selected semantic
+        # component.  Its representative node ID is retained only for tracking.
+        'target_node_selection': 'component_center',
         # This only permits more failed candidates to be rejected. It never
         # accepts a collision and leaves all collision radii unchanged.
         'exact_max_replans': exact_replan_budget,
+        # At the folded ready pose link2 and link6 make a verified mechanical
+        # touch. FCL reports coplanar triangle contact as collision, so only
+        # this explicit pair is allowed; all other non-adjacent pairs remain
+        # strict collision checks.
+        'allowed_self_collision_pairs': ['link2:link6'],
     })
     config = directory / 'experiment_topology.yaml'
     config.write_text(yaml.safe_dump(document, sort_keys=False))
@@ -96,12 +119,28 @@ def setup(context):
     share = Path(get_package_share_directory('om6dof_dd_gng'))
     pick_share = Path(get_package_share_directory('om6dof_pick_and_place'))
     directory = tempfile.mkdtemp(prefix='ddgng_experiment_')
+    pickup = LaunchConfiguration('pickup').perform(context).lower() == 'true'
     try:
         config = prepare_config(share / 'config/topo_gng_v2.yaml',
                                 LaunchConfiguration('workspace_samples_file').perform(context), directory,
                                 LaunchConfiguration('sample_selection').perform(context),
                                 LaunchConfiguration('component_center_candidates').perform(context),
-                                LaunchConfiguration('exact_replan_budget').perform(context))
+                                LaunchConfiguration('exact_replan_budget').perform(context),
+                                final_grasp=pickup)
+        pick_config = pick_share / 'config/graph_pick.yaml'
+        if pickup:
+            pick_document = yaml.safe_load(pick_config.read_text())
+            pick_document['graph_pick']['ros__parameters'].update({
+                'task_mode': 'pickup', 'tool_approach_axis': [0.0, 0.0, 1.0],
+                'grasp_tcp_to_pinch': [0.0, 0.0, 0.0],
+                'selected_target_excluded_from_collision': True,
+                'minimum_approach_alignment': 0.95,
+                'max_start_joint_error_rad': 0.02,
+                'gripper_open': 0.019, 'gripper_close': -0.010,
+                'retreat_after_grasp': False,
+            })
+            pick_config = Path(directory) / 'graph_grasp.yaml'
+            pick_config.write_text(yaml.safe_dump(pick_document, sort_keys=False))
     except Exception:
         shutil.rmtree(directory)
         raise
@@ -123,6 +162,7 @@ def setup(context):
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(str(pick_share / 'launch/graph_pick.launch.py')),
             launch_arguments={
+                'config_file': str(pick_config),
                 'execution_enabled': LaunchConfiguration('execution_enabled'),
                 'rmw_implementation': LaunchConfiguration('rmw_implementation'),
             }.items()),
@@ -145,10 +185,12 @@ def generate_launch_description():
         DeclareLaunchArgument('workspace_samples_file', default_value=str(DEFAULT_DATASET)),
         DeclareLaunchArgument('sample_selection', default_value='green', choices=['green', 'all'],
                              description='Green experiment poses only, or all position-found witnesses'),
-        DeclareLaunchArgument('component_center_candidates', default_value='12',
-                             description='Observed middle-surface targets retained per object component'),
+        DeclareLaunchArgument('component_center_candidates', default_value='1',
+                             description='Deprecated: component-centre mode uses one target per object'),
         DeclareLaunchArgument('exact_replan_budget', default_value='80',
                              description='Collision-safe candidate rejections allowed before reporting no route'),
+        DeclareLaunchArgument('pickup', default_value='false', choices=['true', 'false'],
+                             description='Append validated front insertion and explicit gripper closing'),
         DeclareLaunchArgument('camera_calibration_file', default_value=''),
         DeclareLaunchArgument('execution_enabled', default_value='false', choices=['true', 'false']),
         DeclareLaunchArgument('launch_rviz', default_value='true', choices=['true', 'false']),

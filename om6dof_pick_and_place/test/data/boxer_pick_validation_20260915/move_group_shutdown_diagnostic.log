@@ -1,0 +1,99 @@
+[INFO] [1789477376.341419776] [moveit_rdf_loader.rdf_loader]: Loaded robot model in 0.00575872 seconds
+[INFO] [1789477376.341792480] [moveit_robot_model.robot_model]: Loading robot model 'om6dof_v2'...
+[INFO] [1789477376.341824288] [moveit_robot_model.robot_model]: No root/virtual joint specified in SRDF. Assuming fixed joint
+[WARN] [1789477376.341869824] [moveit_robot_model.robot_model]: Link base_link has visual geometry but no collision geometry. Collision geometry will be left empty. Fix your URDF file by explicitly specifying collision geometry.
+[INFO] [1789477377.261133152] [moveit.ros_planning_interface.moveit_cpp]: Listening to 'joint_states' for joint states
+[INFO] [1789477377.264522784] [moveit_ros.current_state_monitor]: Listening to joint states on topic 'joint_states'
+[INFO] [1789477377.270926688] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/boxer_pick/attached_collision_object' for attached collision objects
+[INFO] [1789477377.272868192] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Publishing maintained planning scene on 'monitored_planning_scene'
+[INFO] [1789477377.273152256] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting planning scene monitor
+[INFO] [1789477377.274654048] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/boxer_pick/planning_scene'
+[INFO] [1789477377.274725760] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting world geometry update monitor for collision objects, attached objects, octomap updates.
+[INFO] [1789477377.275711168] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to 'collision_object'
+[INFO] [1789477377.276491904] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to 'planning_scene_world' for planning scene world geometry
+[WARN] [1789477377.277248000] [moveit.ros.occupancy_map_monitor.middleware_handle]: Resolution not specified for Octomap. Assuming resolution = 0.1 instead
+[ERROR] [1789477377.277297440] [moveit.ros.occupancy_map_monitor.middleware_handle]: No 3D sensor plugin(s) defined for octomap updates
+[INFO] [1789477379.135121664] [moveit.ros_planning_interface.moveit_cpp]: Loading planning pipeline 'ompl'
+[INFO] [1789477379.155498240] [moveit.ros_planning.planning_pipeline]: Using planning interface 'OMPL'
+[INFO] [1789477379.159647168] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.path_tolerance' was not set. Using default value: 0.100000
+[INFO] [1789477379.159722208] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.resample_dt' was not set. Using default value: 0.100000
+[INFO] [1789477379.159732928] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.min_angle_change' was not set. Using default value: 0.001000
+[INFO] [1789477379.159762080] [moveit_ros.fix_workspace_bounds]: Param 'ompl.default_workspace_bounds' was not set. Using default value: 10.000000
+[INFO] [1789477379.159787456] [moveit_ros.fix_start_state_bounds]: Param 'ompl.start_state_max_bounds_error' was set to 0.100000
+[INFO] [1789477379.159796576] [moveit_ros.fix_start_state_bounds]: Param 'ompl.start_state_max_dt' was not set. Using default value: 0.500000
+[INFO] [1789477379.159813344] [moveit_ros.fix_start_state_collision]: Param 'ompl.start_state_max_dt' was not set. Using default value: 0.500000
+[INFO] [1789477379.159822176] [moveit_ros.fix_start_state_collision]: Param 'ompl.jiggle_fraction' was not set. Using default value: 0.020000
+[INFO] [1789477379.159830400] [moveit_ros.fix_start_state_collision]: Param 'ompl.max_sampling_attempts' was not set. Using default value: 100
+[INFO] [1789477379.159846016] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Add Time Optimal Parameterization'
+[INFO] [1789477379.159853536] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Resolve constraint frames to robot links'
+[INFO] [1789477379.159859232] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Workspace Bounds'
+[INFO] [1789477379.159864416] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State Bounds'
+[INFO] [1789477379.159895840] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State In Collision'
+[INFO] [1789477379.159902560] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State Path Constraints'
+[WARN] [1789477379.168352448] [moveit_ros.trajectory_execution_manager]: Parameter '~moveit_controller_manager' is not specified but only one matching plugin was found: 'moveit_simple_controller_manager/MoveItSimpleControllerManager'. Using that one.
+[ERROR] [1789477379.196489024] [moveit.plugins.moveit_simple_controller_manager]: No controller_names specified.
+[INFO] [1789477379.196790144] [moveit.plugins.moveit_simple_controller_manager]: Returned 0 controllers in list
+[INFO] [1789477379.196816064] [moveit.plugins.moveit_simple_controller_manager]: Returned 0 controllers in list
+[INFO] [1789477379.197562048] [moveit_ros.trajectory_execution_manager]: Trajectory execution is not managing controllers
+[INFO] [1789477379.197613888] [move_group.move_group]: MoveGroup debug mode is ON
+[INFO] [1789477379.222262464] [move_group.move_group]: 
+
+********************************************************
+* MoveGroup using: 
+*     - ApplyPlanningSceneService
+*     - ClearOctomapService
+*     - CartesianPathService
+*     - GetPlanningSceneService
+*     - KinematicsService
+*     - MotionPlanService
+*     - QueryPlannersService
+*     - StateValidationService
+********************************************************
+
+[INFO] [1789477379.222524160] [moveit_move_group_capabilities_base.move_group_context]: MoveGroup context using planning plugin ompl_interface/OMPLPlanner
+[INFO] [1789477379.222557728] [moveit_move_group_capabilities_base.move_group_context]: MoveGroup context initialization complete
+[96mLoading 'move_group/ApplyPlanningSceneService'...
+[0m[96mLoading 'move_group/ClearOctomapService'...
+[0m[96mLoading 'move_group/MoveGroupCartesianPathService'...
+[0m[96mLoading 'move_group/MoveGroupGetPlanningSceneService'...
+[0m[96mLoading 'move_group/MoveGroupKinematicsService'...
+[0m[96mLoading 'move_group/MoveGroupPlanService'...
+[0m[96mLoading 'move_group/MoveGroupQueryPlannersService'...
+[0m[96mLoading 'move_group/MoveGroupStateValidationService'...
+[0m[92m
+You can start planning now!
+
+[0m[INFO] [1789477383.572271296] [moveit_move_group_default_capabilities.plan_service_capability]: Received new planning service request...
+[INFO] [1789477383.572454496] [moveit_move_group_capabilities_base.move_group_capability]: Using planning pipeline 'ompl'
+[INFO] [1789477383.575562080] [moveit.ompl_planning.model_based_planning_context]: Planner configuration 'arm[RRTConnect]' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[ERROR] [1789477386.581170144] [ompl]: ./src/ompl/geometric/planners/rrt/src/RRTConnect.cpp:265 - arm/arm[RRTConnect]: Unable to sample any valid states for goal tree
+[ERROR] [1789477386.583388320] [ompl]: ./src/ompl/geometric/planners/rrt/src/RRTConnect.cpp:265 - arm/arm[RRTConnect]: Unable to sample any valid states for goal tree
+[WARN] [1789477386.583615968] [ompl]: ./src/ompl/tools/multiplan/src/ParallelPlan.cpp:138 - ParallelPlan::solve(): Unable to find solution by any of the threads in 3.007561 seconds
+[INFO] [1789477386.596817152] [moveit.ompl_planning.model_based_planning_context]: Unable to solve the planning problem
+[INFO] [1789477386.604312224] [moveit_move_group_default_capabilities.plan_service_capability]: Received new planning service request...
+[INFO] [1789477386.604484832] [moveit_move_group_capabilities_base.move_group_capability]: Using planning pipeline 'ompl'
+[INFO] [1789477386.606636448] [moveit.ompl_planning.model_based_planning_context]: Planner configuration 'arm[RRTConnect]' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[INFO] [1789477387.124995040] [moveit_move_group_default_capabilities.cartersian_path_service_capability]: Received request to compute Cartesian path
+[INFO] [1789477387.125269312] [moveit_move_group_default_capabilities.cartersian_path_service_capability]: Attempting to follow 1 waypoints for link 'end_effector_link' using a step of 0.003000 m and jump threshold 0.000000 (in global reference frame)
+[INFO] [1789477387.129842656] [moveit_move_group_default_capabilities.cartersian_path_service_capability]: Computed Cartesian path with 26 points (followed 100.000000% of requested trajectory)
+[INFO] [1789477388.172036960] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [1789477388.180167744] [moveit.ros_planning_interface.moveit_cpp]: Deleting MoveItCpp
+[INFO] [1789477388.180887328] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Stopped publishing maintained planning scene.
+[INFO] [1789477388.181483872] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Stopping world geometry monitor
+[INFO] [1789477388.181734720] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Stopping planning scene monitor
+Warning: class_loader.ClassLoader: SEVERE WARNING!!! Attempting to unload library while objects created by this loader exist in the heap! You should delete your objects before attempting to unload the library or destroying the ClassLoader. The library will NOT be unloaded.
+         at line 127 in ./src/class_loader.cpp
+Stack trace (most recent call last):
+#11   Object "/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1", at 0xffffffffffffffff, in 
+#10   Object "/opt/ros/humble/lib/moveit_ros_move_group/move_group", at 0xaaaac5e0f46f, in 
+#9    Source "../csu/libc-start.c", line 392, in __libc_start_main_impl [0xffffa41574d7]
+#8    Source "../sysdeps/nptl/libc_start_call_main.h", line 58, in __aarch64_ldadd4_acq [0xffffa41573ff]
+#7    Object "/opt/ros/humble/lib/moveit_ros_move_group/move_group", at 0xaaaac5e0e50b, in 
+#6    Object "/opt/ros/humble/lib/moveit_ros_move_group/move_group", at 0xaaaac5e0f68f, in 
+#5    Object "/opt/ros/humble/lib/librclcpp.so", at 0xffffa472d607, in rclcpp::Node::~Node()
+#4    Object "/opt/ros/humble/lib/librclcpp.so", at 0xffffa4705a13, in 
+#3    Object "/opt/ros/humble/lib/librclcpp.so", at 0xffffa4737863, in 
+#2    Object "/opt/ros/humble/lib/librclcpp.so", at 0xffffa4737767, in rclcpp::node_interfaces::NodeBase::~NodeBase()
+#1    Object "/opt/ros/humble/lib/librclcpp.so", at 0xffffa4705a13, in 
+#0    Object "/opt/ros/humble/lib/librclcpp.so", at 0xffffa470a978, in rclcpp::CallbackGroup::~CallbackGroup()
+Segmentation fault (Address not mapped to object [0xffff981cfaf8])

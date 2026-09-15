@@ -1,0 +1,54 @@
+{
+  "run_directory": "/tmp/om6dof_grasp_execution_smoke_8s8t97bf",
+  "domain_id": 218,
+  "binary": "/home/kublab/ros2_ws/build/om6dof_dd_gng/reachability_graph_node",
+  "binary_mtime": 1789441997.088,
+  "subset_count": 89,
+  "hardware_access": false,
+  "action_clients_created": false,
+  "checks": [
+    {
+      "stage": "graph",
+      "valid": true,
+      "reason": "grasp_execution_segment_validated",
+      "expected_valid": true,
+      "passed": true
+    },
+    {
+      "stage": "approach_and_closure_sweep",
+      "valid": true,
+      "reason": "grasp_execution_segment_validated",
+      "expected_valid": true,
+      "passed": true
+    },
+    {
+      "stage": "closure_only",
+      "valid": true,
+      "reason": "grasp_execution_segment_validated",
+      "expected_valid": true,
+      "passed": true
+    },
+    {
+      "stage": "unknown_obstacle_at_open_finger",
+      "valid": false,
+      "reason": "grasp_execution_collision:dd_gng_grasp_obstacles__gripper_left_link",
+      "expected_valid": false,
+      "passed": true
+    }
+  ],
+  "own_subprocess_pid": 1159093,
+  "plan": {
+    "reason": "path_ready_exact_validated_grasp_preview_only",
+    "valid": true,
+    "grasp_approach_valid": true,
+    "pregrasp_waypoint_count": 2,
+    "trajectory_points": 17,
+    "grasp_position_error_m": 6.416019849003288e-05,
+    "target": [
+      0.295,
+      0.0,
+      0.15000000000000002
+    ]
+  },
+  "passed": true
+}

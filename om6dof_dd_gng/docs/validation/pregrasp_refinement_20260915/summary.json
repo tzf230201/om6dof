@@ -1,0 +1,51 @@
+{
+  "date": "2026-09-15",
+  "hardware_motion_tested": false,
+  "build": {
+    "packages": [
+      "om6dof_dd_gng",
+      "om6dof_pick_and_place"
+    ],
+    "passed": true
+  },
+  "python_tests": {
+    "passed": 135,
+    "files": [
+      "om6dof_dd_gng/test/test_collision_diagnostics.py",
+      "om6dof_dd_gng/test/test_experiment_launch.py",
+      "om6dof_pick_and_place/test/test_graph_pick_node.py"
+    ]
+  },
+  "cpp_suites": {
+    "test_final_grasp": {
+      "tests": "9",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "0",
+      "timestamp": "2026-09-15T19:36:59",
+      "name": "AllTests"
+    },
+    "test_final_grasp_robot": {
+      "tests": "3",
+      "failures": "0",
+      "disabled": "0",
+      "errors": "0",
+      "time": "1.524",
+      "timestamp": "2026-09-15T19:37:09",
+      "name": "AllTests"
+    }
+  },
+  "evidence": [
+    "paired_smoke.json",
+    "historical_disabled.json",
+    "historical_enabled.json",
+    "execution_default.json",
+    "execution_strict.json",
+    "historical_validation/validator_evidence.json"
+  ],
+  "known_limitations": [
+    "Latest live camera/environment and joint stream unavailable during capture; historical scene and synthetic tests only.",
+    "A new query from the historical synthetic grasp endpoint still hits the current-state capsule gate, while frozen insertion/closure FCL validation passes. No hardware grasp, lift or retreat demonstrated."
+  ]
+}

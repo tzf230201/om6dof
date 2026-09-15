@@ -86,6 +86,7 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 #include "om6dof_dd_gng/dynamic_density_gng.hpp"
+#include "om6dof_dd_gng/semantic_cluster_propagation.hpp"
 #include "om6dof_dd_gng/semantic_density_attention.hpp"
 #include "om6dof_dd_gng/tensorrt_yolox_detector.hpp"
 #include "om6dof_dd_gng/yolox_detector.hpp"
@@ -601,6 +602,7 @@ private:
     uint64_t detections = 0;
     uint64_t fusion_detections = 0;
     uint64_t labeled_nodes = 0;
+    uint64_t inherited_cluster_nodes = 0;
     uint64_t planning_target_nodes = 0;
 
     std::string yolo_submit_outcome = "not_attempted";
@@ -736,6 +738,12 @@ private:
       "target_classes_topic", "/om6dof_topo_gng/set_target_classes");
     declare_parameter<double>("label_confidence", 0.35);
     declare_parameter<int>("min_label_nodes", 3);
+    // Visual completion only: an UNKNOWN node needs multiple same-class
+    // DD-GNG neighbours, no competing class, and short 3D edges.
+    declare_parameter<bool>("semantic_cluster_inherit_enabled", true);
+    declare_parameter<double>("semantic_cluster_inherit_max_edge_m", 0.055);
+    declare_parameter<int>("semantic_cluster_inherit_min_neighbours", 2);
+    declare_parameter<double>("semantic_cluster_inherit_min_confidence", 0.15);
     declare_parameter<std::string>("labels_topic", "/om6dof_topo_gng/labels");
     declare_parameter<std::string>(
       "object_clusters_topic", "/om6dof_topo_gng/object_clusters");
@@ -845,6 +853,22 @@ private:
     target_classes_topic_ = get_parameter("target_classes_topic").as_string();
     label_confidence_ = get_parameter("label_confidence").as_double();
     min_label_nodes_ = static_cast<int>(get_parameter("min_label_nodes").as_int());
+    semantic_cluster_propagation_.enabled =
+      get_parameter("semantic_cluster_inherit_enabled").as_bool();
+    semantic_cluster_propagation_.max_edge_length_m = static_cast<float>(
+      get_parameter("semantic_cluster_inherit_max_edge_m").as_double());
+    semantic_cluster_propagation_.min_same_class_neighbours = static_cast<size_t>(
+      get_parameter("semantic_cluster_inherit_min_neighbours").as_int());
+    semantic_cluster_propagation_.min_neighbour_confidence = static_cast<float>(
+      get_parameter("semantic_cluster_inherit_min_confidence").as_double());
+    if (!std::isfinite(semantic_cluster_propagation_.max_edge_length_m) ||
+      semantic_cluster_propagation_.max_edge_length_m <= 0.0F ||
+      semantic_cluster_propagation_.min_same_class_neighbours == 0U ||
+      !std::isfinite(semantic_cluster_propagation_.min_neighbour_confidence) ||
+      semantic_cluster_propagation_.min_neighbour_confidence < 0.0F)
+    {
+      throw std::runtime_error("Invalid semantic cluster label propagation parameters");
+    }
     labels_topic_ = get_parameter("labels_topic").as_string();
     object_clusters_topic_ = get_parameter("object_clusters_topic").as_string();
     object_clusters_marker_topic_ = get_parameter("object_clusters_marker_topic").as_string();
@@ -1258,6 +1282,7 @@ private:
          << ",\"detections\":" << metrics.detections
          << ",\"fusion_detections\":" << metrics.fusion_detections
          << ",\"labeled_nodes\":" << metrics.labeled_nodes
+         << ",\"inherited_cluster_nodes\":" << metrics.inherited_cluster_nodes
          << ",\"planning_target_nodes\":" << metrics.planning_target_nodes << "}"
          << ",\"yolo\":{"
          << "\"submit_outcome\":" << std::quoted(metrics.yolo_submit_outcome)
@@ -1709,6 +1734,8 @@ private:
       source_frame->camera_to_world.inverse() : world_to_camera;
     labelGraph(fusion_depth, detections, fusion_world_to_camera, color_intrinsics_, nodes, node_ids,
       node_class_id, node_confidence, &observed_scores, &node_detection_index);
+    metrics.inherited_cluster_nodes = om6dof_dd_gng::propagateUnknownClusterLabels(
+      nodes, edges, node_class_id, node_confidence, semantic_cluster_propagation_);
 
     // Preserve the full multi-class semantic coloring above. Selection only
     // gates which direct evidence can steer DD-GNG density and which labeled
@@ -2869,6 +2896,7 @@ private:
   std::string target_classes_topic_;
   double label_confidence_ = 0.35;
   int min_label_nodes_ = 3;
+  om6dof_dd_gng::SemanticClusterPropagationParameters semantic_cluster_propagation_;
   double semantic_max_source_age_sec_ = 1.0;
   double semantic_max_camera_translation_m_ = 0.02;
   double semantic_max_camera_rotation_rad_ = 0.10;

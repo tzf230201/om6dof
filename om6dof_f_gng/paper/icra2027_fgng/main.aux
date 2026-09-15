@@ -1,0 +1,78 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{fritzke1995gng}
+\citation{toda2019roi}
+\citation{saputra2023attention}
+\citation{siow2024multicamera}
+\citation{fritzke1995gng}
+\citation{fritzke1997utility}
+\citation{siow2024dbl}
+\citation{toda2019roi}
+\citation{tunnermann2019saliency}
+\citation{saputra2023attention}
+\citation{siow2024multicamera}
+\citation{wang2023dynamic}
+\citation{thorup2013bottomk}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{1}{section.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces WA-FGNG{} separates four operations. Depth samples are transformed with a supplied camera pose, retained in a bounded world-voxel memory, replayed without repeated-view multiplicity, and represented by a foveated graph. The memory budget $K$, replay budget $S$, and graph budget $B$ are distinct. Geometry in this architecture diagram is schematic; experimental renderings use recorded benchmark outputs.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:architecture}{{1}{2}{\method {} separates four operations. Depth samples are transformed with a supplied camera pose, retained in a bounded world-voxel memory, replayed without repeated-view multiplicity, and represented by a foveated graph. The memory budget $K$, replay budget $S$, and graph budget $B$ are distinct. Geometry in this architecture diagram is schematic; experimental renderings use recorded benchmark outputs}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {III}Method}{2}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-A}Problem Setting and Registration}{2}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-B}Bounded World-Space Observation Support}{2}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-C}Bounded Replay}{2}{subsection.3.3}\protected@file@percent }
+\citation{siow2024dbl}
+\citation{sturm2012tum}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-D}World-Anchored Foveation}{3}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-E}Resources and Implementation}{3}{subsection.3.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experimental Protocol}{3}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-A}Data and Causal Evaluation}{3}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-B}Attention and Comparisons}{3}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-C}Metrics}{4}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Results}{4}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {V-A}Registration and Historical Support}{4}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {V-B}Focal Accuracy and Global Cost}{4}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {V-C}Graph Support and Update Cost}{4}{subsection.5.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Primary known-pose results with node cap $B=256$. Errors are in cm; values are mean $\pm $ sample standard deviation of three per-seed means on the fixed evaluation grid. $N_f$ is mean final node count; $t_{95}$ is mean per-run 95th-percentile update time (ms). All memory-based methods use $K=8000$ retained voxels and at most $S=1500$ replay samples. Equal node caps do not imply equal actual node counts or equal total memory.}}{5}{table.1}\protected@file@percent }
+\newlabel{tab:main}{{I}{5}{Primary known-pose results with node cap $B=256$. Errors are in cm; values are mean $\pm $ sample standard deviation of three per-seed means on the fixed evaluation grid. $N_f$ is mean final node count; $t_{95}$ is mean per-run 95th-percentile update time (ms). All memory-based methods use $K=8000$ retained voxels and at most $S=1500$ replay samples. Equal node caps do not imply equal actual node counts or equal total memory}{table.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Prespecified qualitative comparison on fr1/desk, selected frame 119, seed 1, node cap 256. Gray points are the causal held-out reference. All columns use the same world-coordinate orthographic projection onto the first camera's image axes; the bottom row magnifies the anchor region. Orange circles indicate the projected 0.30\,m attention scale, and crosses mark the world anchor. Current-frame learning concentrates on the latest view, while replay supports earlier surfaces. Foveation increases local prototype density relative to a constant attention field. FPS is a point-set comparison and has no learned edges. A projected circle does not imply that every enclosed point lies within the 3D focal sphere.}}{5}{figure.2}\protected@file@percent }
+\newlabel{fig:qualitative}{{2}{5}{Prespecified qualitative comparison on fr1/desk, selected frame 119, seed 1, node cap 256. Gray points are the causal held-out reference. All columns use the same world-coordinate orthographic projection onto the first camera's image axes; the bottom row magnifies the anchor region. Orange circles indicate the projected 0.30\,m attention scale, and crosses mark the world anchor. Current-frame learning concentrates on the latest view, while replay supports earlier surfaces. Foveation increases local prototype density relative to a constant attention field. FPS is a point-set comparison and has no learned edges. A projected circle does not imply that every enclosed point lies within the 3D focal sphere}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {V-D}Pose Perturbations and Additional Rotation Sequence}{5}{subsection.5.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Primary temporal results at $B=256$. Upper panels compare off-screen retention with and without historical replay. Lower panels compare focal accuracy among matched replay methods; the much larger world-only focal errors are reported in Table\nobreakspace  {}\ref  {tab:main} rather than compressing this plot's scale. Dashed vertical lines mark the prescribed attention switches at frames 40 and 80. Lines are means and shaded bands are sample standard deviations over three algorithm seeds on the same recorded sequence, not confidence intervals across environments.}}{6}{figure.3}\protected@file@percent }
+\newlabel{fig:temporal}{{3}{6}{Primary temporal results at $B=256$. Upper panels compare off-screen retention with and without historical replay. Lower panels compare focal accuracy among matched replay methods; the much larger world-only focal errors are reported in Table~\ref {tab:main} rather than compressing this plot's scale. Dashed vertical lines mark the prescribed attention switches at frames 40 and 80. Lines are means and shaded bands are sample standard deviations over three algorithm seeds on the same recorded sequence, not confidence intervals across environments}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Measured focal-error/update-cost trade-off among memory-based methods on the primary sequences. Circles denote a node cap of 128 and squares a cap of 256; lines connect the same method across the two caps. Each point averages three run summaries. The horizontal coordinate is the mean of per-run 95th-percentile update times. FPS is faster in these runs but allocates fewer samples to the prescribed focal region. CPU operating conditions were not fixed; small timing differences should not be overinterpreted.}}{6}{figure.4}\protected@file@percent }
+\newlabel{fig:cost}{{4}{6}{Measured focal-error/update-cost trade-off among memory-based methods on the primary sequences. Circles denote a node cap of 128 and squares a cap of 256; lines connect the same method across the two caps. Each point averages three run summaries. The horizontal coordinate is the mean of per-run 95th-percentile update times. FPS is faster in these runs but allocates fewer samples to the prescribed focal region. CPU operating conditions were not fixed; small timing differences should not be overinterpreted}{figure.4}{}}
+\bibstyle{IEEEtran}
+\bibdata{references}
+\bibcite{fritzke1995gng}{1}
+\bibcite{toda2019roi}{2}
+\bibcite{saputra2023attention}{3}
+\bibcite{siow2024multicamera}{4}
+\bibcite{fritzke1997utility}{5}
+\bibcite{siow2024dbl}{6}
+\bibcite{tunnermann2019saliency}{7}
+\bibcite{wang2023dynamic}{8}
+\bibcite{thorup2013bottomk}{9}
+\bibcite{sturm2012tum}{10}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Additional rotation sequence, fr1/rpy, at $B=256$. Mean errors in cm across three seeds; same fixed protocol. This sequence was added after the two-sequence primary protocol was fixed.}}{7}{table.2}\protected@file@percent }
+\newlabel{tab:rotation}{{II}{7}{Additional rotation sequence, fr1/rpy, at $B=256$. Mean errors in cm across three seeds; same fixed protocol. This sequence was added after the two-sequence primary protocol was fixed}{table.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Discussion and Limitations}{7}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Conclusion}{7}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{7}{section*.2}\protected@file@percent }
+\gdef \@abspage@last{7}

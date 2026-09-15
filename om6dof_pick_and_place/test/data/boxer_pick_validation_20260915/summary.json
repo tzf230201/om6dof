@@ -1,0 +1,17 @@
+{
+  "created_launch": "om6dof_pick_and_place/yolox_boxer3d_pickup.launch.py",
+  "unit_tests_passed": 186,
+  "planner_smoke_valid": true,
+  "preview_node_integration_valid": true,
+  "physical_motion_commanded": false,
+  "arm_goals_in_preview": 0,
+  "gripper_goals_in_preview": 0,
+  "obstacle_collision_rejection_test": true,
+  "camera_pipeline_started": false,
+  "limitations": [
+    "Real camera to physical pickup not exercised in this task.",
+    "Installed MoveIt2.5.9 segfaults at shutdown in TEM/rclcpp callbackgroup destructor. Planning succeeds; no SIGKILL masking.",
+    "Scene models detected boxes only, not all unobserved environment."
+  ],
+  "production_configuration": "Namespaced MoveGroup; action capabilities disabled; management false; retained existing controller registry to avoid missing-controller startup error."
+}

@@ -67,6 +67,12 @@ topo_gng_node:
     target_classes_topic: "/om6dof_topo_gng_v2/set_target_classes"
     label_confidence: 0.35   # per-detection score floor before it can label any node
     min_label_nodes: 3       # a box needs >=3 supporting nodes to label anything
+    # Complete only gaps inside one unambiguous labelled 3D DD-GNG component.
+    # This never changes the collision point cloud or semantic attention.
+    semantic_cluster_inherit_enabled: true
+    semantic_cluster_inherit_max_edge_m: 0.055
+    semantic_cluster_inherit_min_neighbours: 2
+    semantic_cluster_inherit_min_confidence: 0.15
     labels_topic: "/om6dof_topo_gng_v2/labels"
     # One direct, depth-supported DD-GNG cluster for each accepted YOLO box.
     # Each JSON entry has its 3D centroid and stable DD-GNG node IDs.
@@ -137,6 +143,14 @@ reachability_graph_node:
     # every interpolated edge state. Edge 0 (fixed-base link1-link2) is omitted
     # so the known support surface does not invalidate the complete roadmap.
     target_intersection_radius: 0.05
+    # A graph goal is a pre-grasp pose, never a node inside the object. The
+    # physical forward direction of this gripper is +X in end_effector_link.
+    # The entire object remains in the FCL collision scene.
+    pregrasp_filter_enabled: true
+    pregrasp_tool_approach_axis: [1.0, 0.0, 0.0]
+    pregrasp_min_standoff_m: 0.07
+    pregrasp_max_standoff_m: 0.13
+    pregrasp_min_alignment: 0.70
     obstacle_clearance: 0.035
     target_exclusion_radius: 0.055
     body_collision_step: 0.08
@@ -172,6 +186,9 @@ reachability_graph_node:
     start_connect_candidates: 20
     start_max_normalized_joint_distance: 0.85
     preview_joint_velocity: 0.35
+    # Compress sparse roadmap zig-zags only when the direct joint-space
+    # interpolation passes the same capsule and exact FCL checks.
+    path_shortcut_enabled: true
     planning_period_sec: 0.5
 
     node_marker_scale: 0.012

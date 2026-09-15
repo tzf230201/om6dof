@@ -1,0 +1,642 @@
+{
+  "date": "2026-09-15",
+  "scope": "Frozen captured scene replay, isolated ROS domain 219; no action clients, controllers, camera or physical robot motion. Production parameters unchanged.",
+  "capture_sha256": {
+    "environment.json": "173f745889fd58f702672241531ac872d242016e406a073bc9fc2d964cce84b0",
+    "graph.json": "9eaa38f66dbff088e948ff4ec8ac41f2eb74b4b3cbcb279bc622e94f3c72e434",
+    "joints.json": "bdcfb96729e6c74e9d0ec3ea16e63466a9d3b9686e8cf9ebb3b031e60109f53c",
+    "plan.json": "9f047d0cd1fd39587f8dbf933d32ef7c431f6fd3348cbcd6b03ceeb0dce52cc9"
+  },
+  "model_sha256": {
+    "expanded_urdf": "f6ad2c99449bb44b85405b91e8931c3d4824853fe06999b731aeb7d56f2bbc8c",
+    "srdf": "2b532eee69d70e3cd460b07a7a94064a7c5415ad23be68652dcef76aabea9cf8"
+  },
+  "graph_nodes": 3198,
+  "graph_edges": 18554,
+  "raw_graph_connected_components": 1,
+  "runs": {
+    "baseline": {
+      "capsule_obstacle_clearance_m": 0.035,
+      "plan_valid": false,
+      "reason": "target_intersection_exact_blocked_or_disconnected",
+      "blocked_node_count": 0,
+      "blocked_edge_count": 79,
+      "exact_state_checks": 6160,
+      "exact_replans": 79,
+      "planning_time_ms": 637.41344,
+      "summary": {
+        "edge_checks": 1087,
+        "capsule_only_rejections": 0,
+        "exact_only_rejections": 79,
+        "both_rejections": 0
+      },
+      "first_contacts": [
+        {
+          "edge_index": 16973,
+          "node_ids": [
+            2863,
+            3014
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.29396,
+            -0.002987,
+            0.215348
+          ],
+          "fcl_reported_depth_m": -0.000107,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.01189321959925239,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16703,
+          "node_ids": [
+            2810,
+            3014
+          ],
+          "pair": "dd_gng_environment__gripper_left_link",
+          "position_m": [
+            0.296981,
+            0.006024,
+            0.211425
+          ],
+          "fcl_reported_depth_m": -0.001179,
+          "nearest_environment_node": {
+            "id": 17157,
+            "class_id": 39,
+            "position_m": [
+              0.2975233197212219,
+              0.0019756564870476723,
+              0.20140375196933746
+            ],
+            "contact_distance_m": 0.010821673067088436,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16910,
+          "node_ids": [
+            2850,
+            3014
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.295156,
+            -0.019434,
+            0.209516
+          ],
+          "fcl_reported_depth_m": -0.001522,
+          "nearest_environment_node": {
+            "id": 15114,
+            "class_id": 39,
+            "position_m": [
+              0.2946253716945648,
+              -0.015547756105661392,
+              0.1998005211353302
+            ],
+            "contact_distance_m": 0.010477355943875288,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16771,
+          "node_ids": [
+            2823,
+            3014
+          ],
+          "pair": "dd_gng_environment__link7",
+          "position_m": [
+            0.285998,
+            -0.00155,
+            0.211203
+          ],
+          "fcl_reported_depth_m": -0.00012,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.011880164660748538,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16974,
+          "node_ids": [
+            2863,
+            3026
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.293375,
+            -0.003042,
+            0.215195
+          ],
+          "fcl_reported_depth_m": -0.000189,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.01181073087767229,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16702,
+          "node_ids": [
+            2810,
+            3002
+          ],
+          "pair": "dd_gng_environment__gripper_left_link",
+          "position_m": [
+            0.29421,
+            -0.00186,
+            0.215361
+          ],
+          "fcl_reported_depth_m": -0.000115,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.01188565064301813,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16911,
+          "node_ids": [
+            2850,
+            3026
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.296089,
+            -0.008983,
+            0.209557
+          ],
+          "fcl_reported_depth_m": -0.00301,
+          "nearest_environment_node": {
+            "id": 17929,
+            "class_id": 39,
+            "position_m": [
+              0.2939755916595459,
+              -0.006540108006447554,
+              0.2021975815296173
+            ],
+            "contact_distance_m": 0.008037117414090288,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16770,
+          "node_ids": [
+            2823,
+            3002
+          ],
+          "pair": "dd_gng_environment__gripper_left_link",
+          "position_m": [
+            0.295941,
+            0.006988,
+            0.211587
+          ],
+          "fcl_reported_depth_m": -0.00054,
+          "nearest_environment_node": {
+            "id": 17157,
+            "class_id": 39,
+            "position_m": [
+              0.2975233197212219,
+              0.0019756564870476723,
+              0.20140375196933746
+            ],
+            "contact_distance_m": 0.011459749720041684,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16839,
+          "node_ids": [
+            2836,
+            3014
+          ],
+          "pair": "dd_gng_environment__link7",
+          "position_m": [
+            0.285998,
+            -0.00155,
+            0.211203
+          ],
+          "fcl_reported_depth_m": -0.00012,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.011880164660748538,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 17025,
+          "node_ids": [
+            2876,
+            3026
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.294789,
+            -0.002228,
+            0.215404
+          ],
+          "fcl_reported_depth_m": -0.000108,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.011892065089889922,
+            "inside_12mm_node_sphere": true
+          }
+        }
+      ]
+    },
+    "zero_capsule_clearance_counterfactual": {
+      "capsule_obstacle_clearance_m": 0.0,
+      "plan_valid": false,
+      "reason": "target_intersection_exact_blocked_or_disconnected",
+      "blocked_node_count": 0,
+      "blocked_edge_count": 79,
+      "exact_state_checks": 6160,
+      "exact_replans": 79,
+      "planning_time_ms": 606.19824,
+      "summary": {
+        "edge_checks": 1087,
+        "capsule_only_rejections": 0,
+        "exact_only_rejections": 79,
+        "both_rejections": 0
+      },
+      "first_contacts": [
+        {
+          "edge_index": 16973,
+          "node_ids": [
+            2863,
+            3014
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.29396,
+            -0.002987,
+            0.215348
+          ],
+          "fcl_reported_depth_m": -0.000107,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.01189321959925239,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16703,
+          "node_ids": [
+            2810,
+            3014
+          ],
+          "pair": "dd_gng_environment__gripper_left_link",
+          "position_m": [
+            0.296981,
+            0.006024,
+            0.211425
+          ],
+          "fcl_reported_depth_m": -0.001179,
+          "nearest_environment_node": {
+            "id": 17157,
+            "class_id": 39,
+            "position_m": [
+              0.2975233197212219,
+              0.0019756564870476723,
+              0.20140375196933746
+            ],
+            "contact_distance_m": 0.010821673067088436,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16910,
+          "node_ids": [
+            2850,
+            3014
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.295156,
+            -0.019434,
+            0.209516
+          ],
+          "fcl_reported_depth_m": -0.001522,
+          "nearest_environment_node": {
+            "id": 15114,
+            "class_id": 39,
+            "position_m": [
+              0.2946253716945648,
+              -0.015547756105661392,
+              0.1998005211353302
+            ],
+            "contact_distance_m": 0.010477355943875288,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16771,
+          "node_ids": [
+            2823,
+            3014
+          ],
+          "pair": "dd_gng_environment__link7",
+          "position_m": [
+            0.285998,
+            -0.00155,
+            0.211203
+          ],
+          "fcl_reported_depth_m": -0.00012,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.011880164660748538,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16974,
+          "node_ids": [
+            2863,
+            3026
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.293375,
+            -0.003042,
+            0.215195
+          ],
+          "fcl_reported_depth_m": -0.000189,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.01181073087767229,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16702,
+          "node_ids": [
+            2810,
+            3002
+          ],
+          "pair": "dd_gng_environment__gripper_left_link",
+          "position_m": [
+            0.29421,
+            -0.00186,
+            0.215361
+          ],
+          "fcl_reported_depth_m": -0.000115,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.01188565064301813,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16911,
+          "node_ids": [
+            2850,
+            3026
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.296089,
+            -0.008983,
+            0.209557
+          ],
+          "fcl_reported_depth_m": -0.00301,
+          "nearest_environment_node": {
+            "id": 17929,
+            "class_id": 39,
+            "position_m": [
+              0.2939755916595459,
+              -0.006540108006447554,
+              0.2021975815296173
+            ],
+            "contact_distance_m": 0.008037117414090288,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16770,
+          "node_ids": [
+            2823,
+            3002
+          ],
+          "pair": "dd_gng_environment__gripper_left_link",
+          "position_m": [
+            0.295941,
+            0.006988,
+            0.211587
+          ],
+          "fcl_reported_depth_m": -0.00054,
+          "nearest_environment_node": {
+            "id": 17157,
+            "class_id": 39,
+            "position_m": [
+              0.2975233197212219,
+              0.0019756564870476723,
+              0.20140375196933746
+            ],
+            "contact_distance_m": 0.011459749720041684,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 16839,
+          "node_ids": [
+            2836,
+            3014
+          ],
+          "pair": "dd_gng_environment__link7",
+          "position_m": [
+            0.285998,
+            -0.00155,
+            0.211203
+          ],
+          "fcl_reported_depth_m": -0.00012,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.011880164660748538,
+            "inside_12mm_node_sphere": true
+          }
+        },
+        {
+          "edge_index": 17025,
+          "node_ids": [
+            2876,
+            3026
+          ],
+          "pair": "dd_gng_environment__gripper_right_link",
+          "position_m": [
+            0.294789,
+            -0.002228,
+            0.215404
+          ],
+          "fcl_reported_depth_m": -0.000108,
+          "nearest_environment_node": {
+            "id": 18557,
+            "class_id": 39,
+            "position_m": [
+              0.2950144112110138,
+              -0.002413256326690316,
+              0.20351551473140717
+            ],
+            "contact_distance_m": 0.011892065089889922,
+            "inside_12mm_node_sphere": true
+          }
+        }
+      ]
+    }
+  },
+  "interpretation": {
+    "baseline_cause": "All 79 rejected tested edges pass the capsule check and fail exact mesh/world collision; first contacts involve the bottle top graph geometry and right/left finger or link7.",
+    "clearance_counterfactual": "Keeping FCL and its environment radii unchanged, zeroing only capsule obstacle_clearance produces identical 79-edge rejection. The 35mm capsule clearance is not the cause in this snapshot.",
+    "contact_attribution_limit": "Nearest node attribution is geometric (distance to 12mm sphere), not FCL primitive ID. Contact depth is preserved with FCL reported sign; no penetration-depth interpretation is asserted.",
+    "global_reachability_limit": "A failure in this fixed sampled witness graph does not prove that no collision-free robot trajectory exists."
+  },
+  "pregrasp_filter_audit": {
+    "tool_local_approach_axis": [
+      0,
+      0,
+      1
+    ],
+    "min_standoff_m": 0.07,
+    "max_standoff_m": 0.13,
+    "min_alignment": 0.95,
+    "main_bottle_component_nodes": 205,
+    "main_bottle_center_m": [
+      0.30565008521,
+      0.002613620833,
+      0.1392580457
+    ],
+    "main_bottle_eligible_witness_ids": [
+      1896
+    ],
+    "minor_bottle_fragment_nodes": 2,
+    "minor_bottle_center_m": [
+      0.33157031238,
+      -0.0362176504,
+      0.08580520749
+    ],
+    "minor_bottle_eligible_witness_ids": [
+      2122
+    ],
+    "start_node_id": 1010,
+    "start_selection": "First valid candidate among 20 ranked joint-space neighbours, with no alternate-start replan fallback.",
+    "obstacle_free_shortest_path_to_main_pregrasp_nodes": 27,
+    "obstacle_free_path_extents_m": {
+      "max_x": 0.375,
+      "max_z": 0.275
+    },
+    "main_pregrasp_position_m": [
+      0.225,
+      0,
+      0.15
+    ]
+  },
+  "alternate_start_audit": {
+    "test_scope": "After unchanged planner removes 79 exactly colliding edges, evaluate top 100 ranked connectors without modifying result or production graph; isolated replay only.",
+    "components_after_rejections": [
+      {
+        "id": 0,
+        "size": 1120,
+        "contains_original_start": 1
+      },
+      {
+        "id": 1,
+        "size": 2078,
+        "contains_original_start": 0
+      }
+    ],
+    "eligible_goals_after_rejections": [
+      {
+        "node_id": 1896,
+        "component": 1,
+        "remaining_degree": 10,
+        "exact_state_valid": 1
+      },
+      {
+        "node_id": 2122,
+        "component": 1,
+        "remaining_degree": 11,
+        "exact_state_valid": 1
+      }
+    ],
+    "ranked_candidates_tested": 100,
+    "connector_valid_count": 100,
+    "candidates_with_graph_path_to_eligible_target": 0,
+    "connector_component_counts": {
+      "0": 100
+    },
+    "all_79_rejected_edge_contact_pair_counts": {
+      "dd_gng_environment__gripper_right_link": 24,
+      "dd_gng_environment__gripper_left_link": 26,
+      "dd_gng_environment__link7": 29
+    },
+    "conclusion": "Trying another of the nearest 100 validated connectors cannot repair this captured graph disconnection. Continuous configuration-space planning or additional witnesses/edges remains untested; no global infeasibility claim."
+  }
+}

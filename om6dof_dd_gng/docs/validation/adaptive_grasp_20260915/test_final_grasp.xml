@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="12" failures="0" disabled="0" errors="0" time="0" timestamp="2026-09-15T20:58:44" name="AllTests">
+  <testsuite name="FinalGrasp" tests="12" failures="0" disabled="0" errors="0" time="0" timestamp="2026-09-15T20:58:44">
+    <testcase name="ConvergesDeterministicallyAndPreservesOrientationAndPinchOffset" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="DetectsCollisionBetweenOtherwiseValidCartesianEndpoints" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="LocalXPointingDownFailsEvenWhenAimedAtTarget" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="RejectsLateralInsertionButSubdividesRecoverableJointStep" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="InvalidNumbersAndBudgetsFailClosed" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="RejectsInvalidKinematicsSingularityAndNoProgress" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="LateralPregraspBridgeUsesTcpDestinationThenStrictPinchInsertion" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="LateralBridgeStillChecksCollisionBetweenClearEndpoints" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="BridgeRetainsHorizontalAxisFiniteDistanceAndJointBudgetRequirements" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="SubdivisionMakesProgressDespiteThreeMillimeterTerminalTolerance" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="AdaptiveSubdivisionRetainsCollisionChecksAndClearsPartialPath" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+    <testcase name="SubdivisionCannotExceedWaypointOrMinimumStepBudgets" status="run" result="completed" time="0" timestamp="2026-09-15T20:58:44" classname="FinalGrasp" />
+  </testsuite>
+</testsuites>

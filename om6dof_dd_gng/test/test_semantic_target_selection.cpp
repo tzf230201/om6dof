@@ -3,7 +3,7 @@
 
 namespace reach = om6dof_dd_gng::reachability;
 
-TEST(SemanticTargetSelection, UsesObservedMiddleNodeDespiteDenseTop)
+TEST(SemanticTargetSelection, UsesClusterCenterWithObservedMiddleIdentity)
 {
   std::vector<reach::LabeledTarget> nodes{
     {{10, {.1, .0, .0}}, 39}, {{20, {.1, .0, .1}}, 39},
@@ -14,7 +14,7 @@ TEST(SemanticTargetSelection, UsesObservedMiddleNodeDespiteDenseTop)
   ASSERT_EQ(selected.size(), 1U);
   EXPECT_EQ(selected[0].environment_node_id, 20U);
   EXPECT_DOUBLE_EQ(selected[0].position.z, .1);
-  EXPECT_DOUBLE_EQ(selected[0].position.x, .1);  // actual surface, not interior
+  EXPECT_DOUBLE_EQ(selected[0].position.x, .1);
 }
 
 TEST(SemanticTargetSelection, KeepsDisconnectedObjectsAndDifferentClassesSeparate)
@@ -54,5 +54,10 @@ TEST(SemanticTargetSelection, CenterNeighborhoodKeepsCentralSurfaceAlternatives)
   EXPECT_EQ(selected[1].environment_node_id, 31U);
   EXPECT_EQ(selected[2].environment_node_id, 32U);
   EXPECT_EQ(selected[3].environment_node_id, 99U);
+  // All representatives refer to their cluster centre, not their individual
+  // surface locations.
+  EXPECT_DOUBLE_EQ(selected[0].position.z, .10);
+  EXPECT_DOUBLE_EQ(selected[1].position.z, .10);
+  EXPECT_DOUBLE_EQ(selected[2].position.z, .10);
   EXPECT_TRUE(reach::componentCenterNeighborhoodTargets(nodes, {}, 0U).empty());
 }

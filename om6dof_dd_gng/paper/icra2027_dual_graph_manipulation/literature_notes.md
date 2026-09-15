@@ -1,0 +1,41 @@
+# Literature provenance and positioning
+
+Checked on 2026-09-14. This is an internal authoring aid, not an experimental result. The bibliography deliberately retains established method papers; software versions used in the experiment must be reported from the frozen local installation rather than inferred from these citations.
+
+| BibTeX key | Verified primary source | Appropriate use and boundary |
+|---|---|---|
+| `fritzke1995gng` | [NeurIPS proceedings](https://papers.nips.cc/paper/1994/hash/d56b9fc4b0f1be8871f5e1c40c0067e7-Abstract.html) | Attribute incremental topology learning to GNG. The event is NIPS 1994 and the bound NIPS 7 proceedings are commonly cited as 1995; this does not establish robot trajectory validity from workspace connectivity. |
+| `saputra2023ddgng` | [Machines article](https://www.mdpi.com/2075-1702/11/6/619), corroborated by [author laboratory publication list, 2023 entry 7](https://en.kub-lab.jp/paper/) | Attribute dynamic attention expressed through local topological density to Saputra, Botzheim, and Kubota. Their attention and locomotion system is prior work; the present semantic-feedback implementation is a bounded adaptation rather than a reproduction. |
+| `ge2021yolox` | [Author preprint](https://arxiv.org/abs/2107.08430) | Attribute the RGB detector to YOLOX. A YOLOX bounding box supplies 2D class evidence, not an instance mask, a metric 3D solid, or a guarantee that overlapping pixels belong to the foreground object. |
+| `kavraki1996prm` | [Kavraki laboratory publication record and author manuscript](https://www.kavrakilab.org/publications/kavraki-svestka1996probabilistic-roadmaps-for.html) | Configuration-space nodes and feasible local connectors are established roadmap concepts. Retaining a measured joint configuration with each workspace pose should be described as an implementation choice for a finite empirical roadmap, without borrowing PRM completeness guarantees. |
+| `bohlin2000lazyprm` | [Kavraki laboratory publication record and author manuscript](https://www.kavrakilab.org/publications/bohlin-kavraki2000path-planning-using.html) | Searching provisionally valid roadmaps, checking selected paths, removing invalid elements, and searching again are established lazy planning techniques. The proposed system's particular topology-to-collision-model conversion and diagnostic contract must be distinguished from this established mechanism. |
+| `zacharias2007capability` | [DLR institutional record](https://elib.dlr.de/51226/) | Capability maps motivate retaining directional information rather than only reachable Cartesian positions. The cited paper is not evidence that the current sampled configuration set covers the workspace or all useful grasp orientations. |
+| `phillips2012egraphs` | [RSS proceedings and official BibTeX](https://www.roboticsproceedings.org/rss08/p43.html) | Experience reuse for single-arm and two-arm manipulation is already established; the paper also considers incorporating demonstrations. Its completeness and suboptimality properties depend on its underlying planner and cannot be transferred to a finite experimental witness graph. |
+| `pan2012fcl` | [Author institutional publication record](https://scholars.cityu.edu.hk/en/publications/fcl-a-general-purpose-library-for-collision-and-proximity-queries/) | Attribute the collision/proximity engine to FCL. Mesh-level checks are exact only relative to the represented geometry and evaluated states; they do not establish physical safety or continuous-time collision freedom for sparsely sampled interpolations. |
+| `sucan2012ompl` | [Kavraki laboratory record](https://www.kavrakilab.org/publications/sucan-moll2012open-motion-planning.html) | Cite OMPL for any actual OMPL baseline or software integration. Do not describe the custom graph search as OMPL merely because MoveIt can use OMPL. |
+| `coleman2014moveit` | [Author preprint](https://arxiv.org/abs/1404.3785) | Historical source for the MoveIt planning framework and robot-specific configuration architecture. The bibliography cites the verified preprint; its content must not be misrepresented as a paper introducing ROS 2 or the Humble implementation. |
+| `ray2024scenegraph` | [Author preprint](https://arxiv.org/abs/2403.08094), [author-hosted paper](https://groups.csail.mit.edu/rrg/papers/cbradley_isrr_2024.pdf), and [author publication list](https://www.mit.edu/~aaronray/) | Hierarchical scene graphs have already been coupled to task and motion planning and demonstrated with a real mobile manipulator. This project instead addresses a local arm query between semantic object clusters and empirical end-effector/configuration samples; it is not a general TAMP framework. |
+| `moveit2planning2026` | [Official MoveIt 2 Humble planning-scene tutorial](https://moveit.picknik.ai/humble/doc/examples/planning_scene/planning_scene_tutorial.html) | Cite for the actual distinction between self-collision, environment collision, constraints, and the Allowed Collision Matrix. An allowed link pair is deliberately ignored by the checker; its presence must be disclosed rather than described as proof that the pair does not collide. |
+
+## Scope of a defensible contribution
+
+The contribution can be presented as a specific, inspectable coupling between (i) an online semantic DD-GNG environment graph and (ii) a finite empirical roadmap retaining pose/configuration witnesses, with a cluster-centred goal predicate that checks tool-axis alignment and standoff, plus model-based path validation and a preview/execution contract. The usefulness of that coupling remains an empirical question. Existing literature already covers GNG, attentional density allocation, scene-graph planning, capability maps, graph-based motion planning, reuse of demonstrations, and lazy validation.
+
+Avoid claims of being the first dual-graph planner, being generally complete, preserving all reachable configurations, or providing physical collision guarantees. A dense-looking workspace plot does not imply a connected collision-free configuration-space path, and local `+X` is an end-effector-frame convention rather than a world-horizontal approach requirement.
+
+The current cluster centre is an aim point, not a certified force-closure grasp. A pregrasp query that stops at standoff does not by itself demonstrate contact acquisition, gripper closure, lift, transport, or successful pickup. The methods and evaluation should name the tested stage precisely.
+
+## Provenance cautions from this repository
+
+`docs/semantic_ddgng_v1.md` explicitly defines the active C++ learner as a semantic-attention adaptation of Saputra et al. and lists deviations: bounded mixture sampling, maximum rather than additive overlap strength, continuous semantic scores, weighted insertion, and utility-based recycling. Cite the original and disclose those adaptations rather than claiming an exact implementation.
+
+`README.md` explicitly warns that earlier C++ recordings labelled DD-GNG used a different vendored learner, while frozen reachability benchmarks used ordinary GNG and synthetic environments. Such records must not become experimental evidence for the newly integrated RGB-D semantic manipulation pipeline simply because they share a repository.
+
+Search result crawl dates are not paper publication dates. Dates in `references.bib` were taken from the papers, publisher records, or author records. The main MDPI article intermittently returned HTTP 429 on direct open, but its indexed publisher content, version notes, and author's publication list consistently confirmed the title, authors, issue, article number, and DOI.
+
+## Bibliography decisions
+
+- Twelve entries are provided; cite only those actually discussed in the manuscript.
+- The 2024 scene-graph paper is cited as its accessible author preprint with the independently verified ISRR 2024 presentation noted. No unverified proceedings pages or DOI are invented.
+- The MoveIt framework paper is cited as its accessible 2014 author preprint. The Humble documentation is separate, so historical and current implementation claims are not conflated.
+- No BOXER citation is included: the user investigated BOXER, but it is not established as the active pipeline in the code being described. Add it only if the frozen experiments actually use it.

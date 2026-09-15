@@ -1,0 +1,49 @@
+{
+  "approach_alignment": 0.9999973993934524,
+  "approach_points": 16,
+  "busy": false,
+  "component_centroid": [
+    0.2925226894533357,
+    -0.031983669703344146,
+    0.17137510384763444
+  ],
+  "component_nodes": 225,
+  "executable": false,
+  "execution_blockers": [
+    "frozen_plan_stale"
+  ],
+  "execution_enabled": true,
+  "final_approach_validated": true,
+  "graph_revision": 1,
+  "grasp_orientation_required": true,
+  "holding_object": false,
+  "message": "frozen_object_track_not_current",
+  "motion_fault_reason": "",
+  "motion_faulted": false,
+  "motion_id": "5dcc20a944fe2ea3",
+  "plan_age_sec": 318.218,
+  "plan_id": "c4c5b8181cf51037",
+  "plan_ready": true,
+  "pregrasp_waypoint_count": 14,
+  "reachability_edges_used": 27,
+  "schema": "om6dof.graph_pick_status.v1",
+  "selected_target_excluded_from_collision": true,
+  "state": "motion_failed",
+  "target_class": "bottle",
+  "target_class_id": 39,
+  "target_distance_m": 0.0749502473581453,
+  "target_node_id": 10392,
+  "target_position": [
+    0.2978314310312271,
+    -0.0316089439438656,
+    0.17171546444296837
+  ],
+  "target_track_id": 54,
+  "task_mode": "pickup",
+  "tracked_centroid": [
+    0.292633,
+    -0.0320853,
+    0.171046
+  ],
+  "trajectory_points": 29
+}

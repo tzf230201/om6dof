@@ -1,0 +1,98 @@
+{
+  "domain": 219,
+  "actions_or_hardware": false,
+  "complete": true,
+  "diagnostics_assertions_passed": true,
+  "any_valid_grasp_plan": false,
+  "diagnostics": {
+    "reason": "target_intersection_clearance_blocked_or_disconnected",
+    "plan_valid": false,
+    "selected_target_excluded_from_collision": true,
+    "excluded_target_environment_node_id": 18520,
+    "frame_id": "world",
+    "graph_revision": 1,
+    "clearance_m": 0.035,
+    "goal_rejections": {
+      "capsule_only": 0,
+      "mesh_only": 0,
+      "both": 0
+    },
+    "edge_rejections": {
+      "capsule_only": 25,
+      "mesh_only": 0,
+      "both": 0
+    },
+    "cached_edge_rejections": {
+      "capsule_only": 25,
+      "mesh_only": 0,
+      "both": 0
+    },
+    "capsule_prefiltered_nodes": 0,
+    "capsule_prefiltered_edges": 0,
+    "last_rejection": {
+      "stage": "graph_edge",
+      "node_a": 3157,
+      "node_b": 3191,
+      "capsule_blocked": true,
+      "mesh_checked": true,
+      "mesh_blocked": false,
+      "capsule": {
+        "body_links": [
+          "link7",
+          "d405_payload_link"
+        ],
+        "axis_start": [
+          0.27934662,
+          0.030145132,
+          0.16711485
+        ],
+        "axis_end": [
+          0.30718485,
+          0.03314736,
+          0.20303286
+        ],
+        "obstacle_kind": "point",
+        "filtered_obstacle_index": 7,
+        "obstacle_start": [
+          0.29458362,
+          0.029719217,
+          0.076772653
+        ],
+        "obstacle_end": [
+          0.29458362,
+          0.029719217,
+          0.076772653
+        ],
+        "distance_m": 0.091619105,
+        "threshold_m": 0.095
+      }
+    }
+  },
+  "remaining_obstacle_node": {
+    "id": 18677,
+    "position": {
+      "x": 0.29458361864089966,
+      "y": 0.029719216749072075,
+      "z": 0.07677265256643295
+    },
+    "class_id": -1,
+    "confidence": 0.0
+  },
+  "remaining_obstacle_coordinate_match_m": 1.4484815903138261e-09,
+  "plan_summaries": [
+    {
+      "valid": false,
+      "reason": "target_intersection_clearance_blocked_or_disconnected",
+      "blocked_edge_count": 25,
+      "exact_replans": 25,
+      "planning_time_ms": 244.075296
+    },
+    {
+      "valid": false,
+      "reason": "target_intersection_clearance_blocked_or_disconnected",
+      "blocked_edge_count": 25,
+      "exact_replans": 25,
+      "planning_time_ms": 232.78864
+    }
+  ]
+}

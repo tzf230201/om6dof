@@ -101,6 +101,12 @@
   gripper_controller:
     ros__parameters:
       joint: gripper_left_joint
+      # Prismatic units are metres. The controller default (0.01 m) can
+      # report an open goal reached while the fingers are still 1 cm short.
+      goal_tolerance: 0.0015
+      allow_stalling: true
+      stall_velocity_threshold: 0.001
+      stall_timeout: 1.0
       state_interfaces:
         - position
       command_interfaces:

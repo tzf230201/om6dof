@@ -40,7 +40,26 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from visualization_msgs.msg import Marker, MarkerArray
 
 from om6dof_dd_gng.msg import EnvironmentGraph, ReachabilityPlan
+try:
+    from om6dof_dd_gng.srv import ValidateGraspExecution
+except ImportError:
+    # Legacy move-to-target installs can import this module; pickup requires
+    # the rebuilt validator interface and fails closed during initialization.
+    ValidateGraspExecution = None
 from .additive_control_guard import additive_controller_blockers
+
+
+# The `shortcut` variants have passed the same exact FCL validation; they only
+# contain fewer joint waypoints than the raw roadmap route.
+TARGET_PROTECTED_PLAN_REASONS = frozenset({
+    "path_ready_exact_validated_target_protected_preview_only",
+    "path_ready_exact_validated_target_protected_shortcut_preview_only",
+})
+VALIDATED_PLAN_REASONS = TARGET_PROTECTED_PLAN_REASONS | frozenset({
+    "path_ready_exact_validated_preview_only",
+    "path_ready_exact_validated_shortcut_preview_only",
+})
+GRASP_VALIDATED_PLAN_REASON = "path_ready_exact_validated_grasp_preview_only"
 
 
 def _duration_seconds(duration) -> float:
@@ -114,6 +133,17 @@ def approach_alignment(goal_pose, target_position: Sequence[float],
     return sum(world_axis[i] * direction[i] for i in range(3))
 
 
+def approach_axis_endpoint(goal_pose, target_position: Sequence[float],
+                           tool_axis: Sequence[float]) -> Tuple[float, float, float]:
+    """End of the RViz approach arrow: physical tool axis, never a world axis."""
+    origin = _point_tuple(goal_pose.position)
+    axis = _normalize(rotate_vector_by_quaternion(tool_axis, goal_pose.orientation))
+    if axis is None:
+        raise ValueError("tool_approach_axis cannot be transformed by goal orientation")
+    length = _distance(origin, target_position)
+    return tuple(origin[index] + length * axis[index] for index in range(3))
+
+
 def semantic_component(environment: EnvironmentGraph, target_node_id: int):
     """Return the same-class edge-connected component containing target."""
     nodes = {int(node.id): node for node in environment.nodes}
@@ -150,6 +180,17 @@ def semantic_component(environment: EnvironmentGraph, target_node_id: int):
         for axis in range(3)
     )
     return class_id, component, centroid
+
+
+def component_bounding_center(component: Sequence[EnvironmentNode]) -> Tuple[float, float, float]:
+    """Physical target reference shared by every node of one object cluster."""
+    if not component:
+        raise ValueError("semantic component is empty")
+    positions = [_point_tuple(node.position) for node in component]
+    return tuple(
+        (min(position[axis] for position in positions) +
+         max(position[axis] for position in positions)) * 0.5
+        for axis in range(3))
 
 
 @dataclass(frozen=True)
@@ -234,6 +275,56 @@ def matching_environment_snapshot(history, target_node_id: int,
     return None
 
 
+def pickup_target_observation(history, plan, now: float, max_age: float,
+                              max_shift: float):
+    """Resolve a frozen target without treating a detector ID as physical identity.
+
+    A replacement ID must be the unique nearby same-class observation in three
+    consecutive fresh frames spanning 0.1 seconds. Compare raw AND smoothed
+    centres with the frozen reference so smoothing cannot hide object motion.
+    The planner still validates the physical component centre and the entire
+    frozen segment against the newest 3-D scene before any action is sent.
+    """
+    if not history or now - history[-1][0] > max_age:
+        return None, "object_tracks_missing_or_stale"
+
+    def resolve(observations):
+        same_class = [item for item in observations
+                      if item.class_id == plan.target_class_id]
+
+        def close(item):
+            return (_distance(item.centroid, plan.component_centroid) <= max_shift
+                    and _distance(item.tracked_centroid, plan.tracked_centroid) <= max_shift)
+
+        original = [item for item in same_class if item.track_id == plan.target_track_id]
+        if any(not close(item) for item in original):
+            return None, "semantic_object_moved_during_pickup"
+        candidates = [item for item in same_class if close(item)]
+        if len(original) > 1 or len(candidates) > 1:
+            return None, "pickup_target_identity_ambiguous"
+        if not candidates:
+            return None, "frozen_object_track_not_current"
+        return candidates[0], None
+
+    observation, rejection = resolve(history[-1][1])
+    if rejection is not None or observation.track_id == plan.target_track_id:
+        return observation, rejection
+    frames = 0
+    newest = history[-1][0]
+    previous_received = math.inf
+    for received, observations in reversed(history):
+        if now - received > max_age or received >= previous_received:
+            break
+        previous_received = received
+        candidate, rejection = resolve(observations)
+        if rejection is not None or candidate.track_id != observation.track_id:
+            break
+        frames += 1
+        if frames >= 3 and newest - received >= 0.1:
+            return observation, None
+    return None, "pickup_target_reacquiring"
+
+
 def ordered_joint_positions(message: JointState,
                             joint_names: Sequence[str]) -> Optional[List[float]]:
     if len(message.name) != len(message.position):
@@ -301,6 +392,121 @@ def reverse_trajectory(source: JointTrajectory, velocity: float,
     return retime_trajectory(reversed_source, velocity, minimum_segment_time)
 
 
+def split_grasp_trajectory(source: JointTrajectory, pregrasp_count: int):
+    """Retain the validated graph/insertion boundary and rebase segment time."""
+    if pregrasp_count < 2 or pregrasp_count >= len(source.points):
+        raise ValueError("grasp_pregrasp_waypoint_count_invalid")
+    graph = copy.deepcopy(source)
+    graph.points = graph.points[:pregrasp_count]
+    approach = copy.deepcopy(source)
+    approach.points = approach.points[pregrasp_count - 1:]
+    offset = _duration_seconds(approach.points[0].time_from_start)
+    for point in approach.points:
+        _set_duration(point.time_from_start,
+                      _duration_seconds(point.time_from_start) - offset)
+    return graph, approach
+
+
+def validate_grasp_contract(plan, snapshot_center, gripper_open: float,
+                            gripper_close: float, max_target_shift: float,
+                            max_position_error: float,
+                            tcp_to_pinch: Sequence[float] = (0.0, 0.0, 0.0),
+                            selected_target_excluded_from_collision: bool = False):
+    """Reject old pregrasp-only plans instead of closing far from an object."""
+    if (str(plan.reason) != GRASP_VALIDATED_PLAN_REASON or
+            not bool(getattr(plan, "grasp_approach_valid", False))):
+        raise ValueError("pickup_requires_validated_final_approach")
+    if bool(getattr(plan, "selected_target_excluded_from_collision", False)) != bool(
+            selected_target_excluded_from_collision):
+        raise ValueError("grasp_selected_target_collision_policy_mismatch")
+    count = int(getattr(plan, "pregrasp_waypoint_count", 0))
+    if count < 2 or count >= len(plan.joint_path_preview.points):
+        raise ValueError("grasp_pregrasp_waypoint_count_invalid")
+    if len(plan.end_effector_path.poses) != len(plan.joint_path_preview.points):
+        raise ValueError("grasp_joint_and_pose_path_size_mismatch")
+    target = getattr(plan, "grasp_target_position", None)
+    if target is None:
+        raise ValueError("grasp_target_position_missing")
+    target_position = _point_tuple(target)
+    if not all(math.isfinite(value) for value in target_position):
+        raise ValueError("grasp_target_position_nonfinite")
+    if _distance(target_position, snapshot_center) > max_target_shift:
+        raise ValueError("grasp_target_snapshot_mismatch")
+    error = float(getattr(plan, "grasp_position_error", math.nan))
+    final_pose = plan.end_effector_path.poses[-1].pose
+    pinch_offset = rotate_vector_by_quaternion(tcp_to_pinch, final_pose.orientation)
+    pinch_position = tuple(a + b for a, b in zip(
+        _point_tuple(final_pose.position), pinch_offset))
+    actual_error = _distance(pinch_position, target_position)
+    if (not math.isfinite(error) or error < 0.0 or error > max_position_error or
+            not math.isfinite(actual_error) or actual_error > max_position_error):
+        raise ValueError("grasp_endpoint_position_error_invalid")
+    for field, expected in (("gripper_open_position", gripper_open),
+                            ("gripper_close_position", gripper_close)):
+        value = float(getattr(plan, field, math.nan))
+        if not math.isfinite(value) or abs(value - expected) > 1.0e-6:
+            raise ValueError(f"grasp_collision_model_{field}_mismatch")
+    return count, target_position
+
+
+def gripper_result_state(result, opening: bool, requested: float,
+                         close_position: float, tolerance: float,
+                         measured_position: Optional[float] = None,
+                         allow_stalled_abort: bool = False) -> str:
+    """Classify actuator feedback; a closed aperture alone is not a grasp."""
+    if result is None:
+        return "action_failed"
+    feedback = getattr(result, "result", None)
+    stalled = bool(getattr(feedback, "stalled", False))
+    if result.status != GoalStatus.STATUS_SUCCEEDED and not (
+            allow_stalled_abort and not opening and stalled and
+            result.status == GoalStatus.STATUS_ABORTED):
+        return "action_failed"
+    reported = float(getattr(feedback, "position", math.nan))
+    position = reported if measured_position is None else float(measured_position)
+    if not math.isfinite(position) or not math.isfinite(reported):
+        return "position_invalid"
+    reached = bool(getattr(feedback, "reached_goal", False))
+    if opening:
+        return ("open_reached" if reached and not stalled and
+                abs(position - requested) <= tolerance else "open_not_reached")
+    if stalled and position > close_position + tolerance:
+        return "contact_detected"
+    if reached and abs(position - requested) <= tolerance:
+        return "closed_unconfirmed"
+    return "close_not_confirmed"
+
+
+def gripper_stationary(history, earliest_time: float, duration: float,
+                       tolerance: float) -> bool:
+    """Require a full interval of encoder observations with bounded variation."""
+    samples = [(stamp, value) for stamp, value in history if stamp >= earliest_time]
+    if len(samples) < 2:
+        return False
+    cutoff = samples[-1][0] - duration
+    anchor = next((index for index in range(len(samples) - 1, -1, -1)
+                   if samples[index][0] <= cutoff), None)
+    if anchor is None:
+        return False
+    values = [value for _, value in samples[anchor:]]
+    return all(math.isfinite(value) for value in values) and max(values) - min(values) <= tolerance
+
+
+def _grasp_fingerprint_payload(plan) -> dict:
+    if not bool(getattr(plan, "grasp_approach_valid", False)):
+        return {}
+    target = getattr(plan, "grasp_target_position", None)
+    return {
+        "grasp_approach_valid": True,
+        "pregrasp_waypoint_count": int(getattr(plan, "pregrasp_waypoint_count", 0)),
+        "grasp_target_position": (list(_point_tuple(target)) if target is not None else None),
+        "gripper_open_position": float(getattr(plan, "gripper_open_position", math.nan)),
+        "gripper_close_position": float(getattr(plan, "gripper_close_position", math.nan)),
+        "selected_target_excluded_from_collision": bool(getattr(
+            plan, "selected_target_excluded_from_collision", False)),
+    }
+
+
 def trajectory_fingerprint(plan: ReachabilityPlan) -> str:
     payload = {
         "graph_revision": int(plan.graph_revision),
@@ -313,6 +519,7 @@ def trajectory_fingerprint(plan: ReachabilityPlan) -> str:
         "points": [[round(float(value), 7) for value in point.positions]
                    for point in plan.joint_path_preview.points[1:]],
     }
+    payload.update(_grasp_fingerprint_payload(plan))
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -325,6 +532,7 @@ def motion_fingerprint(plan: ReachabilityPlan) -> str:
         "points": [[round(float(value), 7) for value in point.positions]
                    for point in plan.joint_path_preview.points[1:]],
     }
+    payload.update(_grasp_fingerprint_payload(plan))
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -358,6 +566,12 @@ class FrozenPickPlan:
     bus_read_failures: int
     bus_write_failures: int
     task_mode: str = "pickup"
+    graph_trajectory: Optional[JointTrajectory] = None
+    approach_trajectory: Optional[JointTrajectory] = None
+    pregrasp_waypoint_count: int = 0
+    selected_target_excluded_from_collision: bool = False
+    gripper_open_position: float = math.nan
+    gripper_close_position: float = math.nan
 
 
 class GraphPickNode(Node):
@@ -398,12 +612,20 @@ class GraphPickNode(Node):
         self.declare_parameter("max_joint_state_age_sec", 0.5)
         self.declare_parameter("max_plan_hold_sec", 5.0)
         self.declare_parameter("max_start_joint_error_rad", 0.08)
+        self.declare_parameter("arm_endpoint_verification_timeout_sec", 2.0)
         self.declare_parameter("max_target_distance_m", 0.055)
         self.declare_parameter("minimum_target_distance_m", 0.01)
         self.declare_parameter("minimum_target_component_nodes", 3)
         self.declare_parameter("max_object_track_association_m", 0.08)
         self.declare_parameter("max_object_track_shift_m", 0.02)
-        self.declare_parameter("tool_approach_axis", [0.0, 0.0, 1.0])
+        self.declare_parameter("target_reacquisition_timeout_sec", 1.0)
+        self.declare_parameter("max_grasp_target_snapshot_shift_m", 0.01)
+        self.declare_parameter("max_grasp_position_error_m", 0.005)
+        self.declare_parameter("grasp_tcp_to_pinch", [0.0, 0.0, 0.0])
+        self.declare_parameter("selected_target_excluded_from_collision", False)
+        # Frame-specific convention; the isolated grasp launch overrides this
+        # to the physical forward axis verified for its URDF/model.
+        self.declare_parameter("tool_approach_axis", [1.0, 0.0, 0.0])
         self.declare_parameter("minimum_approach_alignment", 0.30)
         self.declare_parameter("require_calibration_verified", True)
         self.declare_parameter("execution_enabled", False)
@@ -414,6 +636,16 @@ class GraphPickNode(Node):
         self.declare_parameter("gripper_open", 0.019)
         self.declare_parameter("gripper_close", -0.010)
         self.declare_parameter("gripper_max_effort", 0.0)
+        self.declare_parameter("gripper_joint_name", "gripper_left_joint")
+        self.declare_parameter("gripper_position_tolerance", 0.0015)
+        self.declare_parameter("gripper_result_match_tolerance", 0.002)
+        self.declare_parameter("gripper_contact_position_margin", 0.002)
+        self.declare_parameter("gripper_stationary_time_sec", 0.25)
+        self.declare_parameter("gripper_stationary_tolerance", 0.0005)
+        self.declare_parameter("gripper_verification_timeout_sec", 3.0)
+        self.declare_parameter("grasp_validation_service",
+                               "/om6dof_topo_gng_v2/validate_grasp_execution")
+        self.declare_parameter("grasp_validation_timeout_sec", 30.0)
         self.declare_parameter("action_timeout_sec", 120.0)
         self.declare_parameter("retreat_after_grasp", False)
         self.declare_parameter("retreat_joint_velocity", 0.20)
@@ -430,12 +662,36 @@ class GraphPickNode(Node):
         if _normalize(axis) is None:
             raise ValueError("tool_approach_axis must be a nonzero finite 3-vector")
         self.tool_axis = axis
+        self.gripper_joint_name = str(self.get_parameter("gripper_joint_name").value)
+        self.tcp_to_pinch = [float(value) for value in
+                             self.get_parameter("grasp_tcp_to_pinch").value]
+        if len(self.tcp_to_pinch) != 3 or not all(
+                math.isfinite(value) for value in self.tcp_to_pinch):
+            raise ValueError("grasp_tcp_to_pinch must be a finite 3-vector")
         for parameter_name in (
                 "max_object_track_association_m", "max_object_track_shift_m",
+                "target_reacquisition_timeout_sec",
+                "max_grasp_target_snapshot_shift_m", "max_grasp_position_error_m",
+                "gripper_position_tolerance",
+                "gripper_result_match_tolerance", "gripper_contact_position_margin",
+                "gripper_stationary_time_sec", "gripper_stationary_tolerance",
+                "gripper_verification_timeout_sec",
+                "arm_endpoint_verification_timeout_sec",
+                "grasp_validation_timeout_sec",
                 "controller_state_timeout_sec"):
             value = float(self.get_parameter(parameter_name).value)
             if not math.isfinite(value) or value <= 0.0:
                 raise ValueError(f"{parameter_name} must be positive and finite")
+        gripper_open = float(self.get_parameter("gripper_open").value)
+        gripper_close = float(self.get_parameter("gripper_close").value)
+        if (not math.isfinite(gripper_open) or not math.isfinite(gripper_close) or
+                gripper_open <= gripper_close):
+            raise ValueError("gripper_open must be finite and greater than gripper_close")
+        if self.task_mode == "pickup" and bool(
+                self.get_parameter("retreat_after_grasp").value):
+            raise ValueError("pickup_retreat_requires_payload_validated_plan")
+        if self.task_mode == "pickup" and ValidateGraspExecution is None:
+            raise ValueError("pickup_validator_interface_unavailable; rebuild om6dof_dd_gng")
 
         self._lock = threading.RLock()
         self._environment = None
@@ -451,6 +707,7 @@ class GraphPickNode(Node):
         self._selected_target = ""
         self._joint_state = None
         self._joint_state_time = 0.0
+        self._gripper_measurements = deque(maxlen=512)
         self._controller_snapshot = None
         self._controller_snapshot_time = 0.0
         self._controller_query_future = None
@@ -467,6 +724,9 @@ class GraphPickNode(Node):
         self._cancel = threading.Event()
         self._arm_goal_handle = None
         self._gripper_goal_handle = None
+        self._last_gripper_result_state = "not_commanded"
+        self._failure_stage = ""
+        self._observed_target_track_id = None
 
         cb = ReentrantCallbackGroup()
         input_qos = QoSProfile(
@@ -543,6 +803,10 @@ class GraphPickNode(Node):
         self._controller_client = self.create_client(
             ListControllers, str(self.get_parameter("controller_manager_service").value),
             callback_group=cb)
+        self._grasp_validate_client = (self.create_client(
+            ValidateGraspExecution,
+            str(self.get_parameter("grasp_validation_service").value),
+            callback_group=cb) if self.task_mode == "pickup" else None)
         self.create_timer(0.5, self._poll_controllers, callback_group=cb)
         self.create_timer(0.5, self._publish_status, callback_group=cb)
         self.create_timer(0.1, self._monitor_execution_interlocks, callback_group=cb)
@@ -611,9 +875,13 @@ class GraphPickNode(Node):
             self._publish_status()
 
     def _on_joint_state(self, message: JointState) -> None:
+        received = time.monotonic()
+        gripper = ordered_joint_positions(message, [self.gripper_joint_name])
         with self._lock:
             self._joint_state = copy.deepcopy(message)
-            self._joint_state_time = time.monotonic()
+            self._joint_state_time = received
+            if gripper is not None:
+                self._gripper_measurements.append((received, gripper[0]))
 
     def _poll_controllers(self) -> None:
         """Query topology without switching controllers or sending a command."""
@@ -764,12 +1032,15 @@ class GraphPickNode(Node):
             raise ValueError(f"reachability_plan_invalid:{reachability.reason}")
         if not bool(reachability.exact_collision_valid):
             raise ValueError("reachability_plan_lacks_exact_collision_validation")
-        if self.task_mode == "move_to_target" and reachability.reason != (
-                "path_ready_exact_validated_target_protected_preview_only"):
+        if self.task_mode == "move_to_target" and reachability.reason not in \
+                TARGET_PROTECTED_PLAN_REASONS:
             raise ValueError("planner_target_collision_check_required")
-        if reachability.reason not in {
-                "path_ready_exact_validated_preview_only",
-                "path_ready_exact_validated_target_protected_preview_only"}:
+        if self.task_mode == "pickup" and (
+                reachability.reason != GRASP_VALIDATED_PLAN_REASON or
+                not bool(getattr(reachability, "grasp_approach_valid", False))):
+            raise ValueError("pickup_requires_validated_final_approach")
+        if reachability.reason not in VALIDATED_PLAN_REASONS | {
+                GRASP_VALIDATED_PLAN_REASON}:
             raise ValueError(f"unexpected_reachability_reason:{reachability.reason}")
         target_id = int(reachability.target_environment_node_id)
         environment = matching_environment_snapshot(
@@ -797,15 +1068,6 @@ class GraphPickNode(Node):
         start_error = max(abs(a - b) for a, b in zip(ordered, start))
         if start_error > float(self.get_parameter("max_start_joint_error_rad").value):
             raise ValueError(f"joint_path_start_mismatch:{start_error:.6f}")
-        target_distance = float(reachability.target_distance)
-        if not math.isfinite(target_distance) or target_distance < 0.0:
-            raise ValueError("target_distance_invalid")
-        minimum_distance = float(
-            self.get_parameter("minimum_target_distance_m").value)
-        if target_distance < minimum_distance:
-            raise ValueError(f"target_too_close_to_graph_goal:{target_distance:.6f}")
-        if target_distance > float(self.get_parameter("max_target_distance_m").value):
-            raise ValueError(f"target_too_far_from_graph_goal:{target_distance:.6f}")
         class_id, component, centroid = semantic_component(environment, target_id)
         minimum_component = int(
             self.get_parameter("minimum_target_component_nodes").value)
@@ -826,9 +1088,44 @@ class GraphPickNode(Node):
                 f"tracked_object_class_mismatch:{class_name}!={selected}")
         if not reachability.end_effector_path.poses:
             raise ValueError("end_effector_path_is_empty")
-        goal_pose = reachability.end_effector_path.poses[-1].pose
-        target_node = next(node for node in component if int(node.id) == target_id)
-        target_position = _point_tuple(target_node.position)
+        if reachability.end_effector_path.header.frame_id != self.world_frame:
+            raise ValueError("end_effector_path_frame_mismatch")
+        for point in reachability.end_effector_path.poses:
+            if (point.header.frame_id and point.header.frame_id != self.world_frame):
+                raise ValueError("end_effector_pose_frame_mismatch")
+            orientation = point.pose.orientation
+            values = _point_tuple(point.pose.position) + (
+                orientation.x, orientation.y, orientation.z, orientation.w)
+            if not all(math.isfinite(float(value)) for value in values):
+                raise ValueError("end_effector_path_nonfinite_pose")
+            if sum(float(value)**2 for value in values[3:]) <= 1.0e-18:
+                raise ValueError("end_effector_path_zero_quaternion")
+        # target_id identifies the cluster for temporal matching.  It is not a
+        # grasp point: the planner and coordinator both use the 3-D centre of
+        # that connected semantic cluster, so a dense top/side surface cannot
+        # pull the goal away from the object's middle.
+        target_position = component_bounding_center(component)
+        pregrasp_count = 0
+        gripper_open = float(self.get_parameter("gripper_open").value)
+        gripper_close = float(self.get_parameter("gripper_close").value)
+        if self.task_mode == "pickup":
+            pregrasp_count, target_position = validate_grasp_contract(
+                reachability, target_position, gripper_open, gripper_close,
+                float(self.get_parameter("max_grasp_target_snapshot_shift_m").value),
+                float(self.get_parameter("max_grasp_position_error_m").value),
+                self.tcp_to_pinch,
+                bool(self.get_parameter("selected_target_excluded_from_collision").value))
+        goal_index = pregrasp_count - 1 if pregrasp_count else -1
+        goal_pose = reachability.end_effector_path.poses[goal_index].pose
+        target_distance = (float(reachability.target_distance) if not pregrasp_count else
+                           _distance(_point_tuple(goal_pose.position), target_position))
+        if not math.isfinite(target_distance) or target_distance < 0.0:
+            raise ValueError("target_distance_invalid")
+        minimum_distance = float(self.get_parameter("minimum_target_distance_m").value)
+        if target_distance < minimum_distance:
+            raise ValueError(f"target_too_close_to_graph_goal:{target_distance:.6f}")
+        if target_distance > float(self.get_parameter("max_target_distance_m").value):
+            raise ValueError(f"target_too_far_from_graph_goal:{target_distance:.6f}")
         alignment = approach_alignment(goal_pose, target_position, self.tool_axis)
         minimum_alignment = float(
             self.get_parameter("minimum_approach_alignment").value)
@@ -850,6 +1147,10 @@ class GraphPickNode(Node):
             minimum_segment_time=float(
                 self.get_parameter("minimum_segment_time_sec").value),
         )
+        graph_trajectory, approach_trajectory = (None, None)
+        if pregrasp_count:
+            graph_trajectory, approach_trajectory = split_grasp_trajectory(
+                trajectory, pregrasp_count)
         bus_read_failures, bus_write_failures = self._bus_failure_counts()
         return FrozenPickPlan(
             created_monotonic=now,
@@ -872,6 +1173,13 @@ class GraphPickNode(Node):
             bus_read_failures=bus_read_failures,
             bus_write_failures=bus_write_failures,
             task_mode=self.task_mode,
+            graph_trajectory=graph_trajectory,
+            approach_trajectory=approach_trajectory,
+            pregrasp_waypoint_count=pregrasp_count,
+            selected_target_excluded_from_collision=bool(getattr(
+                reachability, "selected_target_excluded_from_collision", False)),
+            gripper_open_position=gripper_open,
+            gripper_close_position=gripper_close,
         )
 
     def _plan_payload(self, plan: Optional[FrozenPickPlan] = None) -> dict:
@@ -893,6 +1201,8 @@ class GraphPickNode(Node):
             "holding_object": holding,
             "motion_faulted": faulted,
             "motion_fault_reason": fault_reason,
+            "failure_stage": getattr(self, "_failure_stage", ""),
+            "observed_target_track_id": getattr(self, "_observed_target_track_id", None),
             "plan_ready": plan is not None,
         }
         if plan is not None:
@@ -920,6 +1230,12 @@ class GraphPickNode(Node):
                 "target_distance_m": plan.target_distance,
                 "approach_alignment": plan.alignment,
                 "grasp_orientation_required": plan.task_mode == "pickup",
+                "final_approach_validated": plan.approach_trajectory is not None,
+                "pregrasp_waypoint_count": plan.pregrasp_waypoint_count,
+                "selected_target_excluded_from_collision":
+                    plan.selected_target_excluded_from_collision,
+                "approach_points": (len(plan.approach_trajectory.points)
+                                    if plan.approach_trajectory is not None else 0),
                 "trajectory_points": len(plan.trajectory.points),
                 "reachability_edges_used": max(0, len(plan.trajectory.points) - 2),
                 "execution_blockers": blockers,
@@ -960,14 +1276,21 @@ class GraphPickNode(Node):
         sphere.color.a = 0.95
         markers.markers.append(sphere)
         if plan.path.poses:
+            goal_pose = plan.path.poses[
+                plan.pregrasp_waypoint_count - 1 if plan.pregrasp_waypoint_count else -1].pose
+            endpoint = approach_axis_endpoint(
+                goal_pose, plan.target_position, self.tool_axis)
             arrow = Marker()
             arrow.header = copy.deepcopy(target.header)
             arrow.ns = "graph_pick_approach"
             arrow.id = 1
             arrow.type = Marker.ARROW
             arrow.action = Marker.ADD
-            arrow.points = [copy.deepcopy(plan.path.poses[-1].pose.position),
-                            copy.deepcopy(target.point)]
+            # Draw the configured physical gripper approach direction. The endpoint is
+            # intentionally derived from FK orientation, rather than forced
+            # to the target point, so an alignment error stays visible.
+            arrow.points = [copy.deepcopy(goal_pose.position), Point(
+                x=endpoint[0], y=endpoint[1], z=endpoint[2])]
             arrow.scale.x = 0.006
             arrow.scale.y = 0.012
             arrow.scale.z = 0.018
@@ -1046,7 +1369,7 @@ class GraphPickNode(Node):
             if time.monotonic() >= deadline:
                 return False
             time.sleep(0.02)
-        return future.done()
+        return future.done() and rclpy.ok() and not self._cancel.is_set()
 
     def _latch_motion_fault(self, reason: str) -> None:
         """Retain the first execution fault until this coordinator restarts."""
@@ -1060,6 +1383,9 @@ class GraphPickNode(Node):
             self.get_logger().error(f"motion fault latched: {normalized}")
 
     def _execution_interlocks_ready(self, plan: FrozenPickPlan) -> bool:
+        if self._cancel.is_set() or self._faulted:
+            self._message = "execution cancelled or faulted"
+            return False
         blockers = self._interlock_blockers(plan)
         if not blockers:
             return True
@@ -1068,16 +1394,198 @@ class GraphPickNode(Node):
         self._cancel.set()
         return False
 
+    def _segment_start_rejection(self, trajectory: JointTrajectory) -> Optional[str]:
+        """Compare measured joints with this segment, including after graph motion."""
+        with self._lock:
+            joint_state = copy.deepcopy(self._joint_state)
+            received = self._joint_state_time
+        if joint_state is None or time.monotonic() - received > float(
+                self.get_parameter("max_joint_state_age_sec").value):
+            return "joint_state_missing_or_stale"
+        ordered = ordered_joint_positions(joint_state, self.joint_names)
+        if ordered is None:
+            return "joint_state_incomplete"
+        if not trajectory.points or len(trajectory.points[0].positions) != len(ordered):
+            return "arm_segment_start_invalid"
+        error = max(abs(a - b) for a, b in zip(
+            ordered, trajectory.points[0].positions))
+        if not math.isfinite(error) or error > float(
+                self.get_parameter("max_start_joint_error_rad").value):
+            return f"arm_segment_start_mismatch:{error:.6f}"
+        return None
+
+    def _pickup_target_rejection(self, plan: FrozenPickPlan) -> Optional[str]:
+        """Check current sensing/identity without rebuilding a plan from its old start."""
+        now = time.monotonic()
+        max_age = float(self.get_parameter("max_input_age_sec").value)
+        with self._lock:
+            perception = dict(self._perception_status)
+            perception_time = self._perception_status_time
+            history = list(self._object_track_history)
+        if now - perception_time > max_age or not perception.get("accepted", False):
+            return "perception_missing_stale_or_rejected"
+        if bool(self.get_parameter("require_calibration_verified").value) and not \
+                perception.get("calibration_verified", False):
+            return "camera_calibration_not_verified"
+        observation, rejection = pickup_target_observation(
+            history, plan, now, max_age,
+            float(self.get_parameter("max_object_track_shift_m").value))
+        if observation is not None:
+            with self._lock:
+                self._observed_target_track_id = observation.track_id
+        return rejection
+
+    def _arm_segment_ready(self, plan: FrozenPickPlan,
+                           trajectory: JointTrajectory) -> bool:
+        # Pause at the segment boundary for a brief detector dropout. Never
+        # send motion during reacquisition, and never wait through joint drift,
+        # hardware faults, moved objects, or ambiguous identity.
+        deadline = None
+        while True:
+            if not self._execution_interlocks_ready(plan):
+                return False
+            rejection = self._segment_start_rejection(trajectory)
+            if rejection is not None:
+                self._message = rejection
+                return False
+            if plan.task_mode != "pickup":
+                return True
+            rejection = self._pickup_target_rejection(plan)
+            if rejection is None:
+                return True
+            self._message = rejection
+            if rejection not in {"frozen_object_track_not_current", "pickup_target_reacquiring"}:
+                return False
+            if deadline is None:
+                deadline = time.monotonic() + float(
+                    self.get_parameter("target_reacquisition_timeout_sec").value)
+                self._publish_status()
+            if time.monotonic() >= deadline or self._cancel.wait(0.02):
+                return False
+
+    def _cancel_late_goal(self, future) -> None:
+        """Cancel a goal whose acceptance arrives after timeout/cancellation."""
+        try:
+            handle = future.result()
+            if handle is not None and handle.accepted:
+                handle.cancel_goal_async()
+        except Exception:
+            # A canceled/exceptional acceptance has no usable goal handle.
+            pass
+
+    def _validate_pickup_segment(self, plan: FrozenPickPlan,
+                                 trajectory: JointTrajectory,
+                                 include_closure: bool) -> bool:
+        """Ask the planner to check this frozen segment against its newest scene."""
+        if not self._arm_segment_ready(plan, trajectory):
+            return False
+        client = self._grasp_validate_client
+        if ValidateGraspExecution is None or client is None or not client.wait_for_service(
+                timeout_sec=1.0):
+            self._message = "grasp_execution_validator_unavailable"
+            return False
+        if self._cancel.is_set():
+            self._message = "grasp_execution_validation_cancelled"
+            return False
+        request = ValidateGraspExecution.Request()
+        request.trajectory = copy.deepcopy(trajectory)
+        request.trajectory.header.frame_id = self.world_frame
+        request.trajectory.header.stamp = self.get_clock().now().to_msg()
+        request.target_position = Point(
+            x=plan.target_position[0], y=plan.target_position[1], z=plan.target_position[2])
+        request.target_class_id = plan.target_class_id
+        request.target_environment_node_id = plan.target_node_id
+        request.gripper_open_position = plan.gripper_open_position
+        request.gripper_close_position = plan.gripper_close_position
+        request.include_closure = include_closure
+        try:
+            future = client.call_async(request)
+            if not self._wait_future(future, float(
+                    self.get_parameter("grasp_validation_timeout_sec").value)):
+                client.remove_pending_request(future)
+                future.cancel()
+                self._message = "grasp_execution_validation_timed_out_or_cancelled"
+                return False
+            result = future.result()
+        except Exception as error:
+            self._message = f"grasp_execution_validation_failed:{error}"
+            return False
+        if result is None or not result.valid:
+            self._message = "grasp_execution_validation_rejected:" + str(
+                getattr(result, "reason", "missing_response"))
+            return False
+        # The service may have taken long enough for encoders, health, or
+        # target observations to change. Recheck these before sending motion.
+        return self._arm_segment_ready(plan, trajectory)
+
+    def _confirm_gripper_result(self, result, opening: bool,
+                                requested: float, action_started: float,
+                                deadline: float) -> bool:
+        """Action success can precede physical arrival with legacy loose tolerances."""
+        result_received = time.monotonic()
+        feedback = getattr(result, "result", None)
+        if gripper_result_state(result, opening, requested, requested,
+                                float(self.get_parameter("gripper_position_tolerance").value),
+                                allow_stalled_abort=True) in {"action_failed", "position_invalid"}:
+            self._last_gripper_result_state = "action_failed"
+            return False
+        deadline = min(deadline, result_received + float(
+            self.get_parameter("gripper_verification_timeout_sec").value))
+        self._last_gripper_result_state = "measured_gripper_unconfirmed"
+        while rclpy.ok() and not self._cancel.is_set() and time.monotonic() < deadline:
+            now = time.monotonic()
+            with self._lock:
+                measurements = list(self._gripper_measurements)
+            if (not measurements or measurements[-1][0] < result_received or
+                    now - measurements[-1][0] > float(
+                        self.get_parameter("max_joint_state_age_sec").value)):
+                time.sleep(0.02)
+                continue
+            position = measurements[-1][1]
+            state = gripper_result_state(
+                result, opening, requested, requested,
+                float(self.get_parameter("gripper_position_tolerance").value),
+                measured_position=position, allow_stalled_abort=True)
+            if state == "open_reached":
+                self._last_gripper_result_state = state
+                return True
+            reported = float(getattr(feedback, "position", math.nan))
+            matches = abs(position - reported) <= float(
+                self.get_parameter("gripper_result_match_tolerance").value)
+            stationary = gripper_stationary(
+                measurements, action_started,
+                float(self.get_parameter("gripper_stationary_time_sec").value),
+                float(self.get_parameter("gripper_stationary_tolerance").value))
+            if not opening and matches and stationary:
+                if state == "contact_detected" and position > requested + float(
+                        self.get_parameter("gripper_contact_position_margin").value):
+                    self._last_gripper_result_state = state
+                    return True
+                if state == "closed_unconfirmed":
+                    self._last_gripper_result_state = state
+                    return True
+            time.sleep(0.02)
+        return False
+
     def _send_gripper(self, position: float, label: str) -> bool:
+        self._last_gripper_result_state = "not_confirmed"
+        if self._cancel.is_set():
+            self._message = f"{label} cancelled before command"
+            return False
         if not self._gripper_client.wait_for_server(timeout_sec=3.0):
             self._message = "gripper action server unavailable"
+            return False
+        if self._cancel.is_set():
+            self._message = f"{label} cancelled before command"
             return False
         goal = GripperCommand.Goal()
         goal.command.position = float(position)
         goal.command.max_effort = float(
             self.get_parameter("gripper_max_effort").value)
+        action_started = time.monotonic()
         future = self._gripper_client.send_goal_async(goal)
         if not self._wait_future(future, 5.0):
+            future.add_done_callback(self._cancel_late_goal)
             self._message = f"{label} goal acceptance timed out"
             self._latch_motion_fault(self._message)
             return False
@@ -1087,6 +1595,10 @@ class GraphPickNode(Node):
             return False
         with self._lock:
             self._gripper_goal_handle = handle
+        if self._cancel.is_set():
+            handle.cancel_goal_async()
+            self._message = f"{label} cancelled before result"
+            return False
         result_future = handle.get_result_async()
         timeout = float(self.get_parameter("action_timeout_sec").value)
         if not self._wait_future(result_future, timeout):
@@ -1097,11 +1609,28 @@ class GraphPickNode(Node):
         result = result_future.result()
         with self._lock:
             self._gripper_goal_handle = None
-        return bool(result is not None and result.status == GoalStatus.STATUS_SUCCEEDED)
+        if self._cancel.is_set():
+            self._message = f"{label} cancelled"
+            return False
+        verified = self._confirm_gripper_result(
+            result, opening=label == "open gripper", requested=position,
+            action_started=action_started, deadline=action_started + timeout)
+        self._message = f"{label}: {self._last_gripper_result_state}"
+        return verified
 
     def _send_arm(self, trajectory: JointTrajectory, label: str) -> bool:
+        if self._cancel.is_set():
+            self._message = f"{label} cancelled before command"
+            return False
         if not self._arm_client.wait_for_server(timeout_sec=3.0):
             self._message = "arm FollowJointTrajectory server unavailable"
+            return False
+        if self._cancel.is_set():
+            self._message = f"{label} cancelled before command"
+            return False
+        rejection = self._segment_start_rejection(trajectory)
+        if rejection is not None:
+            self._message = rejection
             return False
         command = copy.deepcopy(trajectory)
         command.header.stamp = self.get_clock().now().to_msg()
@@ -1109,6 +1638,7 @@ class GraphPickNode(Node):
         goal.trajectory = command
         future = self._arm_client.send_goal_async(goal)
         if not self._wait_future(future, 5.0):
+            future.add_done_callback(self._cancel_late_goal)
             self._message = f"{label} goal acceptance timed out"
             self._latch_motion_fault(self._message)
             return False
@@ -1118,6 +1648,10 @@ class GraphPickNode(Node):
             return False
         with self._lock:
             self._arm_goal_handle = handle
+        if self._cancel.is_set():
+            handle.cancel_goal_async()
+            self._message = f"{label} cancelled before result"
+            return False
         result_future = handle.get_result_async()
         timeout = float(self.get_parameter("action_timeout_sec").value)
         if not self._wait_future(result_future, timeout):
@@ -1128,14 +1662,31 @@ class GraphPickNode(Node):
         result = result_future.result()
         with self._lock:
             self._arm_goal_handle = None
-        return bool(
-            result is not None
+        succeeded = bool(
+            not self._cancel.is_set() and result is not None
             and result.status == GoalStatus.STATUS_SUCCEEDED
             and int(result.result.error_code) == 0
         )
+        if not succeeded:
+            self._message = f"{label} action failed or was cancelled"
+            return False
+        terminal = copy.deepcopy(trajectory)
+        terminal.points = terminal.points[-1:]
+        result_received = time.monotonic()
+        deadline = result_received + float(
+            self.get_parameter("arm_endpoint_verification_timeout_sec").value)
+        while rclpy.ok() and not self._cancel.is_set() and time.monotonic() < deadline:
+            with self._lock:
+                received = self._joint_state_time
+            if received >= result_received and self._segment_start_rejection(terminal) is None:
+                return True
+            time.sleep(0.02)
+        self._message = f"{label} measured endpoint not reached or cancelled"
+        return False
 
     def _execute_worker(self, plan: FrozenPickPlan) -> None:
         success = False
+        self._failure_stage = ""
         try:
             if plan.task_mode == "move_to_target":
                 self._state = "following_graph_path"
@@ -1151,53 +1702,59 @@ class GraphPickNode(Node):
                 return
             if plan.task_mode != "pickup":
                 raise ValueError(f"unsupported_task_mode:{plan.task_mode}")
+            if (plan.graph_trajectory is None or plan.approach_trajectory is None or
+                    not math.isfinite(plan.gripper_open_position) or
+                    not math.isfinite(plan.gripper_close_position)):
+                self._message = "pickup_requires_validated_final_approach"
+                return
             self._state = "opening_gripper"
             self._message = "opening gripper before graph traversal"
             self._publish_status()
-            if not self._execution_interlocks_ready(plan) or not self._send_gripper(
-                    float(self.get_parameter("gripper_open").value), "open gripper"):
+            if not self._validate_pickup_segment(plan, plan.graph_trajectory, False) or not self._send_gripper(
+                    plan.gripper_open_position, "open gripper"):
                 return
             self._state = "following_graph_path"
             self._message = (
-                f"following {len(plan.trajectory.points)} exact-validated graph points")
+                f"following {len(plan.graph_trajectory.points)} validated pregrasp points")
             self._publish_status()
-            if not self._execution_interlocks_ready(plan) \
-                    or not self._send_arm(plan.trajectory, "graph approach"):
+            if not self._arm_segment_ready(plan, plan.graph_trajectory) \
+                    or not self._send_arm(plan.graph_trajectory, "graph pregrasp"):
+                return
+            self._state = "following_final_approach"
+            self._message = "following validated insertion from pregrasp to cluster center"
+            self._publish_status()
+            if not self._validate_pickup_segment(plan, plan.approach_trajectory, True) \
+                    or not self._send_arm(plan.approach_trajectory, "final grasp approach"):
                 return
             self._state = "closing_gripper"
             self._message = f"closing gripper on {plan.target_class_name}"
             self._publish_status()
-            if not self._execution_interlocks_ready(plan) or not self._send_gripper(
-                    float(self.get_parameter("gripper_close").value), "close gripper"):
+            terminal = copy.deepcopy(plan.approach_trajectory)
+            terminal.points = terminal.points[-1:]
+            if not self._validate_pickup_segment(plan, terminal, True) or not self._send_gripper(
+                    plan.gripper_close_position, "close gripper"):
                 return
-            with self._lock:
-                self._holding_object = True
-            if bool(self.get_parameter("retreat_after_grasp").value):
-                retreat = reverse_trajectory(
-                    plan.trajectory,
-                    velocity=float(
-                        self.get_parameter("retreat_joint_velocity").value),
-                    minimum_segment_time=float(
-                        self.get_parameter("minimum_segment_time_sec").value),
-                )
-                self._state = "retreating_on_graph"
-                self._message = "retreating on the validated graph path"
-                self._publish_status()
-                if not self._execution_interlocks_ready(plan) \
-                        or not self._send_arm(retreat, "graph retreat"):
-                    self._state = "retreat_failed_holding_object"
-                    self._message = "retreat failed; gripper remains closed"
-                    return
+            if self._cancel.is_set():
+                self._message = "pickup cancelled after gripper action"
+                return
             success = True
-            self._state = "pickup_complete_holding_object"
-            self._message = f"pickup complete; holding {plan.target_class_name}"
+            contact = self._last_gripper_result_state == "contact_detected"
+            with self._lock:
+                self._holding_object = contact
+            if contact:
+                self._state = "grasp_contact_detected"
+                self._message = (
+                    f"gripper contact detected at {plan.target_class_name}; lift not performed")
+            else:
+                self._state = "gripper_closed_unconfirmed"
+                self._message = "gripper reached closed position; object holding is unconfirmed"
         finally:
             with self._lock:
                 self._busy = False
                 self._arm_goal_handle = None
                 self._gripper_goal_handle = None
-                if not success and self._state not in {
-                        "retreat_failed_holding_object"}:
+                if not success:
+                    self._failure_stage = self._state
                     self._state = "motion_failed"
             self._publish_status()
 
@@ -1218,6 +1775,10 @@ class GraphPickNode(Node):
             response.message = f"execution rejected: {rejection}"
             return response
         with self._lock:
+            if self._busy:
+                response.success = False
+                response.message = "graph pickup is already active"
+                return response
             self._busy = True
             self._holding_object = False
             self._cancel.clear()

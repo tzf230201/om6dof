@@ -1,0 +1,138 @@
+\documentclass[letterpaper,10pt,conference]{template/ieeeconf}
+\IEEEoverridecommandlockouts
+\overrideIEEEmargins
+\usepackage{amsmath,amssymb,graphicx,booktabs,multirow,url,xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{flushend}
+\graphicspath{{figures/}}
+\newcommand{\method}{WA-FGNG}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\placeholder}[1]{\textcolor{red}{#1}}
+\title{World-Anchored Foveated Growing Neural Gas\\with Bounded Multi-View Replay}
+\author{Anonymous authors}
+\input{numbers.tex}
+\begin{document}
+\maketitle
+\thispagestyle{empty}\pagestyle{empty}
+\begin{abstract}
+A graph learned from a moving depth camera must allocate detail near a target while retaining surfaces outside the current view. World-coordinate registration aligns observations, but cannot alone prevent a batch-learning graph from forgetting unobserved geometry. We present WA-FGNG, a foveated graph representation that separates registration, persistent observation support, and attention-dependent allocation. A bounded world-voxel memory supplies replay to a density-controlled split--merge graph. Its retained support is invariant to observation order and duplication for a fixed input set. We evaluate 72 runs on two TUM RGB-D sequences using supplied ground-truth poses, disjoint training/evaluation pixels, and prescribed world-space attention switches. At a 256-node limit, focal error decreases by \DeskFocusGain\% and \XyzFocusGain\% relative to a matched uniform-attention replay ablation, while mean observed-surface error increases by \DeskGlobalCost\% and \XyzGlobalCost\%, respectively. Shared-memory DBL-GNG and FPS comparisons, an additional rotation sequence, and pose-jitter tests characterize the resulting trade-offs. The results establish conditional representation behavior under supplied poses; robot task success and pose estimation are not evaluated.
+\end{abstract}
+
+\section{Introduction}
+A robot observing a workspace from a moving camera encounters a persistent allocation problem: fine detail is useful near the current interaction target, while previously observed geometry remains relevant after the camera looks elsewhere. A fixed-size representation cannot increase resolution everywhere indefinitely. It must distribute its representational capacity across space and over time. Growing neural gas (GNG) is attractive for this setting because it incrementally represents data through adaptive prototypes and learned adjacency~\cite{fritzke1995gng}. Its output is compact and explicit, making allocation and forgetting observable rather than hidden in a latent representation.
+
+Attention-dependent graph density is established in prior work. ROI-GNG controls overall density against processing time and adjusts target and background resolution~\cite{toda2019roi}. Dynamic-density GNG links local attention to robot locomotion~\cite{saputra2023attention}. Multi-camera extensions of distributed batch-learning GNG already register observations in a common world frame~\cite{siow2024multicamera}. These results motivate a narrower question: when camera motion and attention changes occur together, what observation support is needed for a capacity-limited foveated graph to maintain previously seen surfaces?
+
+A depth image can be backprojected into metric camera-frame XYZ, but directly learning these coordinates produces a graph in a moving reference frame. Batch topology updates introduce a separate temporal issue: winner mass and edge strength are recomputed for every batch, and nodes without supported connections may be removed. Applying a correct camera-to-world transform fixes the coordinate mismatch, but does not make old surfaces appear in a new batch. Lack of observation then becomes an implicit forgetting signal, even in a static scene.
+
+We address these two failure mechanisms explicitly. Observations first enter a common world frame using an externally supplied camera pose. A bounded voxel memory then retains a reproducible subset of observed surfaces. Replay supplies historical geometric support to the graph, while a world-anchored attention field controls the allocation of a separate node budget. The method does not estimate pose, infer free space, or identify dynamic object removal. Its intended setting is a static workspace with a known camera trajectory, such as one supplied by motion capture or an external tracking system.
+
+Our contributions are: (i) a foveated graph representation coupling world-space observation support to attention-dependent allocation under separate node and replay limits; (ii) a deterministic support policy whose order- and duplicate-invariance clarifies what can be preserved despite changing observations; and (iii) a reproducible public-data study that isolates registration, retention, and focal allocation. Controlled comparisons identify where focal accuracy improves and quantify the corresponding global-coverage and runtime costs.
+
+\begin{figure*}[t]
+\centering\includegraphics[width=\textwidth]{architecture.pdf}
+\caption{\method{} separates four operations. Depth samples are transformed with a supplied camera pose, retained in a bounded world-voxel memory, replayed without repeated-view multiplicity, and represented by a foveated graph. The memory budget $K$, replay budget $S$, and graph budget $B$ are distinct. Geometry in this architecture diagram is schematic; experimental renderings use recorded benchmark outputs.}
+\label{fig:architecture}
+\end{figure*}
+
+\section{Related Work}
+\textbf{Adaptive graph representations.} GNG adds prototypes and connections to capture a data distribution~\cite{fritzke1995gng}. Utility-based extensions remove poorly used prototypes and address nonstationary distributions~\cite{fritzke1997utility}. Batch-learning and distributed initialization improve the efficiency of topology construction~\cite{siow2024dbl}. These mechanisms already permit substantial adaptation under changing input distributions. We use the same density-controlled graph operator in the registration and replay ablations, and run DBL-GNG with the same retained support as an additional comparison.
+
+\textbf{Attention and multiple views.} ROI-GNG varies graph density in response to a processing-time threshold and target relevance~\cite{toda2019roi}. GNG-based saliency models derive attentional structure from images~\cite{tunnermann2019saliency}, while dynamic-density attention has been used for embodied locomotion~\cite{saputra2023attention}. Multi-camera MS-DBL-GNG estimates inter-camera transformations and forms a common environmental map~\cite{siow2024multicamera}. Our supplied-pose registration is consequently a prerequisite, not a claimed registration contribution. The experimental emphasis is persistent support when observations leave the field of view and a previously selected target is revisited.
+
+\textbf{Resolution and computational resources.} Dynamic-resolution models for object-pile manipulation adapt particle resolution to downstream control objectives~\cite{wang2023dynamic}. Our attention schedule is prescribed rather than learned, and no manipulation outcome is measured. Deterministic hash-priority retention follows established bottom-$K$ sampling ideas~\cite{thorup2013bottomk}. We use it to make the support set independent of repeated observations and to expose a bounded memory parameter, not as a new sampling estimator. Equal node limits are kept distinct from equal total memory and equal update time throughout the evaluation.
+
+\section{Method}
+\subsection{Problem Setting and Registration}
+At observation $t$, the input consists of a depth map $D_t$, calibrated pinhole intrinsics $(f_x,f_y,c_x,c_y)$, a camera-to-world rigid pose $T_{wc,t}$, and a world-space attention anchor $q_t\in\R^3$. Valid sampled pixels are backprojected and transformed before learning:
+\begin{align}
+ p_c(u,v)&=D_t(u,v)\left[(u-c_x)/f_x,\ (v-c_y)/f_y,\ 1\right]^\top,\\
+ p_w(u,v)&=R_{wc,t}p_c(u,v)+t_{wc,t}.
+\end{align}
+We validate finite observations and proper rigid transforms. Pose synchronization, calibration, and estimation remain external responsibilities. The graph $G_t=(V_t,E_t)$ contains metric world-space prototypes with $|V_t|\leq B$. Edges describe learned geometric adjacency; they are not traversability or collision-free motion certificates.
+
+\subsection{Bounded World-Space Observation Support}
+For voxel width $h$, a point $p$ belongs to integer key $v(p)=\lfloor p/h\rfloor$. Each key receives a fixed seeded 64-bit hash priority. A lexicographic key tie-break produces a total order. Among the keys observed up to time $t$, the memory $M_t$ retains the $K$ smallest priorities. A new key enters if memory is not full or if its priority is smaller than the largest retained priority. In the latter case the key with the largest priority is evicted.
+
+Within a retained voxel, the representative is the observed point closest to the voxel center. Equal distances are broken lexicographically by XYZ. A representative is therefore an actual observed sample, rather than a centroid that can drift as one viewpoint is repeated. A voxel contributes only one replay candidate, independent of how often it has been observed. This reduces repeated-view multiplicity; it does not provide an exact uniform surface-area distribution, since occupancy depends on grid orientation, voxel size, sensor noise, and visibility.
+
+\textbf{Support invariance.} For a fixed finite set of point observations and a fixed hash seed, the final retained keys and representatives are independent of observation order and duplication. To see this, the final keys are the $K$ smallest elements of a fixed total priority order. Once a key outside this set is rejected or evicted, the maximum retained priority cannot increase, so the key cannot later displace a final retained key. For each retained key, the representative is the minimum of a fixed tuple (center distance, XYZ). Both operations are idempotent under duplication. This property concerns the final memory, not the trajectory or final state of the online graph, which depends on the sequence of replay batches.
+
+\subsection{Bounded Replay}
+Let $m=|M_t|$ and $S$ be the replay limit. All representatives are used when $m\leq S$. Otherwise, sort them by voxel key and select
+\begin{equation}
+ i_j=\left(\left\lfloor jm/S\right\rfloor+o_e\right)\bmod m,
+ \qquad j=0,\ldots,S-1,
+\end{equation}
+where $o_e$ is a seeded hash of the learning epoch modulo $m$. The indices are distinct within a batch. Changing the offset distributes replay across the ordered support over successive epochs. Each selected point carries unit weight. The graph learns from this memory batch; current samples are not appended again with a second weight.
+
+Replay supplies evidence for surfaces outside the current field of view. It does not preserve every individual graph node: split, merge, and pruning remain active. Nor does it infer that an old surface has physically disappeared. In a dynamic scene, this static memory can retain stale geometry until priority replacement; visibility-aware removal is outside the implemented method.
+
+\subsection{World-Anchored Foveation}
+For focal scale $r>0$ and a positive peripheral floor $a_0$, attention at prototype $x_i$ is
+\begin{equation}
+ a_i=a_0+\frac{1-a_0}{1+\|x_i-q_t\|^2/r^2}.
+\end{equation}
+The world anchor remains attached to a selected spatial location as the camera moves. This metric radial field is defined in the scene rather than by retinal image eccentricity. The same metric field is used across our F-GNG ablations, including the diagnostic unregistered mode after transforming the anchor to the current camera frame.
+
+Following distributed batch GNG, each sample identifies its two nearest prototypes. Winner and neighbor displacements accumulate against the pre-update graph; prototypes move by normalized batch displacements, and edges are rebuilt from co-winning pairs. Isolated prototypes are removed before density-based reallocation.
+
+The density controller computes an unnormalized demand
+\begin{align}
+ d_i&=(m_i+\epsilon)^\mu s_i^{D(1-\mu)}(1+\kappa c_i)a_i,\\
+ \rho_i&=\frac{d_i}{\sum_j d_j},\qquad b_i=B\rho_i.
+\end{align}
+where $m_i$ is batch winner mass, $s_i$ is local neighbor spacing, and $D=2$ reflects a surface embedded in 3D. With unit edge directions $\hat u_{ij}$, the uncentered second-moment matrix is $C_i=\sum_{j\in\mathcal{N}(i)}\hat u_{ij}\hat u_{ij}^{\top}$. The complexity factor $c_i=1-\lambda_{\max}/\mathrm{tr}(C_i)$ measures dispersion of those directions. It is not a curvature estimator. The exponent $\mu$ controls magnification of the local data distribution; $\kappa$ controls the contribution of directional dispersion. Zero-support nodes receive zero demand.
+
+Nodes with sustained demand $b_i$ above a split threshold can create a prototype between adjacent nodes. Sustained low demand enables merging. Hysteresis reduces immediate reversal, and chronic unmet external attention demand at capacity can trigger reallocation from weaker neighboring pairs. The density-controlled split--merge operators act on distributed batch updates initialized following DBL-GNG~\cite{siow2024dbl}. Registration and replay change the coordinates and geometric support of those updates. The attention floor prevents zero weighting of peripheral locations, but supplies no minimum coverage guarantee. Prototype IDs track graph entities through supported merges, not material points on objects.
+
+\subsection{Resources and Implementation}
+The implementation is C++20 and exposes both the foveated density controller and a DBL-GNG comparison. It accepts camera XYZ and a supplied rigid transform, making it independent of a camera driver or ROS installation. A replay executable records per-frame node positions, edges, IDs, resource counts, and update times.
+
+Support and replay cardinalities are bounded by $K$ and $S$, respectively. The implementation searches all prototypes for each sample and uses dense adjacency arrays, giving a leading batch cost of $O(SB+B^2)$ and graph-array storage of $O(B^2)$. Voxel lookup and replacement use ordered containers. Replay constructs the ordered memory representatives before subsampling, adding $O(K+S)$ work and scratch storage per batch; memory insertion costs $O(P\log K)$ for $P$ current samples. Retired-ID bookkeeping in the graph core is not bounded for arbitrarily long sessions; consequently our claim is bounded geometric support and graph cardinality, not bounded total process memory over an infinite run. Update time includes transformation, support maintenance, graph learning, and graph extraction, but excludes file decoding, pose interpolation, serialization, and metric evaluation.
+
+\section{Experimental Protocol}
+\subsection{Data and Causal Evaluation}
+We use the public TUM RGB-D benchmark~\cite{sturm2012tum}, selecting \texttt{freiburg1\_desk} and \texttt{freiburg1\_xyz}. The motion-capture trajectory is supplied as an oracle input. The experiment therefore measures representation quality conditioned on pose; it is not a SLAM accuracy test. Per sequence, 120 depth frames are uniformly selected over the available pose-supported interval. Translation is linearly interpolated and rotation uses quaternion SLERP, with bracketing pose intervals limited to 50\,ms.
+
+Depth is converted using 5000 raw units per meter and retained in $[0.35,4.0]$\,m. We follow the dataset's recommendation for preregistered depth using the default pinhole intrinsics $(525,525,319.5,239.5)$, without additional undistortion or depth scaling. Training pixels use a stride-12 grid and a deterministic cap of 1500 points. Evaluation pixels use a disjoint stride-8 grid with offset 3. They share the sensor and pose source but never enter graph learning; they are not independent surveyed geometry.
+
+The reference at frame $t$ includes only evaluation observations at or before $t$. It is voxel-deduplicated to reduce repeat-view density. No future surface is used for an earlier metric. We separately evaluate the current view, the accumulated observed surface, and historical reference points outside the current camera frustum. The last set measures off-screen retention; it is not a complete occlusion test.
+
+\subsection{Attention and Comparisons}
+Two anchors are chosen from the first frame's training points nearest pixels $(192,264)$ and $(448,264)$, then transformed to world coordinates. Attention follows a prescribed A--B--A schedule with switches at selected frames 40 and 80. The focal scale is 0.30\,m. Anchor selection uses no held-out measurements. This schedule tests spatial reallocation independently of object recognition or a learned attention policy.
+
+The comparisons are unregistered F-GNG, registered current-frame F-GNG, \method{}, registered memory F-GNG with uniform attention, and DBL-GNG with the same memory. The uniform-attention ablation uses a constant-one field while retaining the same capacity-reallocation logic, isolating the spatial attention weights. Farthest-point sampling (FPS) over the same replay batch is a point-set baseline. It has no learned edges and does not test graph identity or topology. The unregistered mode is a diagnostic of coordinate inconsistency and uses the same metric attention field as the other F-GNG variants.
+
+\input{protocol_details.tex}
+
+\subsection{Metrics}
+For a reference set $Q$ and prototype set $V$, mean observed-surface distance is
+\begin{equation}
+ E(Q,V)=|Q|^{-1}\sum_{p\in Q}\min_{x\in V}\|p-x\|_2.
+\end{equation}
+We report this separately for cumulative, current-view, historical, and focal reference subsets. Coverage is the fraction of reference samples within a stated distance of a node. These are representation-resolution measures, not dense surface reconstruction accuracy: a valid surface between sparse prototypes can still be distant from every node.
+
+To inspect adjacency separately, we sample interior points along each learned edge and measure their distance to the causal reference surface. Unsupported-edge statistics are sensor- and threshold-dependent diagnostics, not a proof of correct or incorrect topology. Update-time distributions are recorded per selected frame, and actual node/support counts accompany the configured limits. Repeated seeds quantify algorithm variability on fixed sequences; they do not establish population-level generalization across environments.
+
+\section{Results}
+\input{results.tex}
+
+\section{Discussion and Limitations}
+Replay and attention address different allocation problems. Persistent support improves historical coverage, while foveation trades global accuracy for focal detail; downstream requirements determine whether that trade-off is useful.
+
+The experiment conditions on supplied poses. Calibration errors, pose drift, tracking failures, and loop-closure corrections can invalidate accumulated coordinates. The pose-jitter test quantifies one sensitivity, but does not reproduce the correlated errors of a real tracker. Disjoint reference pixels share the sensor and pose source and are not independent surveyed geometry.
+
+Memory assumes a static scene and has no visibility-based removal. Hash retention bounds and stabilizes support cardinality, but can evict rare or task-relevant surfaces. The positive attention floor gives no minimum coverage guarantee. Split--merge thresholds remain heuristic, prototype IDs do not identify physical surface points, and unsupported edges persist. The graph consequently cannot be treated as a certified collision or traversability model.
+
+ROI-GNG, the closest attention-based alternative, is not included as an executable baseline. Comparative conclusions are restricted to the matched ablations, DBL-GNG, and FPS. The Freiburg 1 office recordings cover a narrow environment and sensor regime; rpy expands camera-motion coverage rather than scene diversity. Estimated trajectories, dynamic scenes, task-derived attention, and closed-loop robot experiments are needed to assess broader utility.
+
+\section{Conclusion}
+World-anchored replay sustains historical graph support, while spatial attention reallocates resolution toward a selected region at a measurable global cost. Separate support, replay, and graph budgets make these effects testable through controlled comparisons. The accompanying data provenance, executable outputs, and plotting scripts support reproduction of this known-pose representation study.
+
+\section*{Acknowledgments and AI Disclosure}
+OpenAI Codex assisted with manuscript text throughout, mapping and benchmark code in Sections III--IV, and figure/table scripts. Experimental values and plots derive from recorded inputs and executable outputs. The architecture drawing is a labeled schematic.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+\end{document}

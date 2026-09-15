@@ -37,7 +37,7 @@ install(TARGETS f_gng_node DESTINATION lib/${PROJECT_NAME})
 
 ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS scripts/realsense_depth_node DESTINATION lib/${PROJECT_NAME})
-install(DIRECTORY launch config rviz docs DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch config rviz docs paper DESTINATION share/${PROJECT_NAME})
 install(FILES README.md THIRD_PARTY_NOTICE.md CORE_PROVENANCE.json BASELINE_PROVENANCE.json
   DESTINATION share/${PROJECT_NAME})
 

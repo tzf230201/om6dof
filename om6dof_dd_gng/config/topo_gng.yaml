@@ -35,6 +35,10 @@ topo_gng_node:
     target_classes: ""       # attention/planning target; YOLO display and graph colors retain all classes
     label_confidence: 0.35   # per-detection score floor before it can label any node
     min_label_nodes: 3       # a box needs >=3 supporting nodes to label anything
+    semantic_cluster_inherit_enabled: true
+    semantic_cluster_inherit_max_edge_m: 0.055
+    semantic_cluster_inherit_min_neighbours: 2
+    semantic_cluster_inherit_min_confidence: 0.15
     labels_topic: "/om6dof_topo_gng/labels"
 
     # Current-body graph used only for the camera self-mask. This is distinct
@@ -94,6 +98,11 @@ reachability_graph_node:
     # every interpolated edge state. Edge 0 (fixed-base link1-link2) is omitted
     # so the known support surface does not invalidate the complete roadmap.
     target_intersection_radius: 0.05
+    pregrasp_filter_enabled: true
+    pregrasp_tool_approach_axis: [1.0, 0.0, 0.0]
+    pregrasp_min_standoff_m: 0.07
+    pregrasp_max_standoff_m: 0.13
+    pregrasp_min_alignment: 0.70
     obstacle_clearance: 0.035
     target_exclusion_radius: 0.055
     body_collision_step: 0.08
@@ -123,6 +132,7 @@ reachability_graph_node:
     start_connect_candidates: 20
     start_max_normalized_joint_distance: 0.85
     preview_joint_velocity: 0.35
+    path_shortcut_enabled: true
     planning_period_sec: 0.5
 
     node_marker_scale: 0.012

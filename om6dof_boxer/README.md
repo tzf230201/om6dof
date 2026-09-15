@@ -113,6 +113,46 @@ Outputs default to `~/ros2_ws/src/.boxer_runtime/outputs/capture_<timestamp>/`:
 Confidence acceptance is >=0.5 from the official demo default. Empty cuts and
 3D box overlaps are reported; they are not replaced with invented depth.
 
+### Optional calibrated pickup interface
+
+The automatic ONNX launch accepts `publish_pick_detections:=true` with
+`camera_calibration_file:=/absolute/path/d435_hand_eye.yaml`. This validates the
+same measured hand-eye artifact as DD-GNG, including its camera serial. The
+ordinary preview default remains `false`. `display_window:=false` permits a
+headless automatic detector.
+
+Pickup results are published as JSON in `std_msgs/String` on
+`/boxer3d/detections`, schema `om6dof.boxer3d_detections.v1`, with:
+
+- `frame_id: world`, `source_stamp_ns` from the paired RGB-D host receipt,
+  `result_stamp_ns`, `camera_serial`, `calibration_verified`, and
+  `calibration_sha256`.
+- Accepted `boxes`, each containing a snapshot-local numeric `id`, YOLO `label`,
+  Boxer `score`, `yolo_score`, `center[3]`, `size[3]`, `quaternion_xyzw[4]`, and
+  `inside_point_count`. Dimensions follow the oriented box axes, in metres.
+- An empty `boxes` array and `reason` when the current observation fails. Box IDs
+  are indices for one snapshot; they do not claim persistent object tracking.
+
+The box centre is the existing depth-anchored Boxer centre, with the original
+learned dimensions and yaw. The detector records the timestamped
+`world <- end_effector_link` transform before inference and composes the measured
+`end_effector_link <- d435_color_optical_frame` transform. It then inverts the
+snapshot's `R_local_camera` to transform its OBB into world. It never uses a
+camera pose measured after the slow inference. TF-derived gravity uses the same
+measured camera transform. No extra empirical Z offset is applied.
+
+World-frame boxes also appear on `/boxer3d/world_boxes` (`MarkerArray`). These
+optional topics provide perception only; the ONNX launch itself sends no robot
+commands. Consumers must use source timestamp freshness, not inference completion
+time, before making a motion plan. Both pickup topics use reliable,
+transient-local QoS with depth one, so a late subscriber receives the latest
+scene or its empty invalidation. YOLO prompt replies retain volatile QoS.
+
+The standalone `test/boxer_pick_dds_smoke.py --camera-calibration-file <path>`
+checks actual late-subscriber DDS delivery for both a synthetic box and a later
+empty scene on isolated ROS domain 230. It opens no camera and creates no robot
+command clients.
+
 Replay a saved snapshot without the camera (same GUI):
 
 ```bash

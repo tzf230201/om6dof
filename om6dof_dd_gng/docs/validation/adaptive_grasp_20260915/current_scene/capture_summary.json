@@ -1,0 +1,24 @@
+{
+  "directory": "/tmp/om6dof_joint_jump_capture_47yn3n_h",
+  "scope": "Read-only current planner capture, no robot actions or production mutations",
+  "baseline_binary_sha256": "b1e66adaf32da8bdcfdc07a47e4b7471b0bd199ae34182c9853d264773747ad7",
+  "runtime_params_verified": true,
+  "witnesses_sha256": "18fa82e0e8486923ffb174c74c08c751d21b4c7cb8d1f6f8427d6155351a23c0",
+  "counts": {
+    "environment": 53,
+    "graph": 1,
+    "plan": 4,
+    "diagnostics": 4,
+    "joints": 1
+  },
+  "complete": true,
+  "plan_reason": "grasp_approach_unavailable:pregrasp_bridge_joint_jump",
+  "publisher_counts": {
+    "environment_graph_topic": 1,
+    "joint_state_topic": 1
+  },
+  "stamp_offsets_s": {
+    "environment": -0.0105743408203125,
+    "joints": 0.8886301517486572
+  }
+}

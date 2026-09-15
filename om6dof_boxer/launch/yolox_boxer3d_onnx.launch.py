@@ -23,6 +23,9 @@ def generate_launch_description():
         '--boxer-min-score',LaunchConfiguration('boxer_min_score'),'--max-boxes',LaunchConfiguration('max_boxes'),
         '--threads',LaunchConfiguration('onnx_threads'),'--gravity-source',LaunchConfiguration('gravity_source'),
         '--rgb-topic',rgb_topic,'--detections-topic',detections_topic,
+        '--publish-pick-detections',LaunchConfiguration('publish_pick_detections'),
+        '--camera-calibration-file',LaunchConfiguration('camera_calibration_file'),
+        '--display-window',LaunchConfiguration('display_window'),
         '--output-dir',LaunchConfiguration('output_dir')],output='both')
     description=Path(get_package_share_directory('om6dof_description'))/'urdf/om6dof_v2.urdf.xacro'
     return LaunchDescription([
@@ -35,6 +38,9 @@ def generate_launch_description():
         DeclareLaunchArgument('max_boxes',default_value='3'),
         DeclareLaunchArgument('onnx_threads',default_value='8'),
         DeclareLaunchArgument('gravity_source',default_value='auto',choices=['auto','imu','tf']),
+        DeclareLaunchArgument('publish_pick_detections',default_value='false',choices=['true','false']),
+        DeclareLaunchArgument('camera_calibration_file',default_value=''),
+        DeclareLaunchArgument('display_window',default_value='true',choices=['true','false']),
         DeclareLaunchArgument('output_dir',default_value=str(runtime/'outputs')),
         DeclareLaunchArgument('launch_rviz',default_value='true',choices=['true','false']),
         DeclareLaunchArgument('publish_robot_state',default_value='true',choices=['true','false']),
