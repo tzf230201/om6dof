@@ -1,0 +1,37 @@
+# ATC-DT for Intel RealSense D435.
+# The official D435 operating range is about 0.30--3.0 m. V_thr is metric.
+/om6dof_f_gng/realsense_depth:
+  ros__parameters:
+    fps: 15
+    stride: 4
+    min_depth: 0.30
+    max_depth: 3.00
+    serial: ""
+    camera_frame: d435_depth_optical_frame
+    depth_filter: supported
+
+/om6dof_f_gng/atc_dt:
+  ros__parameters:
+    algorithm: atcdt
+    world_frame: world
+    camera_frame: d435_depth_optical_frame
+    min_depth: 0.30
+    max_depth: 3.00
+    memory_mode: current
+    max_nodes: 1000
+    input_budget: 4000
+    replay_budget: 4000
+    memory_capacity: 3
+    epochs_per_frame: 1
+    voxel_size: 0.01
+    edge_support_radius: 0.0
+    # ATC-DT V_thr: direct node spacing in metres (1 cm).
+    atc_vigilance: 0.01
+    # Random samples from the current cloud per frame. This is the principal
+    # real-time budget for the online ATC-DT update.
+    atc_updates: 750
+    atc_max_slope_deg: 30.0
+    atc_normal_similarity_deg: 20.0
+    tf_timeout: 0.5
+    max_pose_age: 0.5
+    require_joint_states: true

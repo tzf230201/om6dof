@@ -1,5 +1,7 @@
 # Native DD-GNG learns only after depth has been converted to XYZ in world.
-# Shared world-memory sampling is supplied by this package, not the native core.
+# Shared world-memory sampling is supplied by this package. The paper's
+# dynamic-density sampling uses the validated focus field as its current
+# suspected-region source; a semantic obstacle detector can replace it later.
 # Surface-support filtering defaults to disabled so RViz displays the native graph.
 # All lengths are metres; no world axis is mirrored.
 /om6dof_f_gng/realsense_depth:
@@ -19,7 +21,10 @@
     camera_frame: d435_depth_optical_frame
     min_depth: 0.15
     max_depth: 3.0
-    max_nodes: 768
+    # Saputra et al., IROS 2019, Table I: lambda=300, kappa=10,
+    # eta1=0.08, eta2=0.008, g_max=100, alpha=0.5, beta=chi=0.005,
+    # mu=0.5 and k=1000. lambda is dd_updates.
+    max_nodes: 100
     memory_mode: world
     memory_capacity: 16000
     replay_budget: 4000
@@ -27,7 +32,15 @@
     voxel_size: 0.01
     edge_support_radius: 0.0
     epochs_per_frame: 1
-    dd_updates: 500
+    dd_updates: 300
+    ddgng_kappa: 10
+    ddgng_eta1: 0.08
+    ddgng_eta2: 0.008
+    ddgng_alpha: 0.5
+    ddgng_beta: 0.005
+    ddgng_chi: 0.005
+    ddgng_mu: 0.5
+    ddgng_k: 1000.0
     tf_timeout: 0.5
     max_pose_age: 0.5
     require_joint_states: true

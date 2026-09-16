@@ -66,7 +66,7 @@ def test_default_profile_resolves_to_native_world_graph(monkeypatch, stem, algor
     assert params["world_frame"] == "world"
     assert params["camera_frame"] == "d435_depth_optical_frame"
     assert params["memory_mode"] == "world"
-    assert params["max_nodes"] == 768
+    assert params["max_nodes"] == (100 if algorithm == "ddgng" else 768)
     assert params["memory_capacity"] == 16000
     assert params["input_budget"] == 12000
     assert params["replay_budget"] == 4000
@@ -78,7 +78,10 @@ def test_default_profile_resolves_to_native_world_graph(monkeypatch, stem, algor
         params["min_depth"], params["max_depth"])
     assert camera["stride"] == 2
     if algorithm == "ddgng":
-        assert params["dd_updates"] == 500
+        assert params["dd_updates"] == 300
+        assert (params["ddgng_kappa"], params["ddgng_eta1"], params["ddgng_eta2"],
+                params["ddgng_alpha"], params["ddgng_beta"], params["ddgng_chi"],
+                params["ddgng_mu"], params["ddgng_k"]) == (10, .08, .008, .5, .005, .005, .5, 1000.0)
     else:
         assert params["dbl_edge_cut_period_frames"] == 10
 

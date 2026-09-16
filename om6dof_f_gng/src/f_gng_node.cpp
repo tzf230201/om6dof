@@ -83,10 +83,25 @@ public:
     algorithm_ = fixed_parameter<std::string>("algorithm", "fgng");
     memory_mode_ = fixed_parameter<std::string>("memory_mode", "world");
     dd_updates_ = bounded_integer("dd_updates", 500, 1, 100000);
+    ddgng_max_edge_age_ = bounded_integer("ddgng_kappa", 10, 1, 10000);
+    ddgng_winner_rate_ = fixed_parameter<double>("ddgng_eta1", 0.08);
+    ddgng_neighbor_rate_ = fixed_parameter<double>("ddgng_eta2", 0.008);
+    ddgng_alpha_ = fixed_parameter<double>("ddgng_alpha", 0.5);
+    ddgng_beta_ = fixed_parameter<double>("ddgng_beta", 0.005);
+    ddgng_chi_ = fixed_parameter<double>("ddgng_chi", 0.005);
+    ddgng_mu_ = fixed_parameter<double>("ddgng_mu", 0.5);
+    ddgng_utility_k_ = fixed_parameter<double>("ddgng_k", 1000.0);
     dbl_edge_cut_period_frames_ = bounded_integer("dbl_edge_cut_period_frames", 10, 1, 10000);
+    atc_vigilance_ = fixed_parameter<double>("atc_vigilance", 0.025);
+    atc_max_slope_deg_ = fixed_parameter<double>("atc_max_slope_deg", 30.0);
+    atc_normal_similarity_deg_ = fixed_parameter<double>("atc_normal_similarity_deg", 20.0);
+    atc_updates_ = bounded_integer("atc_updates", 750, 3, 1000000);
     config_.focus.minDepth = fixed_parameter<double>("min_depth", 0.15);
     config_.focus.maxDepth = fixed_parameter<double>("max_depth", 3.0);
-    config_.graph.maxNodes = bounded_integer("max_nodes", 768, 2, 4096);
+    // ATC-DT uses a lightweight sparse graph core and can retain more nodes
+    // than the dense F-GNG allocation guard.
+    config_.graph.maxNodes = bounded_integer("max_nodes", 768, 2,
+                                             algorithm_ == "atcdt" ? 100000 : 4096);
     config_.memoryCapacity = bounded_integer("memory_capacity", 16000, 3, 1000000);
     config_.replayBudget = bounded_integer("replay_budget", 4000, 3, 1000000);
     config_.inputBudget = bounded_integer("input_budget", 12000, 3, 1000000);
@@ -203,7 +218,22 @@ private:
     options.algorithm = algorithm_;
     options.memoryMode = memory_mode_;
     options.ddUpdates = dd_updates_;
+    options.ddgng.maxNodes = config_.graph.maxNodes;
+    options.ddgng.maxEdgeAge = ddgng_max_edge_age_;
+    options.ddgng.winnerRate = static_cast<float>(ddgng_winner_rate_);
+    options.ddgng.neighborRate = static_cast<float>(ddgng_neighbor_rate_);
+    options.ddgng.alpha = static_cast<float>(ddgng_alpha_);
+    options.ddgng.beta = static_cast<float>(ddgng_beta_);
+    options.ddgng.chi = static_cast<float>(ddgng_chi_);
+    options.ddgng.mu = static_cast<float>(ddgng_mu_);
+    options.ddgng.utilityK = static_cast<float>(ddgng_utility_k_);
     options.dblEdgeCutPeriodFrames = dbl_edge_cut_period_frames_;
+    constexpr double pi = 3.14159265358979323846;
+    options.atcdt.vigilance = static_cast<float>(atc_vigilance_);
+    options.atcdt.maxSlopeRadians = static_cast<float>(atc_max_slope_deg_ * pi / 180.0);
+    options.atcdt.normalSimilarityRadians = static_cast<float>(atc_normal_similarity_deg_ * pi / 180.0);
+    options.atcdt.maxNodes = static_cast<size_t>(config_.graph.maxNodes);
+    options.atcUpdates = static_cast<size_t>(atc_updates_);
     return std::make_unique<comparison::Mapper>(options);
   }
 
@@ -462,6 +492,23 @@ private:
     }
     MarkerArray result;
     result.markers.push_back(std::move(edges)); result.markers.push_back(std::move(nodes));
+    if (algorithm_ == "ddgng") {
+      auto normals = marker(header, "surface_normals", 0, Marker::LINE_LIST);
+      normals.scale.x = 0.0015;
+      normals.color = color(0.95F, 0.95F, 0.30F, 0.85F);
+      const auto &vectors = mapper_->nodeNormals();
+      const size_t count = std::min(graph.nodes.size(), vectors.size());
+      for (size_t index = 0; index < count; ++index) {
+        const auto &normal = vectors[index];
+        const float length = std::sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+        if (length < 1e-6F) continue;
+        normals.points.push_back(point_message(graph.nodes[index]));
+        normals.points.push_back(point_message({graph.nodes[index].x + .04F * normal.x,
+                                                graph.nodes[index].y + .04F * normal.y,
+                                                graph.nodes[index].z + .04F * normal.z}));
+      }
+      result.markers.push_back(std::move(normals));
+    }
     graph_publisher_->publish(std::move(result));
   }
 
@@ -551,7 +598,16 @@ private:
           "depth backprojection, acquisition-time TF, current frame sampling; graph state persists");
     value("attention_enabled", mapper_->attentionEnabled());
     value("dd_updates", dd_updates_);
+    value("ddgng_profile", algorithm_ == "ddgng" ? "IROS2019_TableI" : "not_applicable");
+    value("ddgng_kappa", ddgng_max_edge_age_); value("ddgng_eta1", ddgng_winner_rate_);
+    value("ddgng_eta2", ddgng_neighbor_rate_); value("ddgng_alpha", ddgng_alpha_);
+    value("ddgng_beta", ddgng_beta_); value("ddgng_chi", ddgng_chi_);
+    value("ddgng_mu", ddgng_mu_); value("ddgng_k", ddgng_utility_k_);
     value("dd_updates_applied", algorithm_ == "ddgng");
+    value("atc_vigilance_m", atc_vigilance_);
+    value("atc_updates", atc_updates_);
+    value("atc_max_slope_deg", atc_max_slope_deg_);
+    value("atc_normal_similarity_deg", atc_normal_similarity_deg_);
     value("dbl_edge_cut_period_frames", dbl_edge_cut_period_frames_);
     value("epochs_per_frame", config_.epochsPerFrame);
     value("node_id_semantics", algorithm_ == "dblgng" ? "snapshot indices" : "persistent native IDs");
@@ -585,7 +641,13 @@ private:
   double tf_timeout_ = 0.5, max_pose_age_ = 0.5;
   bool require_joint_states_ = true;
   std::string algorithm_, memory_mode_;
-  int dd_updates_ = 500, dbl_edge_cut_period_frames_ = 10;
+  int dd_updates_ = 500, ddgng_max_edge_age_ = 10, dbl_edge_cut_period_frames_ = 10;
+  double ddgng_winner_rate_ = 0.08, ddgng_neighbor_rate_ = 0.008,
+         ddgng_alpha_ = 0.5, ddgng_beta_ = 0.005, ddgng_chi_ = 0.005,
+         ddgng_mu_ = 0.5, ddgng_utility_k_ = 1000.0;
+  double atc_vigilance_ = 0.025, atc_max_slope_deg_ = 30.0,
+         atc_normal_similarity_deg_ = 20.0;
+  int atc_updates_ = 750;
   bio_fgng::MapperConfig config_;
   bio_fgng::FocusControl control_;
   std::unique_ptr<comparison::Mapper> mapper_;

@@ -1,0 +1,39 @@
+# ATC-DT for Intel RealSense D405 close-range mapping.
+# D405's specified operating band is 0.07--0.50 m. V_thr is deliberately in
+# metres: 0.025 m is a conservative starting node spacing for that 0.43 m band
+# (rather than copying the paper's metre-scale simulated-terrain threshold).
+/om6dof_f_gng/realsense_depth:
+  ros__parameters:
+    fps: 30
+    stride: 4
+    min_depth: 0.07
+    max_depth: 0.50
+    serial: ""
+    camera_frame: d405_depth_optical_frame
+    depth_filter: supported
+
+/om6dof_f_gng/atc_dt:
+  ros__parameters:
+    algorithm: atcdt
+    world_frame: world
+    camera_frame: d405_depth_optical_frame
+    min_depth: 0.07
+    max_depth: 0.50
+    # ATC-DT uses only the current measured cloud; stability comes from the
+    # winner-count decay in Eq. (4)--(5), not replaying historic raw points.
+    memory_mode: current
+    max_nodes: 2048
+    input_budget: 16000
+    replay_budget: 16000
+    memory_capacity: 3
+    epochs_per_frame: 1
+    voxel_size: 0.0025
+    edge_support_radius: 0.0
+    # Toda & Masuyama (2024): V_thr is the direct metric node-spacing control.
+    # 2.5 cm is the D405-specific default; tune upward for a coarser map.
+    atc_vigilance: 0.025
+    atc_max_slope_deg: 30.0
+    atc_normal_similarity_deg: 20.0
+    tf_timeout: 0.5
+    max_pose_age: 0.5
+    require_joint_states: true

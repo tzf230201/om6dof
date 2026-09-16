@@ -4,8 +4,10 @@
 // Depth is converted into metric world XYZ before either baseline learns.
 // See BASELINE_PROVENANCE.json for exact sources and algorithm limitations.
 #include "bio_mapper.hpp"
+#include "atcdt_core.hpp"
 #include "ddgng_core.hpp"
 
+#include <array>
 #include <numeric>
 
 namespace comparison {
@@ -15,7 +17,11 @@ struct Config {
     std::string algorithm="fgng";
     std::string memoryMode="world"; // "current" is available for baselines only.
     int ddUpdates=500;              // Stochastic updates per epoch, native default.
+    DDGNGConfig ddgng;              // IROS 2019 Table I profile by default.
+    bool ddgngDynamicDensity=true;
     int dblEdgeCutPeriodFrames=10;  // Valid depth frames per accumulated-strength cut.
+    atcdt::Config atcdt;            // Toda & Masuyama (2024), Sec. IV.
+    size_t atcUpdates=750;          // Random current-cloud samples per depth frame.
 };
 
 inline dblgng::Config dblConfig(const fgng::Config& source) {
@@ -43,8 +49,10 @@ public:
             memory_=std::make_unique<world_fgng::VoxelMemory>(
                 config_.mapping.voxelSize,config_.mapping.memoryCapacity,
                 config_.mapping.graph.seed);
-        if (config_.algorithm=="ddgng")
-            dd_=std::make_unique<DynamicGrowingNeuralGas>(config_.mapping.graph.maxNodes);
+        if (config_.algorithm=="atcdt")
+            atc_=std::make_unique<atcdt::Mapper>(config_.atcdt);
+        else if (config_.algorithm=="ddgng")
+            dd_=std::make_unique<DynamicGrowingNeuralGas>(config_.ddgng);
         else
             dbl_=std::make_unique<dblgng::DistributedBatchLearningGNG>(
                 dblConfig(config_.mapping.graph));
@@ -90,7 +98,15 @@ public:
         // Do not learn history alone when no current observation is available.
         if (!incoming.empty()) {
             const auto current=boundedCurrent(incoming,cfg.replayBudget);
-            for (int epoch=0;epoch<cfg.epochsPerFrame;++epoch) {
+            if (atc_) {
+                // ATC-DT paper learns only the current measured point-cloud set;
+                // its decaying winner count preserves prior topology. Limit the
+                // stochastic samples separately from the generic replay budget:
+                // processing every image pixel makes online ATC-DT intractable.
+                const auto atcCurrent=boundedCurrent(incoming,config_.atcUpdates);
+                atc_->learn(atcCurrent);
+                stats.replayPoints=atcCurrent.size();
+            } else for (int epoch=0;epoch<cfg.epochsPerFrame;++epoch) {
                 const auto batch=memory_ ? memory_->replay(cfg.replayBudget,replayEpoch_++) : current;
                 stats.replayPoints=batch.size();
                 learn(batch);
@@ -103,7 +119,9 @@ public:
                     dbl_->cutWeakEdges();
             }
             copyRawGraph();
+            if (dd_) analyzeSurface(rawGraph_);
             refreshSurfaceGraph(memory_ ? memory_->representatives() : incoming);
+            if (dd_) ++ddFrames_;
         }
         stats.memoryPoints=memory_ ? memory_->size() : 0;
         stats.evictions=memory_ ? memory_->evictions() : 0;
@@ -123,37 +141,48 @@ public:
     // For F-GNG this method returns the same exported graph as graph().
     world_fgng::Graph rawGraph() const { return fg_ ? fg_->graph() : rawGraph_; }
     const bio_fgng::FocusField& focus() const { return fg_ ? fg_->focus() : *focus_; }
+    const std::vector<world_fgng::Point>& nodeNormals() const {
+        return atc_ ? atcNormals_ : nodeNormals_;
+    }
     bool attentionEnabled() const { return config_.algorithm=="fgng"; }
     const Config& config() const { return config_; }
 
 private:
     static Config validated(Config config) {
-        if (config.algorithm!="fgng" && config.algorithm!="ddgng" && config.algorithm!="dblgng")
-            throw std::invalid_argument("algorithm must be fgng, ddgng or dblgng");
+        if (config.algorithm!="fgng" && config.algorithm!="ddgng" && config.algorithm!="dblgng" && config.algorithm!="atcdt")
+            throw std::invalid_argument("algorithm must be fgng, ddgng, dblgng or atcdt");
         if (config.memoryMode!="world" && config.memoryMode!="current")
             throw std::invalid_argument("memory_mode must be world or current");
         if (config.algorithm=="fgng" && config.memoryMode!="world")
             throw std::invalid_argument("F-GNG requires memory_mode world; current is baseline-only");
+        if (config.algorithm=="atcdt" && config.memoryMode!="current")
+            throw std::invalid_argument("ATC-DT paper uses only the current measurement set; set memory_mode current");
         if (config.ddUpdates<1 || config.ddUpdates>100000)
             throw std::invalid_argument("dd_updates must be in [1,100000]");
+        if (config.algorithm=="ddgng" && config.ddgng.maxNodes!=config.mapping.graph.maxNodes)
+            throw std::invalid_argument("max_nodes must equal ddgng_g_max for DD-GNG");
         if (config.dblEdgeCutPeriodFrames<1 || config.dblEdgeCutPeriodFrames>10000)
             throw std::invalid_argument("dbl_edge_cut_period_frames must be in [1,10000]");
+        if (config.atcUpdates<3 || config.atcUpdates>1000000)
+            throw std::invalid_argument("atc_updates must be in [3,1000000]");
         const auto& c=config.mapping;
         if (c.inputBudget<3 || c.inputBudget>4000000 || c.memoryCapacity>4000000 ||
             c.replayBudget>4000000 || c.epochsPerFrame>100)
             throw std::invalid_argument("unsupported input/memory/replay budget or epochs");
         if (!std::isfinite(c.edgeSupportRadius) || c.edgeSupportRadius<0)
             throw std::invalid_argument("edge support radius must be finite and nonnegative");
-        world_fgng::Config base;
-        // Reuse the complete graph/budget validation without constructing a
-        // dense graph: the FPS branch allocates no native core matrix.
-        base.mode=world_fgng::Mode::MemoryFps;
-        base.graph=c.graph;
-        base.memoryCapacity=c.memoryCapacity;
-        base.replayBudget=c.replayBudget;
-        base.voxelSize=c.voxelSize;
-        base.epochsPerFrame=c.epochsPerFrame;
-        const world_fgng::WorldFoveatedGNG validateGraph(base);
+        if (config.algorithm!="atcdt") {
+            world_fgng::Config base;
+            // Reuse the complete graph/budget validation without constructing a
+            // dense graph: the FPS branch allocates no native core matrix.
+            base.mode=world_fgng::Mode::MemoryFps;
+            base.graph=c.graph;
+            base.memoryCapacity=c.memoryCapacity;
+            base.replayBudget=c.replayBudget;
+            base.voxelSize=c.voxelSize;
+            base.epochsPerFrame=c.epochsPerFrame;
+            const world_fgng::WorldFoveatedGNG validateGraph(base);
+        }
         c.focus.validate();
         return config;
     }
@@ -170,10 +199,18 @@ private:
     void learn(const std::vector<world_fgng::Point>& batch) {
         if (dd_) {
             std::vector<GngPoint3f> points;
+            std::vector<float> attention;
             points.reserve(batch.size());
-            for (const auto& p:batch) points.push_back({p.x,p.y,p.z});
-            dd_->partialFit(points,config_.ddUpdates);
-        } else {
+            attention.reserve(batch.size());
+            for (const auto& p:batch) {
+                points.push_back({p.x,p.y,p.z});
+                // Algorithm 1 of the paper alternates uniform sampling and
+                // sampling inside the previously segmented suspected regions.
+                attention.push_back(suspectedWeight(p));
+            }
+            dd_->partialFit(points,config_.ddUpdates,
+                            config_.ddgngDynamicDensity ? attention : std::vector<float>{});
+        } else if (dbl_) {
             std::vector<dblgng::Point3f> points;
             points.reserve(batch.size());
             for (const auto& p:batch) points.push_back({p.x,p.y,p.z});
@@ -181,10 +218,65 @@ private:
         }
     }
 
+    static world_fgng::Point subtract(const world_fgng::Point& a,const world_fgng::Point& b) {
+        return {a.x-b.x,a.y-b.y,a.z-b.z};
+    }
+    static world_fgng::Point cross(const world_fgng::Point& a,const world_fgng::Point& b) {
+        return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};
+    }
+    static float norm(const world_fgng::Point& p) {
+        return std::sqrt(p.x*p.x+p.y*p.y+p.z*p.z);
+    }
+    static world_fgng::Point normalized(const world_fgng::Point& p) {
+        const float n=norm(p); return n>1e-6F ? world_fgng::Point{p.x/n,p.y/n,p.z/n} : world_fgng::Point{};
+    }
+
+    // Paper stage: graph triangles -> surface normals -> nonhomogeneous nodes.
+    // Regions persist only as the sampling cue for the following depth frame.
+    void analyzeSurface(const world_fgng::Graph& graph) {
+        nodeNormals_.assign(graph.nodes.size(),{});
+        std::vector<std::vector<bool>> edge(graph.nodes.size(),std::vector<bool>(graph.nodes.size()));
+        for (const auto& [a,b]:graph.edges) if (a<edge.size() && b<edge.size()) edge[a][b]=edge[b][a]=true;
+        std::vector<unsigned> counts(graph.nodes.size());
+        for (size_t a=0;a<graph.nodes.size();++a) for (size_t b=a+1;b<graph.nodes.size();++b) {
+            if (!edge[a][b]) continue;
+            for (size_t c=b+1;c<graph.nodes.size();++c) if (edge[a][c] && edge[b][c]) {
+                const auto n=normalized(cross(subtract(graph.nodes[b],graph.nodes[a]),
+                                              subtract(graph.nodes[c],graph.nodes[a])));
+                if (norm(n)==0) continue;
+                for (const auto i:{a,b,c}) { nodeNormals_[i].x+=n.x; nodeNormals_[i].y+=n.y; nodeNormals_[i].z+=n.z; ++counts[i]; }
+            }
+        }
+        for (auto& n:nodeNormals_) n=normalized(n);
+        suspected_.clear();
+        const float cosine=std::cos(config_.ddgng.mu);
+        for (size_t a=0;a<graph.nodes.size();++a) {
+            if (counts[a]==0 || norm(nodeNormals_[a])==0) continue;
+            float radius=0.03F; bool nonhomogeneous=false;
+            for (size_t b=0;b<graph.nodes.size();++b) if (edge[a][b] && norm(nodeNormals_[b])>0) {
+                const float dot=std::abs(nodeNormals_[a].x*nodeNormals_[b].x+
+                                         nodeNormals_[a].y*nodeNormals_[b].y+
+                                         nodeNormals_[a].z*nodeNormals_[b].z);
+                if (dot<cosine) nonhomogeneous=true;
+                radius=std::max(radius,norm(subtract(graph.nodes[a],graph.nodes[b])));
+            }
+            if (nonhomogeneous) suspected_.push_back({graph.nodes[a],radius});
+        }
+    }
+
+    float suspectedWeight(const world_fgng::Point& p) const {
+        if (!config_.ddgngDynamicDensity || ddFrames_%2!=0 || suspected_.empty()) return 0.0F;
+        for (const auto& region:suspected_) if (norm(subtract(p,region.center))<=region.radius) return 1.0F;
+        return 0.0F;
+    }
+
     void copyRawGraph() {
         rawGraph_.nodes.clear();
         rawGraph_.ids.clear();
-        if (dd_) {
+        if (atc_) {
+            rawGraph_=atc_->positionGraph();
+            atcNormals_=atc_->normals();
+        } else if (dd_) {
             std::vector<GngPoint3f> points;
             std::vector<uint32_t> ids;
             dd_->copyGraph(points,ids,rawGraph_.edges);
@@ -227,11 +319,17 @@ private:
     std::unique_ptr<world_fgng::VoxelMemory> memory_;
     std::unique_ptr<DynamicGrowingNeuralGas> dd_;
     std::unique_ptr<dblgng::DistributedBatchLearningGNG> dbl_;
+    std::unique_ptr<atcdt::Mapper> atc_;
     world_fgng::Graph rawGraph_,surfaceGraph_;
     size_t rejectedUnsupportedEdges_=0;
     uint64_t replayEpoch_=0;
     uint64_t dblFrames_=0;
     bool dblReachedCapacity_=false;
+    struct SuspectedRegion { world_fgng::Point center; float radius; };
+    std::vector<world_fgng::Point> nodeNormals_;
+    std::vector<world_fgng::Point> atcNormals_;
+    std::vector<SuspectedRegion> suspected_;
+    uint64_t ddFrames_=0;
 };
 
 } // namespace comparison

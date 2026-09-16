@@ -13,16 +13,32 @@ struct GngPoint3f {
     float z = 0.0F;
 };
 
+// Table I of Saputra et al., IROS 2019.  lambda is supplied as the number of
+// samples to partialFit(); the remaining values are stored here so that the
+// ROS profile and the learning rule cannot silently diverge.
+struct DDGNGConfig {
+    int maxNodes = 100;       // g_max
+    int maxEdgeAge = 10;      // kappa
+    float winnerRate = 0.08F; // eta_1
+    float neighborRate = 0.008F; // eta_2
+    float alpha = 0.5F;
+    float beta = 0.005F;
+    float chi = 0.005F;
+    float mu = 0.5F;
+    float utilityK = 1000.0F; // k
+};
+
 // Dynamic Growing Neural Gas core used by the optional DD-GNG + YOLO mode.
 // Node degrees are tracked explicitly so isolated-node removal does not scan
 // the complete adjacency matrix for every online update.
 class DynamicGrowingNeuralGas {
 public:
-    explicit DynamicGrowingNeuralGas(int maxNodes)
-        : capacity_(maxNodes), nodes_(maxNodes), nodeIds_(maxNodes), errors_(maxNodes),
-          utility_(maxNodes), degrees_(maxNodes),
-          ages_(static_cast<size_t>(maxNodes) * maxNodes, kNoEdge), rng_(7) {
-        neighbors_.reserve(maxNodes);
+    explicit DynamicGrowingNeuralGas(int maxNodes) : DynamicGrowingNeuralGas(DDGNGConfig{.maxNodes=maxNodes}) {}
+    explicit DynamicGrowingNeuralGas(DDGNGConfig config = {})
+        : config_(validated(config)), capacity_(config_.maxNodes), nodes_(capacity_), nodeIds_(capacity_), errors_(capacity_),
+          utility_(capacity_), strength_(capacity_, 1.0F), degrees_(capacity_),
+          ages_(static_cast<size_t>(capacity_) * capacity_, kNoEdge), rng_(7) {
+        neighbors_.reserve(capacity_);
     }
 
     void reset() {
@@ -33,18 +49,29 @@ public:
         std::fill(nodeIds_.begin(), nodeIds_.end(), 0);
         std::fill(errors_.begin(), errors_.end(), 0.0F);
         std::fill(utility_.begin(), utility_.end(), 0.0F);
+        std::fill(strength_.begin(), strength_.end(), 1.0F);
         std::fill(degrees_.begin(), degrees_.end(), 0);
         std::fill(ages_.begin(), ages_.end(), kNoEdge);
     }
 
-    void partialFit(const std::vector<GngPoint3f>& points, int updates) {
+    void partialFit(const std::vector<GngPoint3f>& points, int updates,
+                    const std::vector<float>& attention = {}) {
         if (points.size() < 2 || updates <= 0) return;
+        if (!attention.empty() && attention.size()!=points.size())
+            throw std::invalid_argument("DD-GNG attention weights must match points");
         if (count_ < 2) initialize(points);
         if (count_ < 2) return;
 
-        std::uniform_int_distribution<size_t> pick(0, points.size() - 1);
+        std::uniform_int_distribution<size_t> uniformPick(0, points.size() - 1);
+        std::vector<double> density;
+        if (!attention.empty()) {
+            density.reserve(attention.size());
+            for (const float a:attention)
+                density.push_back(config_.mu+(1.0-config_.mu)*std::max(0.0F,a));
+        }
+        std::discrete_distribution<size_t> focusedPick(density.begin(),density.end());
         for (int update = 0; update < updates; ++update) {
-            const GngPoint3f point = points[pick(rng_)];
+            const GngPoint3f point = points[attention.empty() ? uniformPick(rng_) : focusedPick(rng_)];
             int winner = -1;
             int second = -1;
             float best = std::numeric_limits<float>::max();
@@ -80,14 +107,14 @@ public:
 
             errors_[winner] += best;
             utility_[winner] += next - best;
-            moveToward(nodes_[winner], point, 0.08F);
+            moveToward(nodes_[winner], point, config_.winnerRate);
             for (const int neighbor : neighbors_)
-                moveToward(nodes_[neighbor], point, 0.0008F);
+                moveToward(nodes_[neighbor], point, config_.neighborRate);
             setEdge(winner, second, 0);
 
             bool removedEdge = false;
             for (int i = 0; i < count_; ++i) {
-                if (ages_[row + i] > 50) {
+                if (ages_[row + i] > config_.maxEdgeAge) {
                     setEdge(winner, i, kNoEdge);
                     removedEdge = true;
                 }
@@ -95,8 +122,8 @@ public:
             if (removedEdge) removeIsolated();
 
             for (int i = 0; i < count_; ++i) {
-                errors_[i] *= 0.9995F;
-                utility_[i] *= 0.9995F;
+                errors_[i] *= 1.0F-config_.beta;
+                utility_[i] *= 1.0F-config_.chi;
             }
             ++totalUpdates_;
             if (totalUpdates_ % 100 == 0) insertNode();
@@ -119,6 +146,18 @@ public:
     }
 
 private:
+    static DDGNGConfig validated(DDGNGConfig c) {
+        if (c.maxNodes < 2 || c.maxNodes > 4096 || c.maxEdgeAge < 1 ||
+            !std::isfinite(c.winnerRate) || !std::isfinite(c.neighborRate) ||
+            !std::isfinite(c.alpha) || !std::isfinite(c.beta) || !std::isfinite(c.chi) ||
+            !std::isfinite(c.mu) || !std::isfinite(c.utilityK) ||
+            c.winnerRate <= 0 || c.neighborRate <= 0 || c.alpha <= 0 || c.alpha >= 1 ||
+            c.beta < 0 || c.beta >= 1 || c.chi < 0 || c.chi >= 1 ||
+            c.mu < 0 || c.mu > 1 || c.utilityK <= 0)
+            throw std::invalid_argument("invalid DD-GNG paper parameters");
+        return c;
+    }
+
     static constexpr int16_t kNoEdge = -1;
 
     static void moveToward(GngPoint3f& node, const GngPoint3f& point,
@@ -179,6 +218,7 @@ private:
             nodeIds_[index] = nodeIds_[last];
             errors_[index] = errors_[last];
             utility_[index] = utility_[last];
+            strength_[index] = strength_[last];
             for (int k = 0; k < last; ++k) {
                 const int16_t moved = edge(last, k);
                 setEdge(index, k, moved);
@@ -187,6 +227,7 @@ private:
         }
         for (int k = 0; k < count_; ++k) setEdge(last, k, kNoEdge);
         errors_[last] = utility_[last] = 0.0F;
+        strength_[last] = 1.0F;
         nodeIds_[last] = 0;
         --count_;
         recomputeDegrees();
@@ -204,9 +245,11 @@ private:
     void insertNode() {
         if (count_ < 2) return;
         if (count_ >= capacity_) {
-            const int weakest = static_cast<int>(
-                std::min_element(utility_.begin(), utility_.begin() + count_) -
-                utility_.begin());
+            const int weakest = static_cast<int>(std::min_element(utility_.begin(), utility_.begin() + count_) - utility_.begin());
+            const float largestError=*std::max_element(errors_.begin(),errors_.begin()+count_);
+            // GNG-U retention from the DD-GNG paper: only replace a weak node
+            // when its utility is insufficient relative to its local strength.
+            if (largestError <= config_.utilityK*strength_[weakest]*std::max(utility_[weakest],1e-12F)) return;
             removeNode(weakest);
             removeIsolated();
         }
@@ -224,16 +267,18 @@ private:
                      (nodes_[q].y + nodes_[f].y) * 0.5F,
                      (nodes_[q].z + nodes_[f].z) * 0.5F};
         nodeIds_[r] = nextNodeId_++;
-        errors_[q] *= 0.5F;
-        errors_[f] *= 0.5F;
+        errors_[q] *= config_.alpha;
+        errors_[f] *= config_.alpha;
         errors_[r] = errors_[q];
         utility_[r] = (utility_[q] + utility_[f]) * 0.5F;
+        strength_[r] = (strength_[q] + strength_[f]) * 0.5F;
         degrees_[r] = 0;
         setEdge(q, f, kNoEdge);
         setEdge(q, r, 0);
         setEdge(f, r, 0);
     }
 
+    DDGNGConfig config_;
     int capacity_;
     int count_ = 0;
     uint64_t totalUpdates_ = 0;
@@ -242,6 +287,7 @@ private:
     std::vector<uint32_t> nodeIds_;
     std::vector<float> errors_;
     std::vector<float> utility_;
+    std::vector<float> strength_;
     std::vector<int> degrees_;
     std::vector<int16_t> ages_;
     std::vector<int> neighbors_;

@@ -55,7 +55,7 @@ source ~/ros2_ws/install/setup.bash
 # F-GNG: perhatian berdasarkan arah pandangan dan jarak fokus
 ros2 launch om6dof_f_gng f_gng.launch.py
 
-# DD-GNG: graf oranye, tanpa foviasi
+# DD-GNG: graf oranye, profil dynamic-density paper IROS 2019
 ros2 launch om6dof_f_gng dd_gng.launch.py
 
 # DBL-GNG: graf ungu, tanpa foviasi
@@ -75,9 +75,12 @@ menampilkan frustum kamera dan tidak menyediakan alat Publish Point untuk fokus.
 | `dd_gng.launch.py` | `native_depth_yolo/src/ddgng.hpp`, dipakai oleh `native_ddgng` | `/om6dof_f_gng/dd_gng` |
 | `dbl_gng.launch.py` | `native_dblgng/include/dblgng_core.hpp` | `/om6dof_f_gng/dbl_gng` |
 
-Profil ketiganya menggunakan depth 0,15–3 m, 320×240 setelah subsampling,
-maksimum 768 simpul, voxel 1 cm, kapasitas memori 16.000 titik, anggaran input
-12.000 titik, dan anggaran replay 4.000 titik. Pada baseline, `memory_mode:=world`
+Profil F-GNG dan DBL-GNG menggunakan maksimum 768 simpul. DD-GNG memakai
+profil Table I IROS 2019: maksimum 100 simpul dan 300 sampel pembelajaran per
+epoch; parameter `kappa=10`, `eta1=0,08`, `eta2=0,008`, `alpha=0,5`,
+`beta=chi=0,005`, `mu=0,5`, dan `k=1000` tersedia sebagai parameter read-only
+`ddgng_*`. Ketiganya memakai voxel 1 cm, kapasitas memori 16.000 titik,
+anggaran input 12.000 titik, dan anggaran replay 4.000 titik. Pada baseline, `memory_mode:=world`
 menambahkan memori voxel dan replay di luar inti native agar observasi dari
 beberapa pose kamera tetap digunakan. Mode `memory_mode:=current` memberikan
 hanya titik frame saat ini ke algoritma; graf tetap berlanjut antar-frame.
@@ -103,8 +106,12 @@ ros2 launch om6dof_f_gng dbl_gng.launch.py \
 Filter dukungan permukaan hanya memilih edge yang diekspor ke RViz; aturan
 pembelajaran inti DD-GNG/DBL-GNG tetap berasal dari program native.
 
-DD-GNG memakai `dd_updates:=500` per epoch frame, mengikuti jumlah pembaruan
-default program `native_ddgng`; DBL-GNG memproses sampel replay per epoch sesuai
+DD-GNG memakai `dd_updates:=300` per epoch frame, sesuai `lambda` pada Table I
+paper. Setelah pembaruan graf, DD-GNG membentuk triangle dari edge, menghitung
+normal per node, dan menandai node dengan normal tetangga yang tidak homogen
+sebagai area tersangka. Frame berikutnya secara bergantian memilih sampel dari
+area ini dan dari seluruh point cloud, sesuai Algorithm 1 paper. Normal tampil
+sebagai garis kuning pada topic graph/RViz. DBL-GNG memproses sampel replay per epoch sesuai
 aturan intinya. Setelah graph pernah mencapai `max_nodes`, DBL-GNG mengakumulasi
 strength dan menjalankan edge cutting setiap `edge_cut_period_frames` frame valid
 (default 10). Pemotongan dilakukan setelah seluruh epoch frame tersebut selesai.
@@ -113,6 +120,43 @@ komputasi yang sama. Untuk benchmark, gunakan rekaman depth, intrinsik, dan TF
 yang sama serta laporkan waktu pembaruan dari topic status.
 Percobaan live berurutan hanya membantu pemeriksaan visual, bukan bukti bahwa
 salah satu algoritma lebih akurat.
+
+## ATC-DT untuk D435
+
+`atc_dt_d435.launch.py` adalah implementasi terpisah dari **ATC-DT** pada Toda
+dan Masuyama (IEEE Access 2024), bukan DD-GNG. Intinya memakai node-addition
+berbasis vigilance jarak, laju pembaruan yang turun menurut winner count,
+ambang umur edge adaptif, normal PCA dari tetangga topologi posisi, serta
+topologi traversability. Inputnya hanya cloud pada pengukuran saat ini;
+stabilitas peta global berasal dari pembaruan yang meluruh seperti paper.
+
+```bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch om6dof_f_gng atc_dt_d435.launch.py
+```
+
+Profilnya ditujukan untuk RealSense D435: `min_depth=0.30`, `max_depth=3.00`,
+dan `atc_vigilance=0.01` (meter). D435 dispesifikasikan untuk area operasi
+sekitar 0,3--3 m. Vigilance **bukan** parameter tak berdimensi: naikkan untuk
+graf lebih renggang, atau turunkan perlahan setelah memeriksa noise depth pada
+jarak kerja sebenarnya.
+
+```bash
+ros2 launch om6dof_f_gng atc_dt_d435.launch.py vigilance:=0.02
+```
+
+Normal node muncul sebagai garis kuning di RViz. `max_nodes` default adalah
+1.000. `atc_max_slope_deg` (default
+30) menentukan label traversable, dan `atc_normal_similarity_deg` (default 20)
+menentukan edge topologi normal. Konfigurasi lengkap ada di
+[`config/atc_dt_d435.yaml`](config/atc_dt_d435.yaml). Untuk memakai driver
+D435 yang sudah berjalan, gunakan `start_camera:=false` dan berikan topic serta
+`camera_frame` milik driver tersebut.
+
+Untuk menjaga respons real-time, profil D435 memproses `atc_updates=750` sampel
+acak dari cloud saat ini pada 15 FPS; bukan 16.000 titik penuh di setiap frame.
+Naikkan nilai ini hanya bila CPU masih longgar. Parameter aktual muncul sebagai
+`atc_updates` dan `update_ms` pada topic status.
 
 Argumen `start_camera`, `depth_topic`, `camera_info_topic`, `camera_frame`,
 `world_frame`, `use_rviz`, `camera_serial`, dan `params_file` berlaku juga pada
@@ -224,8 +268,10 @@ SLAM, atau sertifikat jalur bebas tabrakan. Belum ada penghapusan permukaan dina
 berdasarkan bukti ruang kosong.
 
 Inti F-GNG berasal dari `TopoVLA/native_fgng_bio` beserta komponen GNG/world
-yang digunakan oleh implementasi tersebut. Inti DD-GNG dan DBL-GNG disalin dari
-path yang tercantum pada tabel perbandingan di atas; asal dan checksum berkas
+yang digunakan oleh implementasi tersebut. Inti DBL-GNG disalin dari path yang
+tercantum pada tabel perbandingan di atas. Inti DD-GNG memakai profil parameter
+Table I serta aturan GNG-U/dynamic-density dari paper IROS 2019; snapshot TopoVLA
+tetap menjadi referensi implementasi. Asal dan checksum berkas
 tersedia pada `CORE_PROVENANCE.json`, `BASELINE_PROVENANCE.json`, dan
 `THIRD_PARTY_NOTICE.md`. Memori dunia,
 konversi depth, dan integrasi ROS/RViz merupakan pembungkus untuk inti baseline;

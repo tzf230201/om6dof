@@ -52,6 +52,8 @@ comparison::Config config(const std::string& algorithm) {
     result.algorithm=algorithm;
     result.memoryMode="current";
     result.mapping.graph.maxNodes=32;
+    result.ddgng.maxNodes=32;
+    result.ddgngDynamicDensity=false; // Direct-core equivalence fixture.
     result.mapping.graph.initialRegions=3;
     result.mapping.memoryCapacity=1200;
     result.mapping.inputBudget=1000;
@@ -113,6 +115,13 @@ void originalCoreAgreement(const std::string& algorithm) {
         check(wrapper.graph(),32);
         for (const auto& point:wrapper.graph().nodes)
             require(std::abs(point.x-3.25F)<1e-6F,"rotation or translation not applied exactly once");
+    }
+    if (algorithm=="ddgng") {
+        bool normalFound=false;
+        for (const auto& normal:wrapper.nodeNormals())
+            normalFound|=world_fgng::finite(normal) &&
+                         std::abs(normal.x)+std::abs(normal.y)+std::abs(normal.z)>1e-4F;
+        require(normalFound,"DD-GNG did not derive normals from graph triangles");
     }
     const auto before=wrapper.graph();
     auto missing=plane(2);
