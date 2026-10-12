@@ -93,6 +93,7 @@ protected:
   double ramp_seconds_{1.0};
 
   GravityModel model_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr com_parameter_guard_;
 
   std::vector<double> positions_;
   std::vector<double> velocities_;
@@ -107,7 +108,12 @@ protected:
   std::shared_ptr<rclcpp::Publisher<std_msgs::msg::Float64MultiArray>> command_publisher_;
   std::unique_ptr<TorquePublisher> realtime_command_publisher_;
   double publish_period_{0.05};
+  bool publish_every_update_{false};
   rclcpp::Time last_publish_time_;
+
+  /// At publish_rate >= controller update_rate, attempt one nonblocking
+  /// publication per update; do not lose cycles to a wall-time threshold.
+  bool publicationDue(const rclcpp::Time & time) const;
 
   /// Copies state interfaces into `positions_`/`velocities_`.
   /// \return false if any of them read back non-finite.

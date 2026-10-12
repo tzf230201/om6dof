@@ -34,6 +34,8 @@ controller_interface::CallbackReturn GravityCompensationController::on_init()
     auto_declare<std::string>("base_link", "world");
     auto_declare<std::string>("tip_link", "end_effector_link");
     auto_declare<std::vector<double>>("gravity", {0.0, 0.0, -9.80665});
+    auto_declare<std::vector<std::string>>("com_offsets.links", {});
+    auto_declare<std::vector<double>>("com_offsets.xyz_m", {});
 
     auto_declare<std::vector<double>>("gain", {});
     auto_declare<std::vector<double>>("effort_scale", {});
@@ -43,6 +45,8 @@ controller_interface::CallbackReturn GravityCompensationController::on_init()
     auto_declare<std::string>("command_semantics", "torque");
     auto_declare<std::vector<double>>("min_effort", {});
     auto_declare<std::vector<double>>("headroom", {});
+    // Preserve legacy controllers; teaching explicitly selects URDF in YAML.
+    auto_declare<std::string>("friction.source", "parameters");
     auto_declare<std::vector<double>>("friction.coulomb", {});
     auto_declare<std::vector<double>>("friction.viscous", {});
     auto_declare<double>("friction.deadzone", 0.05);
@@ -52,6 +56,25 @@ controller_interface::CallbackReturn GravityCompensationController::on_init()
     auto_declare<std::string>("robot_description", "");
     auto_declare<std::string>("robot_description_topic", "/robot_description");
     auto_declare<double>("robot_description_timeout", 10.0);
+    // Startup parameter overrides are already read above. Never acknowledge
+    // a runtime CoM edit while the active KDL model still uses the old value.
+    com_parameter_guard_ = get_node()->add_on_set_parameters_callback(
+      [](const std::vector<rclcpp::Parameter> & parameters) {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        for (const auto & parameter : parameters) {
+          if (parameter.get_name().rfind("com_offsets.", 0) == 0 ||
+            parameter.get_name().rfind("friction.", 0) == 0 ||
+            parameter.get_name() == "publish_rate")
+          {
+            result.successful = false;
+            result.reason = "CoM/friction/publication settings are startup-only: edit the source "
+              "and reload only with the arm safely supported; no live torque-model updates";
+            break;
+          }
+        }
+        return result;
+      });
   } catch (const std::exception & exception) {
     RCLCPP_ERROR(get_node()->get_logger(), "exception while declaring parameters: %s",
       exception.what());
@@ -175,6 +198,23 @@ controller_interface::CallbackReturn GravityCompensationController::on_configure
   }
 
   const double deadzone = get_node()->get_parameter("friction.deadzone").as_double();
+  if (!std::isfinite(deadzone) || deadzone <= 0.0) {
+    RCLCPP_ERROR(logger, "friction.deadzone must be finite and positive");
+    return controller_interface::CallbackReturn::ERROR;
+  }
+  const auto friction_source = get_node()->get_parameter("friction.source").as_string();
+  if (friction_source != "parameters" && friction_source != "urdf") {
+    RCLCPP_ERROR(logger, "friction.source must be 'parameters' or 'urdf'");
+    return controller_interface::CallbackReturn::ERROR;
+  }
+  if (friction_source == "urdf" &&
+    (!get_node()->get_parameter("friction.coulomb").as_double_array().empty() ||
+    !get_node()->get_parameter("friction.viscous").as_double_array().empty()))
+  {
+    RCLCPP_ERROR(logger, "friction.source=urdf rejects YAML coulomb/viscous overrides; "
+      "keep physical coefficients only in URDF joint dynamics");
+    return controller_interface::CallbackReturn::ERROR;
+  }
   friction_.resize(n);
   for (size_t i = 0; i < n; ++i) {
     friction_[i] = FrictionParameters{coulomb[i], viscous[i], deadzone};
@@ -199,12 +239,37 @@ controller_interface::CallbackReturn GravityCompensationController::on_configure
     return controller_interface::CallbackReturn::ERROR;
   }
 
+  if (friction_source == "urdf") {
+    error = GravityModel::readUrdfFriction(urdf, joint_names_, deadzone, friction_);
+    if (!error.empty()) {
+      RCLCPP_ERROR(logger, "%s", error.c_str());
+      return controller_interface::CallbackReturn::ERROR;
+    }
+    for (size_t i = 0; i < n; ++i) {
+      RCLCPP_INFO(logger, "URDF friction compensation %s: Coulomb=%.6f viscous=%.6f "
+        "deadzone=%.6f; +C*tanh(v/deadzone)+B*v (assistance, not braking)",
+        joint_names_[i].c_str(), friction_[i].coulomb, friction_[i].viscous, deadzone);
+    }
+  }
+
   error = model_.configure(
     urdf, get_node()->get_parameter("base_link").as_string(),
-    get_node()->get_parameter("tip_link").as_string(), joint_names_, gravity);
+    get_node()->get_parameter("tip_link").as_string(), joint_names_, gravity,
+    get_node()->get_parameter("com_offsets.links").as_string_array(),
+    get_node()->get_parameter("com_offsets.xyz_m").as_double_array());
   if (!error.empty()) {
     RCLCPP_ERROR(logger, "gravity model: %s", error.c_str());
     return controller_interface::CallbackReturn::ERROR;
+  }
+
+  for (const auto & adjustment : model_.com_adjustments()) {
+    const auto & p = adjustment.original;
+    const auto & d = adjustment.offset;
+    RCLCPP_INFO(
+      logger, "CoM %s [link-local m]: URDF=(%.6f, %.6f, %.6f) "
+      "delta=(%.6f, %.6f, %.6f) effective=(%.6f, %.6f, %.6f)",
+      adjustment.link.c_str(), p[0], p[1], p[2], d[0], d[1], d[2],
+      p[0] + d[0], p[1] + d[1], p[2] + d[2]);
   }
 
   // Say out loud what was hanging off the chain. KDL drops branches silently,
@@ -226,6 +291,10 @@ controller_interface::CallbackReturn GravityCompensationController::on_configure
   commanded_effort_.assign(n, 0.0);
 
   const double publish_rate = get_node()->get_parameter("publish_rate").as_double();
+  if (!std::isfinite(publish_rate) || publish_rate < 0.0) {
+    RCLCPP_ERROR(logger, "publish_rate must be finite and nonnegative (zero disables diagnostics)");
+    return controller_interface::CallbackReturn::ERROR;
+  }
   publish_period_ = publish_rate > 0.0 ? 1.0 / publish_rate : 0.0;
   torque_publisher_ = get_node()->create_publisher<std_msgs::msg::Float64MultiArray>(
     "~/gravity_torque", rclcpp::SystemDefaultsQoS());
@@ -258,7 +327,22 @@ controller_interface::CallbackReturn GravityCompensationController::on_activate(
 
   ramp_ = 0.0;
   last_publish_time_ = get_node()->now();
+  // The base configure() has now resolved this controller's update_rate.
+  // Teaching explicitly requests 100 Hz, as does controller_manager. A zero
+  // rate (legacy inherit setting) retains the existing timestamp gate.
+  const auto control_rate = get_update_rate();
+  publish_every_update_ = publish_period_ > 0.0 && control_rate > 0 &&
+    publish_period_ <= 1.0 / static_cast<double>(control_rate) + 1e-12;
+  RCLCPP_INFO(get_node()->get_logger(), "controller update_rate=%u Hz; diagnostics %.3f Hz: %s",
+    control_rate, publish_period_ > 0.0 ? 1.0 / publish_period_ : 0.0,
+    publish_every_update_ ? "one nonblocking publish attempt per control update" : "timestamp gated");
   return controller_interface::CallbackReturn::SUCCESS;
+}
+
+bool GravityCompensationController::publicationDue(const rclcpp::Time & time) const
+{
+  return publish_period_ > 0.0 &&
+         (publish_every_update_ || (time - last_publish_time_).seconds() >= publish_period_);
 }
 
 controller_interface::CallbackReturn GravityCompensationController::on_deactivate(
@@ -336,7 +420,9 @@ controller_interface::return_type GravityCompensationController::update(
     command_interfaces_[i].set_value(commanded_effort_[i]);
   }
 
-  if (publish_period_ > 0.0 && (time - last_publish_time_).seconds() >= publish_period_) {
+  // Motor command interfaces have already been updated above. Telemetry must
+  // never block that path; a busy realtime publisher may still drop a sample.
+  if (publicationDue(time)) {
     bool published = false;
     if (realtime_torque_publisher_ && realtime_torque_publisher_->trylock()) {
       realtime_torque_publisher_->msg_.data = gravity_torque_;

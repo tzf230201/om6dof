@@ -42,6 +42,42 @@ menjalankan controller atau mengirim perintah gerak robot. Tutup RealSense Viewe
 dan viewer F-GNG lama sebelum launch karena kamera hanya boleh dibuka oleh satu
 pipeline SDK pada saat yang sama.
 
+## om6dof_topo_vslam (tahap 1: robot + depth saja)
+
+`om6dof_topo_vslam` adalah program terpisah untuk front end topological VSLAM.
+Tahap pertama ini **belum memakai GNG dan belum membangun peta**: node hanya
+mengubah depth RealSense menjadi titik XYZ di frame `world` memakai TF robot,
+supaya RViz menampilkan model lengan dan apa yang sedang dilihat kamera wrist.
+
+```bash
+# Stack om6dof_bringup sudah jalan (robot_description dan /joint_states aktif).
+ros2 launch om6dof_f_gng om6dof_topo_vslam.launch.py start_robot_state_publisher:=false
+
+# Tanpa robot asli: model dari URDF plus slider sendi.
+ros2 launch om6dof_f_gng om6dof_topo_vslam.launch.py start_joint_gui:=true
+```
+
+| Bagian | Nilai |
+| --- | --- |
+| Node kamera | `/om6dof_topo_vslam/realsense_depth` |
+| Node proyeksi depth | `/om6dof_topo_vslam/topo_vslam` |
+| Cloud keluaran | `/om6dof_topo_vslam/points` (frame `world`, warna mengikuti tinggi Z) |
+| Kamera RGB | `/om6dof_topo_vslam/color/image_raw` (rgb8, frame `d435_color_optical_frame`) |
+| Parameter | `config/om6dof_topo_vslam.yaml` |
+| RViz | `rviz/om6dof_topo_vslam.rviz` |
+
+RViz membuka dua panel gambar: **Camera RGB** (aktif) dan **Camera depth**
+(nonaktif, centang untuk menyalakan). RGB diambil dari device yang sama dengan
+depth karena kamera hanya boleh dibuka satu pipeline SDK; stream ini murni untuk
+dilihat, **tidak di-align ke depth** dan tidak dipakai untuk cloud. Matikan
+dengan `enable_color:=false`. Launch F-GNG/DD-GNG/DBL-GNG tidak berubah: pada
+node kamera `enable_color` default `false`.
+
+Pose dicari pada stamp akuisisi, bukan pose terbaru, karena kamera ikut bergerak
+bersama lengan. Frame tanpa pose yang valid dibuang, bukan diproyeksikan dengan
+pose yang salah. Kamera tetap hanya boleh dibuka satu pipeline SDK, jadi jangan
+menjalankan launch ini bersamaan dengan launch F-GNG/DD-GNG/DBL-GNG.
+
 ## Membandingkan DD-GNG dan DBL-GNG
 
 Implementasi C++ native dari TopoVLA disalin ke package ini. Jalankan **satu
@@ -106,12 +142,17 @@ ros2 launch om6dof_f_gng dbl_gng.launch.py \
 Filter dukungan permukaan hanya memilih edge yang diekspor ke RViz; aturan
 pembelajaran inti DD-GNG/DBL-GNG tetap berasal dari program native.
 
-DD-GNG memakai `dd_updates:=300` per epoch frame, sesuai `lambda` pada Table I
-paper. Setelah pembaruan graf, DD-GNG membentuk triangle dari edge, menghitung
-normal per node, dan menandai node dengan normal tetangga yang tidak homogen
-sebagai area tersangka. Frame berikutnya secara bergantian memilih sampel dari
-area ini dan dari seluruh point cloud, sesuai Algorithm 1 paper. Normal tampil
-sebagai garis kuning pada topic graph/RViz. DBL-GNG memproses sampel replay per epoch sesuai
+Profil default DD-GNG disetel untuk kompatibilitas operasional dengan
+`om6dof_dd_gng/DepthSensor_Buggy` layer 0: `max_nodes:=500`,
+`dd_updates:=500`, `kappa:=88`, dan laju belajar utama `0.0075/0.000075`.
+Program lama menjalankan tambahan pass coarse dan fine dengan laju yang berbeda,
+sedangkan inti DD-GNG di paket ini hanya mempunyai satu pass per epoch; jadi
+ini bukan klaim identik secara algoritma. Setelah pembaruan graf, DD-GNG
+membentuk triangle dari edge, menghitung normal per node, dan menandai node
+dengan normal tetangga yang tidak homogen sebagai area tersangka. Frame
+berikutnya secara bergantian memilih sampel dari area ini dan dari seluruh
+point cloud. Normal tampil sebagai garis kuning pada topic graph/RViz.
+DBL-GNG memproses sampel replay per epoch sesuai
 aturan intinya. Setelah graph pernah mencapai `max_nodes`, DBL-GNG mengakumulasi
 strength dan menjalankan edge cutting setiap `edge_cut_period_frames` frame valid
 (default 10). Pemotongan dilakukan setelah seluruh epoch frame tersebut selesai.
@@ -122,6 +163,17 @@ Percobaan live berurutan hanya membantu pemeriksaan visual, bukan bukti bahwa
 salah satu algoritma lebih akurat.
 
 ## ATC-DT untuk D435
+
+Perbandingan versi checkpoint dan versi saat ini dijalankan bergantian (keduanya
+memakai kamera, topic, dan nama node yang sama):
+
+```bash
+# Snapshot sebelum optimasi dan dynamic-object deletion.
+./tools/run_atcdt_checkpoint.sh max_nodes:=1000 vigilance:=0.06
+
+# Source tree saat ini.
+./tools/run_atcdt_current.sh max_nodes:=1000 vigilance:=0.06
+```
 
 `atc_dt_d435.launch.py` adalah implementasi terpisah dari **ATC-DT** pada Toda
 dan Masuyama (IEEE Access 2024), bukan DD-GNG. Intinya memakai node-addition

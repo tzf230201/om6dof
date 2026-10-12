@@ -4,13 +4,14 @@
   <name>om6dof_controllers</name>
   <version>0.1.0</version>
   <description>
-    ros2_control controller plugins for the OM6DOF arm: joint trajectory
-    following, gravity compensation, and a virtual spring actuator.
+    OM6DOF command conversion, kinematics, teleop targets and ros2_control
+    plugins for trajectory following, gravity compensation and virtual springs.
   </description>
   <maintainer email="biancanobelia@gmail.com">unitree</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
 
   <depend>angles</depend>
   <depend>control_msgs</depend>
@@ -23,6 +24,8 @@
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
   <depend>rclcpp_lifecycle</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>urdf</depend>
   <depend>realtime_tools</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
@@ -33,8 +36,21 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>om6dof_description</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>controller_manager_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-pykdl</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>urdfdom_py</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>xacro</exec_depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

@@ -15,7 +15,7 @@ def generate_launch_description():
                               description='Read Logitech for preview; stop legacy teleop first.'),
         DeclareLaunchArgument('trajectory_topic', default_value=
                               '/om6dof_topo_gng_v2/graph_pick/trajectory_preview'),
-        Node(package='om6dof_controller', executable='combined_preview_node',
+        Node(package='om6dof_controllers', executable='combined_preview_node',
              output='screen', parameters=[{'trajectory_topic': LaunchConfiguration('trajectory_topic')}]),
         Node(package='om6dof_teleop', executable='combined_preview_gamepad',
              output='screen', condition=IfCondition(LaunchConfiguration('gamepad'))),
@@ -24,7 +24,7 @@ def generate_launch_description():
              condition=IfCondition(LaunchConfiguration('target_gui')), output='screen'),
         Node(package='rviz2', executable='rviz2', name='combined_preview_rviz',
              arguments=['-d', PathJoinSubstitution([
-                 FindPackageShare('om6dof_controller'), 'rviz', 'combined_preview.rviz'])],
+                 FindPackageShare('om6dof_controllers'), 'rviz', 'combined_preview.rviz'])],
              remappings=[('/tf', '/om6dof_dd_gng/v2/tf'),
                          ('/tf_static', '/om6dof_dd_gng/v2/tf_static')],
              condition=IfCondition(LaunchConfiguration('rviz')), output='screen'),

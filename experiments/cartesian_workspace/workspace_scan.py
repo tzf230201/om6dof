@@ -16,9 +16,9 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 # Run from the source checkout without rebuilding or starting any ROS node.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'om6dof_controller'))
-from om6dof_controller.ik_solver import IKSolver, render_chain_urdf
-from om6dof_controller.control_math import cartesian_rpy_to_tip_rotation, rotation_error
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'om6dof_controllers'))
+from om6dof_controllers.ik_solver import IKSolver, render_chain_urdf
+from om6dof_controllers.control_math import cartesian_rpy_to_tip_rotation, rotation_error
 
 
 COLORS = {

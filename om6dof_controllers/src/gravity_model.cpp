@@ -23,24 +23,66 @@
 
 #include "kdl/tree.hpp"
 #include "kdl_parser/kdl_parser.hpp"
+#include "urdf/model.h"
 
 namespace om6dof_controllers
 {
 
 std::string GravityModel::configure(
   const std::string & urdf, const std::string & base_link, const std::string & tip_link,
-  const std::vector<std::string> & joint_names, const std::array<double, 3> & gravity)
+  const std::vector<std::string> & joint_names, const std::array<double, 3> & gravity,
+  const std::vector<std::string> & com_links, const std::vector<double> & com_xyz_m)
 {
   dyn_param_.reset();
   chain_joint_names_.clear();
   chain_to_controller_.clear();
+  com_adjustments_.clear();
+  folded_mass_ = 0.0;
+  folded_links_.clear();
 
   if (urdf.empty()) {
     return "robot description is empty";
   }
 
+  if (com_xyz_m.size() != 3 * com_links.size()) {
+    return "com_offsets.xyz_m needs exactly three values per com_offsets.links entry";
+  }
+
+  // Parse a private copy: the published robot_description, visual geometry,
+  // joint zero positions, masses and original URDF file remain untouched.
+  urdf::Model description;
+  if (!description.initString(urdf)) {
+    return "could not parse the robot description";
+  }
+  std::set<std::string> seen;
+  std::vector<ComAdjustment> adjustments;
+  for (size_t i = 0; i < com_links.size(); ++i) {
+    const auto & name = com_links[i];
+    if (name.empty() || !seen.insert(name).second) {
+      return "com_offsets.links contains an empty or duplicate link: '" + name + "'";
+    }
+    const auto link = description.getLink(name);
+    if (!link || !link->inertial || !std::isfinite(link->inertial->mass) ||
+      link->inertial->mass <= 0.0)
+    {
+      return "CoM offset needs an existing link with positive inertial mass: '" + name + "'";
+    }
+    const std::array<double, 3> offset{
+      com_xyz_m[3 * i], com_xyz_m[3 * i + 1], com_xyz_m[3 * i + 2]};
+    if (!std::all_of(offset.begin(), offset.end(), [](double v) {return std::isfinite(v);}) ||
+      std::hypot(offset[0], offset[1], offset[2]) > kMaxComOffsetM)
+    {
+      return "CoM offset for '" + name + "' must be finite with XYZ norm <= 0.05 m";
+    }
+    auto & p = link->inertial->origin.position;
+    adjustments.push_back({name, {p.x, p.y, p.z}, offset});
+    p.x += offset[0];
+    p.y += offset[1];
+    p.z += offset[2];
+  }
+
   KDL::Tree tree;
-  if (!kdl_parser::treeFromString(urdf, tree)) {
+  if (!kdl_parser::treeFromUrdfModel(description, tree)) {
     return "could not parse the robot description into a KDL tree";
   }
 
@@ -49,6 +91,18 @@ std::string GravityModel::configure(
   }
 
   foldOffChainMass(tree);
+
+  // Reject offsets that would otherwise silently have no effect (e.g. the
+  // base link or a separate branch upstream of this chain).
+  std::set<std::string> contributing_links(folded_links_.begin(), folded_links_.end());
+  for (unsigned int i = 0; i < chain_.getNrOfSegments(); ++i) {
+    contributing_links.insert(chain_.getSegment(i).getName());
+  }
+  for (const auto & adjustment : adjustments) {
+    if (contributing_links.count(adjustment.link) == 0) {
+      return "CoM offset link does not contribute to this gravity chain: '" + adjustment.link + "'";
+    }
+  }
 
   // Only joints the chain actually moves matter; KDL already dropped the fixed
   // ones. Every one of them has to be a joint this controller reads, otherwise
@@ -86,6 +140,7 @@ std::string GravityModel::configure(
   gravity_torque_.resize(chain_.getNrOfJoints());
   KDL::SetToZero(q_);
   KDL::SetToZero(gravity_torque_);
+  com_adjustments_ = std::move(adjustments);
 
   return "";
 }
@@ -205,6 +260,41 @@ void GravityModel::compute(const std::vector<double> & positions, std::vector<do
   for (size_t i = 0; i < chain_to_controller_.size(); ++i) {
     torques[chain_to_controller_[i]] = gravity_torque_(i);
   }
+}
+
+std::string GravityModel::readUrdfFriction(
+  const std::string & urdf, const std::vector<std::string> & joint_names,
+  double deadzone, std::vector<FrictionParameters> & out)
+{
+  out.clear();
+  if (!std::isfinite(deadzone) || deadzone <= 0.0) {
+    return "friction.deadzone must be finite and positive";
+  }
+  urdf::Model description;
+  if (!description.initString(urdf)) {
+    return "could not parse URDF joint dynamics";
+  }
+  std::set<std::string> seen;
+  std::vector<FrictionParameters> parsed;
+  for (const auto & name : joint_names) {
+    const auto joint = description.getJoint(name);
+    if (!joint || !seen.insert(name).second) {
+      return "URDF friction needs unique existing joints: '" + name + "'";
+    }
+    if (joint->type != urdf::Joint::REVOLUTE && joint->type != urdf::Joint::CONTINUOUS &&
+      joint->type != urdf::Joint::PRISMATIC)
+    {
+      return "URDF friction needs a revolute, continuous or prismatic joint: '" + name + "'";
+    }
+    const double c = joint->dynamics ? joint->dynamics->friction : 0.0;
+    const double b = joint->dynamics ? joint->dynamics->damping : 0.0;
+    if (!std::isfinite(c) || !std::isfinite(b) || c < 0.0 || b < 0.0) {
+      return "URDF friction/damping must be finite and nonnegative on joint '" + name + "'";
+    }
+    parsed.push_back({c, b, deadzone});
+  }
+  out = std::move(parsed);
+  return "";
 }
 
 double GravityModel::friction(double velocity, const FrictionParameters & parameters)

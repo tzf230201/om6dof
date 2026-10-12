@@ -44,8 +44,8 @@ struct OM6DOF_CONTROLLERS_PUBLIC FrictionParameters
 /// Gravity torques g(q) for a serial chain, taken straight from the robot
 /// description.
 ///
-/// The model is derived from the URDF link masses and inertias via KDL; it
-/// carries no identified parameters of its own. Per-joint scaling and friction
+/// The model is derived from URDF via KDL, with optional additive link-local
+/// CoM offsets. The input URDF is never changed. Per-joint scaling and friction
 /// belong to the controller that owns this object.
 class OM6DOF_CONTROLLERS_PUBLIC GravityModel
 {
@@ -57,7 +57,22 @@ public:
   /// \return an empty string on success, or a human-readable reason.
   std::string configure(
     const std::string & urdf, const std::string & base_link, const std::string & tip_link,
-    const std::vector<std::string> & joint_names, const std::array<double, 3> & gravity);
+    const std::vector<std::string> & joint_names, const std::array<double, 3> & gravity,
+    const std::vector<std::string> & com_links = {},
+    const std::vector<double> & com_xyz_m = {});
+
+  /// CoM deltas are flattened XYZ triples, one per com_links entry, in metres
+  /// along the LINK frame axes (not inertial axes or world axes). Their norm
+  /// is limited to 5 cm as a typo guard, NOT a validated safe adjustment.
+  static constexpr double kMaxComOffsetM = 0.05;
+
+  struct ComAdjustment
+  {
+    std::string link;
+    std::array<double, 3> original;
+    std::array<double, 3> offset;
+  };
+  const std::vector<ComAdjustment> & com_adjustments() const {return com_adjustments_;}
 
   bool is_configured() const {return dyn_param_ != nullptr;}
 
@@ -68,8 +83,17 @@ public:
   /// Allocation-free once configured, so it is safe from update().
   void compute(const std::vector<double> & positions, std::vector<double> & torques);
 
-  /// Friction torque opposing `velocity`, in newton-metres.
+  /// Compensation torque in the direction of `velocity`, in newton-metres.
+  /// This cancels modeled mechanical friction; it is NOT artificial damping.
   static double friction(double velocity, const FrictionParameters & parameters);
+
+  /// Read <joint><dynamics friction="C" damping="B"> in controller joint order.
+  /// Missing dynamics/attributes mean zero. Unknown/duplicate/unsupported
+  /// joints, nonfinite or negative coefficients and invalid smoothing fail.
+  /// Output is cleared on error. This function does not command any hardware.
+  static std::string readUrdfFriction(
+    const std::string & urdf, const std::vector<std::string> & joint_names,
+    double deadzone, std::vector<FrictionParameters> & out);
 
   /// Chain joint names, in chain order. Empty until configured.
   const std::vector<std::string> & chain_joint_names() const {return chain_joint_names_;}
@@ -87,6 +111,7 @@ private:
   void foldOffChainMass(const KDL::Tree & tree);
 
   KDL::Chain chain_;
+  std::vector<ComAdjustment> com_adjustments_;
   double folded_mass_{0.0};
   std::vector<std::string> folded_links_;
   std::unique_ptr<KDL::ChainDynParam> dyn_param_;

@@ -18,6 +18,11 @@ class DepthFrame:
     timestamp: float
     intrinsics: dict
     depth: np.ndarray
+    # Colour is an optional viewing stream off the same device. It is never
+    # aligned to depth and never feeds the measured point cloud.
+    color: np.ndarray = None
+    color_timestamp: float = 0.
+    color_intrinsics: dict = None
 
 
 class CaptureCancelled(Exception):
@@ -52,7 +57,8 @@ class RealSenseSource:
 
     def __init__(self, fps=15, stride=2, serial='', timeout_ms=3000,
                  z_min=.15, z_max=3., warmup_frames=15,
-                 depth_filter='supported', max_frame_age=.5, stop_event=None):
+                 depth_filter='supported', max_frame_age=.5, stop_event=None,
+                 color=False):
         if fps not in (15, 30):
             raise ValueError('RealSense fps must be 15 or 30')
         if not isinstance(stride, int) or not 1 <= stride <= 480:
@@ -72,6 +78,8 @@ class RealSenseSource:
         self.z_min, self.z_max = float(z_min), float(z_max)
         self.warmup_frames, self.depth_filter = warmup_frames, depth_filter
         self.max_frame_age, self.stop_event = max_frame_age, stop_event
+        self.color = bool(color)
+        self.color_intrinsics = None
         self.depth_scale, self.depth_intrinsics = None, None
         self.metadata = {}
         self._pipeline = None
@@ -101,6 +109,8 @@ class RealSenseSource:
         if self.serial:
             config.enable_device(str(self.serial))
         config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, self.requested_fps)
+        if self.color:
+            config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, self.requested_fps)
         started = False
         try:
             profile = pipeline.start(config)
@@ -132,6 +142,13 @@ class RealSenseSource:
             if min(intrinsics.width, intrinsics.height) <= 0:
                 raise ValueError('Camera returned invalid image dimensions')
             self.fps = int(depth_profile.fps())
+            if self.color:
+                color_profile = profile.get_stream(rs.stream.color).as_video_stream_profile()
+                color_intrinsics = color_profile.get_intrinsics()
+                self.color_intrinsics = {
+                    'fx': float(color_intrinsics.fx), 'fy': float(color_intrinsics.fy),
+                    'cx': float(color_intrinsics.ppx), 'cy': float(color_intrinsics.ppy),
+                    'width': int(color_intrinsics.width), 'height': int(color_intrinsics.height)}
             self.depth_scale = scale
             self.depth_intrinsics = {key: value / self.stride for key, value in original.items()}
             name = device.get_info(rs.camera_info.name) if device.supports(rs.camera_info.name) else 'Intel RealSense'
@@ -142,6 +159,8 @@ class RealSenseSource:
                                (int(intrinsics.height) + self.stride - 1) // self.stride],
                 'original_intrinsics': original, 'intrinsics': self.depth_intrinsics.copy(),
                 'stride': self.stride, 'depth_filter': self.depth_filter,
+                'color_enabled': self.color,
+                'color_intrinsics': dict(self.color_intrinsics) if self.color_intrinsics else None,
                 'timestamp_domain': 'not yet captured',
             }
             self._pipeline = pipeline
@@ -179,14 +198,14 @@ class RealSenseSource:
                 continue
             if not depth:
                 raise RuntimeError('RealSense frameset did not contain depth')
-            return depth
+            return frames, depth
 
     def capture(self):
         if self._pipeline is None:
             raise RuntimeError('RealSense source is not started')
         deadline = time.monotonic() + self.timeout_ms / 1000
         while True:
-            depth_frame = self._wait_depth(deadline)
+            frames, depth_frame = self._wait_depth(deadline)
             domain = str(depth_frame.get_frame_timestamp_domain())
             if self._timestamp_domain is not None and domain != self._timestamp_domain:
                 raise RuntimeError('Camera timestamp domain changed; restart capture')
@@ -227,7 +246,24 @@ class RealSenseSource:
                 'removed_isolated_pixels': input_count - filtered_count,
                 'sampled_valid_depth_fraction': float(np.count_nonzero(depth) / depth.size),
             })
-            return DepthFrame(timestamp, self.depth_intrinsics.copy(), depth)
+            color, color_timestamp = None, 0.
+            if self.color:
+                # A viewing stream only: a missing or malformed colour frame
+                # must never stop the depth measurement this source exists for.
+                color_frame = frames.get_color_frame()
+                if color_frame:
+                    pixels = np.asanyarray(color_frame.get_data())
+                    stamp = float(color_frame.get_timestamp()) / 1000
+                    if (pixels.dtype == np.uint8 and pixels.ndim == 3 and pixels.shape[2] == 3
+                            and pixels.shape[:2] == (self.color_intrinsics['height'],
+                                                     self.color_intrinsics['width'])
+                            and math.isfinite(stamp) and stamp > 0):
+                        color, color_timestamp = pixels.copy(), stamp
+                self.metadata['color_frames_missing'] = (
+                    self.metadata.get('color_frames_missing', 0) + (color is None))
+            return DepthFrame(timestamp, self.depth_intrinsics.copy(), depth,
+                              color, color_timestamp,
+                              dict(self.color_intrinsics) if color is not None else None)
 
     def close(self):
         pipeline, self._pipeline = self._pipeline, None

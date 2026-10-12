@@ -102,7 +102,7 @@ def generate_launch_description():
             "rviz_config", default_value="",
             description="Empty selects the model-specific RViz preset"),
         OpaqueFunction(function=_launch_setup, kwargs={
-            "moveit_share": get_package_share_directory("om6dof_moveit_config"),
+            "moveit_share": get_package_share_directory("om6dof_moveit"),
             "description_share": get_package_share_directory("om6dof_description"),
             "dd_gng_share": share,
         }),

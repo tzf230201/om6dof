@@ -220,7 +220,7 @@ class TagPickPlaceNode(Node):
             # gripper end-effector link.
             try:
                 srdf_path = str(
-                    Path(get_package_share_directory("om6dof_moveit_config"))
+                    Path(get_package_share_directory("om6dof_moveit"))
                     / "config" / "om6dof.srdf"
                 )
             except Exception:

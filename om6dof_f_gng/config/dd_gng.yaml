@@ -21,10 +21,13 @@
     camera_frame: d435_depth_optical_frame
     min_depth: 0.15
     max_depth: 3.0
-    # Saputra et al., IROS 2019, Table I: lambda=300, kappa=10,
-    # eta1=0.08, eta2=0.008, g_max=100, alpha=0.5, beta=chi=0.005,
-    # mu=0.5 and k=1000. lambda is dd_updates.
-    max_nodes: 100
+    # Compatibility profile for om6dof_dd_gng/DepthSensor_Buggy (layer 0).
+    # Its primary online pass uses ramda=500, e1=0.0075, e2=e1/100,
+    # MAX_AGE=88, GNGN=500, 0.5 node-error split, and K=100000.
+    # The old program also has separate coarse/fine passes; the present
+    # DD-GNG core has one pass, so dd_updates/eta1/eta2 represent its primary
+    # pass.  mu is native DD-GNG attention weighting and has no old-GNG peer.
+    max_nodes: 500
     memory_mode: world
     memory_capacity: 16000
     replay_budget: 4000
@@ -32,15 +35,16 @@
     voxel_size: 0.01
     edge_support_radius: 0.0
     epochs_per_frame: 1
-    dd_updates: 300
-    ddgng_kappa: 10
-    ddgng_eta1: 0.08
-    ddgng_eta2: 0.008
+    dd_updates: 500
+    ddgng_kappa: 88
+    ddgng_eta1: 0.0075
+    ddgng_eta2: 0.000075
     ddgng_alpha: 0.5
-    ddgng_beta: 0.005
-    ddgng_chi: 0.005
+    # DepthSensor_Buggy decays error and utility by 0.001 each update.
+    ddgng_beta: 0.001
+    ddgng_chi: 0.001
     ddgng_mu: 0.5
-    ddgng_k: 1000.0
+    ddgng_k: 100000.0
     tf_timeout: 0.5
     max_pose_age: 0.5
     require_joint_states: true

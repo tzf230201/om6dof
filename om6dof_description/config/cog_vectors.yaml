@@ -1,0 +1,29 @@
+om6dof_dynamic:
+  ros__parameters:
+    reference_frame: world
+    vector_mode: gravity
+    # Acceleration [m/s^2] expressed in reference_frame.
+    gravity: [0.0, 0.0, -9.81]
+    # Display metres per newton: arrow length = force_scale * mass * |gravity|.
+    force_scale: 0.05
+    publish_rate: 10.0
+    shaft_diameter: 0.003
+    head_diameter: 0.008
+    head_length: 0.012
+    color: [1.0, 0.55, 0.05, 1.0]
+    description_topic: /robot_description
+    dynamic_state_topic: /dynamic_joint_states
+    dxl_state_topic: /dynamixel_hardware_interface/dxl_state
+    feedback_timeout: 0.5
+    feedback_label_scale: 0.012
+    # A separate table beside the robot keeps motor values away from CoM labels.
+    feedback_origin: [0.30, -0.20, 0.50]
+    feedback_row_spacing: 0.065
+    show_jacobian: true
+    tip_link: end_effector_link
+    # Per-joint arrows are hypothetical TCP velocities for a unit joint speed.
+    jacobian_scale: 0.4
+    angular_jacobian_scale: 0.07
+    show_ellipsoid: true
+    ellipsoid_scale: 0.4
+    ee_velocity_scale: 0.5

@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Read-only combined-reference preview entry point."""
+
+from om6dof_controllers.combined_preview_node import main
+
+
+if __name__ == '__main__':
+    main()

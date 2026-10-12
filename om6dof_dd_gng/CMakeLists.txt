@@ -190,6 +190,8 @@ ament_target_dependencies(yolo_3d_box_node
   std_msgs
   geometry_msgs
   visualization_msgs
+  tf2
+  tf2_ros
 )
 target_link_libraries(yolo_3d_box_node
   realsense2::realsense2

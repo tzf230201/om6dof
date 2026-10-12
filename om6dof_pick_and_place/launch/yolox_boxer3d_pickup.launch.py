@@ -18,7 +18,7 @@ def launch_setup(context):
     def arg(name):
         return LaunchConfiguration(name).perform(context)
     share = Path(get_package_share_directory('om6dof_pick_and_place'))
-    boxer = Path(get_package_share_directory('om6dof_boxer'))
+    boxer = Path(get_package_share_directory('om6dof_perception'))
     ddgng = Path(get_package_share_directory('om6dof_dd_gng'))
     helper = importlib.util.spec_from_file_location('boxer_pick_model_inputs', ddgng / 'launch/_model_inputs.py')
     module = importlib.util.module_from_spec(helper)
@@ -30,7 +30,7 @@ def launch_setup(context):
     if serial != calibration['camera_calibration_serial']:
         raise RuntimeError('camera_serial tidak cocok dengan file kalibrasi pickup')
     description = Path(get_package_share_directory('om6dof_description'))
-    config = (MoveItConfigsBuilder('om6dof_v2', package_name='om6dof_moveit_config')
+    config = (MoveItConfigsBuilder('om6dof_v2', package_name='om6dof_moveit')
               .robot_description(file_path=str(description / 'urdf/om6dof_v2.urdf.xacro'))
               .robot_description_semantic(file_path='config/om6dof.srdf')
               .robot_description_kinematics(file_path='config/kinematics.yaml')

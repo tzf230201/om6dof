@@ -20,7 +20,7 @@ def generate_launch_description():
     )
     moveit = TimerAction(period=3.0, actions=[IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([
-            FindPackageShare("om6dof_moveit_config"),
+            FindPackageShare("om6dof_moveit"),
             "launch", "om6dof_moveit.launch.py",
         ])),
         launch_arguments={

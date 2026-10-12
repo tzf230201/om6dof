@@ -39,6 +39,47 @@
   <!-- Link4 mounts perpendicular to link3 on the v2 output interface. -->
   <xacro:property name="link3_v2_joint3_mount_pitch" value="${pi / 2.0}"/>
 
+  <!-- Per-joint mechanical dynamics; no shared all_* coefficients.
+       Revolute joints: damping [Nm*s/rad], friction [Nm].
+       Prismatic gripper joints: damping [N*s/m], friction [N].
+       Torque teaching uses these as compensation, not artificial braking.
+       Reload the description/controller safely after editing; no compile needed. -->
+  <!-- <xacro:property name="joint1_damping" value="0.0"/>
+  <xacro:property name="joint2_damping" value="0.0"/>
+  <xacro:property name="joint3_damping" value="0.0"/>
+  <xacro:property name="joint4_damping" value="0.0"/>
+  <xacro:property name="joint5_damping" value="0.0"/>
+  <xacro:property name="joint6_damping" value="0.0"/>
+
+  <xacro:property name="joint1_friction" value="0.015"/>
+  <xacro:property name="joint2_friction" value="0.03"/>
+  <xacro:property name="joint3_friction" value="0.04"/>
+  <xacro:property name="joint4_friction" value="0.0"/>
+  <xacro:property name="joint5_friction" value="0.02"/>
+  <xacro:property name="joint6_friction" value="0.0"/>
+
+  <xacro:property name="gripper_left_joint_damping" value="0.0"/>
+  <xacro:property name="gripper_left_joint_friction" value="0.02"/>
+  <xacro:property name="gripper_right_joint_damping" value="0.7"/>
+  <xacro:property name="gripper_right_joint_friction" value="0.0"/> -->
+  <xacro:property name="joint1_damping" value="0.0"/>
+  <xacro:property name="joint2_damping" value="0.0"/>
+  <xacro:property name="joint3_damping" value="0.0"/>
+  <xacro:property name="joint4_damping" value="0.0"/>
+  <xacro:property name="joint5_damping" value="0.0"/>
+  <xacro:property name="joint6_damping" value="0.0"/>
+
+  <xacro:property name="joint1_friction" value="0.0"/>
+  <xacro:property name="joint2_friction" value="0.0"/>
+  <xacro:property name="joint3_friction" value="0.0"/>
+  <xacro:property name="joint4_friction" value="0.0"/>
+  <xacro:property name="joint5_friction" value="0.0"/>
+  <xacro:property name="joint6_friction" value="0.0"/>
+
+  <xacro:property name="gripper_left_joint_damping" value="0.0"/>
+  <xacro:property name="gripper_left_joint_friction" value="0.0"/>
+  <xacro:property name="gripper_right_joint_damping" value="0.0"/>
+  <xacro:property name="gripper_right_joint_friction" value="0.0"/>
   <!-- World -->
   <link name="world">
   </link>
@@ -113,7 +154,7 @@
     <origin xyz="0.012 0.0 0.017" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
     <limit velocity="4.8" effort="1" lower="${-pi*0.5}" upper="${pi*0.5}" />
-    <dynamics damping="0.1"/>
+    <dynamics damping="${joint1_damping}" friction="${joint1_friction}"/>
   </joint>
   <!--  Link 2 -->
   <link name="link2">
@@ -122,7 +163,7 @@
       <geometry>
         <mesh filename="package://om6dof_description/meshes/chain_link2.stl" scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="grey"/>
+      <material name="red"/>
     </visual>
 
     <collision>
@@ -156,7 +197,7 @@
     <origin xyz="0.0 0.0 0.0595" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
     <limit velocity="4.8" effort="1" lower="${-pi*0.65}" upper="${pi*0.67}" />
-    <dynamics damping="0.1"/>
+    <dynamics damping="${joint2_damping}" friction="${joint2_friction}"/>
   </joint>
   <!--  Link 3 -->
   <link name="link3">
@@ -167,7 +208,7 @@
       <geometry>
         <mesh filename="package://om6dof_description/meshes/chain_link3_v2.stl" scale="1 1 1"/>
       </geometry>
-      <material name="grey"/>
+      <material name="blue"/>
     </visual>
 
     <collision>
@@ -196,7 +237,7 @@
            than the origin, worse than the real numbers link1, link2, link6 and
            link7 carry. The inertia below is still the old placeholder; gravity
            never reads it. -->
-      <origin xyz="0.0 4.5e-04 9.4132e-02" />
+      <origin xyz="0.0 ${4.5e-04 * 1.0} ${9.4132e-02 * 0.7}"/>
       <mass value="0.1385" />
       <inertia ixx="0.1" ixy="0.0" ixz="0.0"
                iyy="0.1" iyz="0.0"
@@ -222,7 +263,7 @@
     <origin xyz="${link3_v2_joint3_x + link3_v2_link4_forward_x_offset} 0 ${link3_v2_joint3_z}" rpy="0 ${link3_v2_joint3_mount_pitch} 0"/>
     <axis xyz="0 1 0"/>
     <limit velocity="4.8" effort="1" lower="${-pi*0.5}" upper="${pi*0.47}" />
-    <dynamics damping="0.1"/>
+    <dynamics damping="${joint3_damping}" friction="${joint3_friction}"/>
   </joint>
   <!--  Link 4 -->
   <link name="link4">
@@ -281,7 +322,7 @@
     <origin xyz="0.0 0.0 0.045" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
     <limit velocity="4.8" effort="1" lower="${-pi*0.4}" upper="${pi*0.4}" />
-    <dynamics damping="0.1"/>
+    <dynamics damping="${joint4_damping}" friction="${joint4_friction}"/>
   </joint>
   <!--  Link 5 -->
   <link name="link5">
@@ -290,7 +331,7 @@
       <geometry>
         <mesh filename="package://om6dof_description/meshes/chain_link5.stl" scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="grey"/>
+      <material name="green"/>
     </visual>
 
     <collision>
@@ -338,7 +379,7 @@
     <origin xyz="0.0 0.0 0.0595" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
     <limit velocity="4.8" effort="1" lower="${-pi*0.5}" upper="${pi*0.67}" />
-    <dynamics damping="0.1"/>
+    <dynamics damping="${joint5_damping}" friction="${joint5_friction}"/>
   </joint>
   <!--  Link 6 -->
   <link name="link6">
@@ -382,10 +423,10 @@
   <joint name="joint6" type="revolute">
     <parent link="link6"/>
     <child link="link7"/>
-    <origin xyz="0.0 0.0 0.0475" rpy="0 0 0"/>
+    <origin xyz="0.0 0.0 ${0.0475 * 1.0}" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
     <limit velocity="4.8" effort="1" lower="${-pi*0.5}" upper="${pi*0.5}" />
-    <dynamics damping="0.1"/>
+    <dynamics damping="${joint6_damping}" friction="${joint6_friction}"/>
   </joint>
   <!--  Link 7 -->
   <link name="link7">
@@ -394,7 +435,7 @@
       <geometry>
         <mesh filename="package://om6dof_description/meshes/chain_link7.stl" scale="0.001 0.001 0.001"/>
       </geometry>
-      <material name="grey"/>
+      <material name="blue"/>
     </visual>
 
     <collision>
@@ -410,7 +451,7 @@
            permutation and sign flip of the three numbers only those putting 44.2 on
            Z land inside it. Keeping y as the near-zero component is the single-swap
            reading and the one consistent with a symmetric part. -->
-      <origin xyz="-8.9142216e-03 3.6839985e-07 ${0.5*4.4206755e-02}" />
+      <origin xyz="-8.9142216e-03 3.6839985e-07 ${0.6 * 4.4206755e-02}" />
       <mass value="0.22527573" />
       <inertia ixx="8.0870749e-05" ixy="0.0" ixz="-1.0157896e-06"
                iyy="7.5980465e-05" iyz="0.0"
@@ -465,7 +506,6 @@
                izz="1.7605306e-05" />
     </inertial>-->
   </link>
-
   <!-- TCP / end-effector control frame.  Keep this link between the wrist and
        the gripper branches so MoveIt places its interactive marker at the TCP,
        rather than at link7 (the wrist flange). -->
@@ -493,7 +533,7 @@
     <origin xyz="0.0 0.021 -0.0443" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
     <limit velocity="4.8" effort="1000" lower="-0.011" upper="0.020" />
-    <dynamics damping="0.1"/>
+    <dynamics damping="${gripper_left_joint_damping}" friction="${gripper_left_joint_friction}"/>
   </joint>
   <!--  Gripper link sub -->
   <link name="gripper_right_link">
@@ -550,7 +590,7 @@
     <origin xyz="0.0 -0.021 -0.0443" rpy="0 0 0"/>
     <axis xyz="0 -1 0"/>
     <limit velocity="4.8" effort="1000" lower="-0.011" upper="0.020" />
-    <dynamics damping="0.7"/>
+    <dynamics damping="${gripper_right_joint_damping}" friction="${gripper_right_joint_friction}"/>
     <mimic joint="gripper_left_joint" multiplier="1"/>
   </joint>
   <!-- ==================== wrist payload (RealSense D435) ====================

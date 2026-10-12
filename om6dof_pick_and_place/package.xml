@@ -3,7 +3,7 @@
 <package format="3">
   <name>om6dof_pick_and_place</name>
   <version>0.1.0</version>
-  <description>Pick-and-place state machine for the 6-DOF OM6DOF. Talks to MoveIt via the MoveGroup action and to the gripper_controller GripperCommand action; no MoveIt Python bindings required.</description>
+  <description>Pick-and-place for the 6-DOF OM6DOF, including point-cloud grasping with Gemini reasoning. Talks to MoveIt via the MoveGroup action and to the gripper_controller GripperCommand action; no MoveIt Python bindings required.</description>
   <maintainer email="biancanobelia@gmail.com">unitree</maintainer>
   <license>Apache-2.0</license>
 
@@ -30,15 +30,16 @@
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-requests</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>rqt_image_view</exec_depend>
   <exec_depend>om6dof_bringup</exec_depend>
   <exec_depend>om6dof_description</exec_depend>
-  <exec_depend>om6dof_moveit_config</exec_depend>
-  <exec_depend>om6dof_controller</exec_depend>
+  <exec_depend>om6dof_moveit</exec_depend>
+  <exec_depend>om6dof_controllers</exec_depend>
   <exec_depend>om6dof_dd_gng</exec_depend>
-  <exec_depend>om6dof_boxer</exec_depend>
+  <exec_depend>om6dof_perception</exec_depend>
   <exec_depend>moveit_configs_utils</exec_depend>
   <exec_depend>python3-tk</exec_depend>
   <test_depend>python3-pytest</test_depend>

@@ -97,6 +97,11 @@ class FrozenBoxPick:
     motion: object
     bus_read_failures: int
     bus_write_failures: int
+    # The world as perception saw it at preview time, replayed for the whole
+    # execution. The D435 rides on end_effector_link, so approaching the
+    # target is exactly what stops the camera from being able to see it.
+    scene_boxes: tuple = ()
+    target_id: str = ''
 
 
 class BoxerPickNode(GraphPickNode):
@@ -261,7 +266,8 @@ class BoxerPickNode(GraphPickNode):
                 raise ValueError('Preview dibatalkan')
             choose_box(self._boxes(), target['label'], target['center'], self.param('max_target_shift_m'))
             counts = self._bus_failure_counts()
-            self._frozen = FrozenBoxPick(time.monotonic(), target['center'], target['label'], motion, *counts)
+            self._frozen = FrozenBoxPick(time.monotonic(), target['center'], target['label'], motion, *counts,
+                                         scene_boxes=tuple(boxes), target_id=target['id'])
             self._preview_pub.publish(motion.display)
             marker = Marker()
             marker.header.frame_id = 'world'
@@ -297,19 +303,34 @@ class BoxerPickNode(GraphPickNode):
         response.success, response.message = True, 'Pickup dimulai'
         return response
 
-    def _refresh_scene(self, plan):
+    def _refresh_scene(self, plan, require_visible=False):
+        """Re-arm the interlocks and restore this plan's frozen view of the world.
+
+        Perception only supervises while it physically can. The camera is
+        mounted on end_effector_link, so once the approach starts the target
+        leaves the field of view or hides behind the gripper, and whatever
+        sliver stays visible reports a centroid biased by the occlusion.
+        Re-detecting the target at every stage therefore aborted every real
+        pickup with 'Target bergeser, hilang, atau ambigu'.
+
+        require_visible is set only for the pre-motion stage, where the arm
+        still sits at the pose that produced the preview: a target missing
+        *there* genuinely means somebody moved or took it, and refusing to
+        reach for thin air is the point of the check. From the first motion
+        onward the plan executes against the scene frozen at preview time.
+        """
         if not self._execution_interlocks_ready(plan):
             raise ValueError(self._message)
-        boxes = self._boxes()
-        target = choose_box(boxes, plan.target_class, plan.center, self.param('max_target_shift_m'))
-        self.planner.set_scene(collision_boxes(boxes), selected_id=target['id'])
+        if require_visible:
+            choose_box(self._boxes(), plan.target_class, plan.center, self.param('max_target_shift_m'))
+        self.planner.set_scene(collision_boxes(plan.scene_boxes), selected_id=plan.target_id)
         if self._cancel.is_set():
             raise ValueError('Pickup dibatalkan')
 
     def _pickup_worker(self, plan):
         try:
             self._stage('opening', 'Membuka gripper')
-            self._refresh_scene(plan)
+            self._refresh_scene(plan, require_visible=True)
             rejection = self._segment_start_rejection(plan.motion.pregrasp)
             if rejection:
                 raise ValueError(rejection)

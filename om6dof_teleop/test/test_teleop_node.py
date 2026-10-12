@@ -8,7 +8,7 @@ from rclpy.parameter import Parameter
 from std_msgs.msg import Bool, String
 
 import om6dof_teleop.teleop_node as teleop_node
-from om6dof_controller.control_math import (
+from om6dof_controllers.control_math import (
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
     MODE_CYLINDRICAL,

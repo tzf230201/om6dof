@@ -32,7 +32,7 @@ spec=importlib.util.spec_from_file_location('experiment_launch',repo/'om6dof_dd_
 launch=importlib.util.module_from_spec(spec);spec.loader.exec_module(launch)
 config=launch.prepare_config(repo/'om6dof_dd_gng/config/topo_gng_v2.yaml',run/'subset.csv',run,final_grasp=True)
 doc=yaml.safe_load(config.read_text());p=doc['reachability_graph_node']['ros__parameters']
-p.update(robot_description=(source/'model.urdf').read_text(),robot_description_semantic=(repo/'om6dof_moveit_config/config/om6dof.srdf').read_text(),planning_period_sec=.3)
+p.update(robot_description=(source/'model.urdf').read_text(),robot_description_semantic=(repo/'om6dof_moveit/config/om6dof.srdf').read_text(),planning_period_sec=.3)
 p['exclude_selected_target_from_collision']=exclude_selected_target
 for name in ['environment_graph_topic','joint_state_topic','graph_data_topic','training_samples_topic','training_samples_cloud_topic','marker_topic','plan_topic','path_topic','query_topic','rebuild_service','plan_service','scene_validation_service']:
  p[name]='/grasp_smoke/'+name

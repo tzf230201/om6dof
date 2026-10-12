@@ -1,6 +1,12 @@
 Panels:
   - Class: rviz_common/Displays
     Name: Displays
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/Tool Properties
+    Name: Tool Properties
+  - Class: rviz_common/Views
+    Name: Views
 Visualization Manager:
   Class: ''
   Global Options:
@@ -48,13 +54,44 @@ Visualization Manager:
       Robot Alpha: 0.6
       Show Robot Visual: true
       Show Robot Collision: false
+  # RViz2's ToolManager drops its built-in default tools and loads only what
+  # this list names, so an absent Tools: section leaves the session with zero
+  # tools -- including no MoveCamera, which is what forwards wheel/drag events
+  # to the view controller. Without it the 3D view cannot be zoomed, rotated
+  # or panned at all. MoveCamera is listed first so it is the active tool on
+  # startup.
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+  Value: true
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
       Distance: 1.15
-      Focal Point: {X: 0.2, Y: 0.0, Z: 0.2}
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 0.2
+        Y: 0.0
+        Z: 0.2
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.01
       Pitch: 0.35
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz)
       Yaw: 0.8
+    Saved: ~
 Window Geometry:
   Width: 1200
   Height: 800

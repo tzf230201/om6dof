@@ -96,6 +96,8 @@ public:
     atc_max_slope_deg_ = fixed_parameter<double>("atc_max_slope_deg", 30.0);
     atc_normal_similarity_deg_ = fixed_parameter<double>("atc_normal_similarity_deg", 20.0);
     atc_updates_ = bounded_integer("atc_updates", 750, 3, 1000000);
+    atc_free_space_margin_ = fixed_parameter<double>("atc_free_space_margin", 0.02);
+    atc_missing_frames_ = bounded_integer("atc_missing_frames", 3, 1, 1000);
     config_.focus.minDepth = fixed_parameter<double>("min_depth", 0.15);
     config_.focus.maxDepth = fixed_parameter<double>("max_depth", 3.0);
     // ATC-DT uses a lightweight sparse graph core and can retain more nodes
@@ -234,6 +236,8 @@ private:
     options.atcdt.normalSimilarityRadians = static_cast<float>(atc_normal_similarity_deg_ * pi / 180.0);
     options.atcdt.maxNodes = static_cast<size_t>(config_.graph.maxNodes);
     options.atcUpdates = static_cast<size_t>(atc_updates_);
+    options.atcFreeSpaceMargin = static_cast<float>(atc_free_space_margin_);
+    options.atcMissingFrames = atc_missing_frames_;
     return std::make_unique<comparison::Mapper>(options);
   }
 
@@ -648,6 +652,8 @@ private:
   double atc_vigilance_ = 0.025, atc_max_slope_deg_ = 30.0,
          atc_normal_similarity_deg_ = 20.0;
   int atc_updates_ = 750;
+  double atc_free_space_margin_ = 0.02;
+  int atc_missing_frames_ = 3;
   bio_fgng::MapperConfig config_;
   bio_fgng::FocusControl control_;
   std::unique_ptr<comparison::Mapper> mapper_;

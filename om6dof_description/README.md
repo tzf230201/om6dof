@@ -1,5 +1,29 @@
 # om6dof_description
 
+## Live dynamics and Jacobian viewers
+
+The viewers previously implemented in `om6dof_dynamic` now live here, including
+their Python modules, configuration, RViz presets, and regression tests.
+
+```bash
+ros2 launch om6dof_description view_dynamic.launch.py
+ros2 launch om6dof_description view_jacobian.launch.py
+```
+
+The second launch uses a dedicated Jacobian RViz preset (joint columns, TCP
+velocity, and manipulability ellipsoid). Both are read-only: they consume the
+running stack's `/robot_description`, TF, and measured motor feedback. They do
+not start hardware, publish synthetic joint states, or send motor commands.
+They use whichever model the running stack publishes, including V2; they do
+not launch a separate robot description. Missing or stale feedback is reported.
+
+Use `rviz:=false` for headless output. Existing `/om6dof_dynamic/*` topics and
+the viewer node name are retained for compatibility. Do not run both viewers
+at once with the same default node name/topics. The old `om6dof_dynamic` package
+has been removed; use the `om6dof_description` launch commands above. The retained
+topic namespace is only a name and does not require the old package.
+See [viewer options and Jacobian interpretation](docs/view_dynamic.md).
+
 ## License and provenance
 
 See [LICENSE](LICENSE) for Apache-2.0 and [NOTICE](NOTICE) for ROBOTIS author

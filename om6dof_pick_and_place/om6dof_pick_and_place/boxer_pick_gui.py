@@ -73,8 +73,10 @@ def main(args=None):
     root.title('YOLO → Boxer3D → Pickup tengah')
     root.geometry('670x350')
     ttk.Label(root, text='Pickup pusat kotak Boxer3D', font=('', 18, 'bold')).pack(pady=15)
-    target, status, notice = tk.StringVar(), tk.StringVar(), tk.StringVar()
+    target, status, notice, center = (tk.StringVar(), tk.StringVar(),
+                                      tk.StringVar(), tk.StringVar())
     ttk.Label(root, textvariable=target).pack(pady=5)
+    ttk.Label(root, textvariable=center, font=('monospace', 11)).pack(pady=2)
     ttk.Label(root, textvariable=status, wraplength=620, justify='center').pack(pady=12)
     buttons = ttk.Frame(root)
     buttons.pack(pady=12)
@@ -90,6 +92,11 @@ def main(args=None):
             payload, received, message = dict(node.payload), node.received, node.notice
         fresh = time.monotonic() - received < 2.0
         target.set('Target: ' + str(payload.get('target_class', 'bottle')))
+        # boxer_pick_node only puts target_center in the status payload while a
+        # frozen preview is being held, so an empty line here means "no plan".
+        point = payload.get('target_center') if fresh else None
+        center.set('Pusat target (world):  X={:+.3f}  Y={:+.3f}  Z={:+.3f} m'.format(*point)
+                   if isinstance(point, list) and len(point) == 3 else 'Pusat target: belum ada preview')
         status.set(str(payload.get('message', 'Menunggu node pickup')) if fresh else 'Status pickup belum tersedia')
         notice.set(message)
         preview.state(['disabled'] if not fresh or payload.get('busy') else ['!disabled'])

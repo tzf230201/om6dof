@@ -1,6 +1,30 @@
 # om6dof_controllers
 
-Four ros2_control controller plugins for the OM6DOF arm:
+Unified OM6DOF package: Python command conversion/kinematics and four C++
+ros2_control controller plugins.
+
+## High-level command converter
+
+The former `om6dof_controller` package is merged here. Its Python modules are
+imported as `om6dof_controllers.*`; launch files and dependencies now use this
+package as well:
+
+```bash
+ros2 launch om6dof_controllers controller.launch.py
+```
+
+This is the normal position-stack command converter, not a torque-teaching
+launch. The ROS node name stays `/om6dof_controller`, and its topics, READY
+sequence, and `/om6dof_controller/get_parameters` service are unchanged so
+existing dashboard and identification clients keep their runtime contract.
+The full-stack launch in `om6dof_teleop` starts it automatically.
+
+See [command converter details](docs/command_converter.md) and the
+[combined reference preview](config/COMBINED_REFERENCE.md). Executables are
+`controller_node` and `combined_preview_node`. Do not start the position
+converter alongside the isolated Mode 0 torque-teaching stack.
+
+## ros2_control plugins
 
 | Plugin | What it does | Command interface |
 |---|---|---|
@@ -9,13 +33,13 @@ Four ros2_control controller plugins for the OM6DOF arm:
 | `om6dof_controllers/GravityCompensationController` | caps the current from the weight model | `effort` |
 | `om6dof_controllers/SpringActuatorController` | virtual spring-damper to a rest pose | `effort` |
 
-These are controller_manager plugins, not nodes. In the normal/legacy profile,
+The four entries above are controller_manager plugins, not Python nodes. In the normal/legacy profile,
 `om6dof_bringup` owns the hardware and `ros2_control_node`; nothing here opens
 U2D2 directly.
 
-This is a different package from `om6dof_controller` (singular), which is the
-Python jog-command converter that publishes to `forward_position_controller`.
-The two do not overlap and do not talk to each other.
+Combining the packages does not change controller ownership or the motor
+control laws. The normal bringup still uses ROS's `JointTrajectoryController`
+as `arm_controller`; merging packages does not select a different plugin.
 
 > **Leader-arm status:** `LeaderArmController` in this package is retained as a
 > historical Operating Mode 5 implementation. It is not the commissioned
@@ -76,6 +100,214 @@ description and claims the same six position interfaces as `arm_controller` and
 
 ## Gravity model
 
+### V2 teaching calibration status (2026-10-06)
+
+The temporary blanket motion lock was removed at the user's request after
+replacing the old direct-ready path. The dashboard enables calibration when
+its worker is idle; a running optional passive recorder does not block it.
+Runtime READY configuration and fresh-feedback checks remain mandatory. This
+code change does not certify bus reliability or validate the physical calibration.
+
+The calibration implementation now requests `READY` on the live
+controller's `operation_mode_topic`, exactly as **Go to READY** does. That
+controller owns the sequence **current pose → TRANSITION → READY**, including
+timing and offset reset. The runner no longer generates its own ready trajectory
+or uses the old hardcoded target. It reads `transition_pose_degrees` and
+`ready_pose_degrees` from `/om6dof_controller/get_parameters` and refuses missing
+or invalid configuration without requesting motion. It must observe fresh
+TRANSITION feedback first, then measured READY positions within 0.03 rad and
+speeds below 0.03 rad/s for one second before recording/excitation. Missing
+TRANSITION, timeout, missing feedback or failure to settle cancels calibration.
+`--move-to-ready` remains for compatibility; `--ready-speed` no longer controls
+the canonical controller's waypoint timing.
+Preview remains non-actuating and checks the excitation around the ready pose.
+The dashboard's excitation route uses this same runner and records its own CSV;
+the legacy separate recorder is not required for that run. This does not certify
+the path to ready as collision-free or automatically start a hardware stack.
+
+The optional dashboard **Start recording** button now uses
+`om6dof_controllers multisine_identification.py --record-only --rate 100`
+with a unique output filename. This mode only subscribes to joint states and
+does not send a trajectory. The rate is an upper bound; it cannot exceed the
+incoming joint-state rate. Existing CSV files are never overwritten.
+
+The dashboard **Fit model** button uses `--model v2 --auto-joints` and fits only
+joints with sufficient bidirectional motion in the selected dataset. Its result
+is `~/om6dof_identification/identified_v2_candidate.yaml`, separate from historical
+fits. The result table shows Coulomb current, viscous current per rad/s, bias,
+training RMSE and R². These current coefficients are not friction values in Nm.
+**Check on another recording** evaluates saved coefficients without refitting;
+it refuses the training CSV or a changed URDF and writes a separate evaluation
+report. Neither fitting nor evaluation deploys coefficients to the controller.
+
+For slow calibration recordings, the fitter now defaults to
+`--velocity-source position`: an offline centered quadratic derivative of the
+recorded positions against `ros_stamp_s`, using a 1 s window. It rejects
+non-increasing timestamps, does not bridge gaps above 0.2 s, and discards
+incomplete windows at segment boundaries. The CSV is unchanged. The dashboard
+fits all retained samples (`--stride 1`) so decimation cannot discard the few
+nonzero motor-velocity readings. `--velocity-source reported` remains available
+for comparison. Saved candidates record preprocessing; evaluation reuses it.
+
+Rank-deficient, ill-conditioned, one-direction-only, or negative-friction fits
+are marked `fit_quality: rejected` with reasons shown on the dashboard. A fit
+without those flags still requires independent validation. Smoothing cannot
+prove that Coulomb and viscous friction are separately identifiable: compare
+window/deadzone sensitivity and use a separate recording. Chronological
+holdouts must be split before centered differentiation to prevent leakage.
+
+#### Experimental combined six-joint multisine
+
+The web monitor's **Preview ranges — all joints** and **Transition → Ready →
+Move all 6 joints** use `teaching_combined`, with distinct three-frequency
+patterns per joint. The last coefficient enforces zero initial velocity.
+The web fixes amplitude/frequency scales to 0.5 and allows 30–120 seconds.
+Each joint's absolute displacement bound is below 0.065 rad at these scales;
+this is a small experimental profile, not a validated excitation design.
+
+The server requires a successful preview of the same duration within ten
+minutes, plus explicit path confirmation. Each execution consumes that
+preview. The existing canonical TRANSITION → READY → settled-feedback gate
+still applies, and the existing **Stop step** targets the same worker. Stop
+step is not an emergency stop and the runner does not own the separate
+canonical READY controller's goal. Keep the physical stopping procedure ready.
+Joint-range preview does **not** check collisions, self-collisions or tool
+clearance. Distinct frequencies do not prove parameter identifiability. All
+six joints are recorded, but no fitted parameters are deployed automatically.
+No web/hardware process is restarted by installing this code; the running
+web monitor must be restarted separately, with operator approval, to show
+the new buttons. Existing single-joint controls remain unchanged.
+
+#### Goal-specific tracking and current/torque checks
+
+Every new multisine `--execute` run automatically creates three files:
+
+- `RUN.csv`: original joint-state schema, including raw Present Current.
+- `RUN.csv.tracking.csv`: controller action feedback for that calibration goal,
+  with goal UUID, source timestamp, receive time, desired/actual/error position
+  and velocity. Missing fields are NaN, not artificial zeroes.
+- `RUN.csv.tracking.json`: automatic diagnostic after a successful trajectory,
+  reporting tracking RMSE/max error, timing-match coverage and data quality.
+
+This also works for calibration launched by the existing web button; no new
+motion button or separate passive recording is required. The runner logs a
+`TRACKING_REPORT` summary for the dashboard log. TRANSITION → READY → settled
+feedback remains mandatory. No controller/servo settings are changed. Passive
+`--record-only` still records only joint states, not unrelated action feedback.
+Aborted runs retain raw files but do not get an automatic success-path report.
+Zero/missing action feedback is warned about and is not a successful tracking
+measurement. Feedback rate is set by the controller, not the CSV rate cap.
+
+Controller desired and actual values come from the same feedback message.
+Motor current comes from the nearest JointState **source timestamp**, with a
+25 ms maximum difference; out-of-window rows remain unmatched, and coverage
+below 95% is flagged. This is not atomic hardware sampling. Nearest matching
+may reuse a joint-state sample; do not count such rows as independent current
+measurements. Duplicate/backwards/zero timestamps are rejected. Header stamps
+must share a clock. Old CSVs cannot acquire missing target feedback retroactively.
+
+Reanalyze offline or export the aligned samples (new output paths only):
+
+```bash
+ros2 run om6dof_controllers identification_tracking.py /path/to/RUN.csv \
+  --output /path/to/NEW_tracking.json --aligned-output /path/to/NEW_aligned.csv
+```
+
+`check_current_torque.py` prepares a signed linear current-to-torque candidate
+from independently supplied reference measurements, not from URDF predictions.
+Use the header in `references/torque_reference_template.csv`. Each row is one
+averaged reference observation with a unique `reference_id`, raw measured
+current, measured velocity, and reference actuator joint torque in Nm. The
+reference must include the total required joint torque (including gravity),
+not just an added external load. Document the torque sign convention, method,
+instrument/load uncertainty, pose and payload in `--reference-source`.
+Static friction/hysteresis can still bias this fit; a good regression is not
+physical validation. This tool does not specify or execute a loading procedure.
+
+```bash
+ros2 run om6dof_controllers check_current_torque.py TRAIN_REFERENCE.csv TEST_REFERENCE.csv \
+  --joint joint3 --reference-source 'Describe independent measurement and sign convention' \
+  --output NEW_current_torque.json
+```
+
+Each dataset requires at least six unique reference points, at least three
+positive and three negative torques and four distinct torque levels; training
+and test reference IDs must be disjoint. Nonfinite values, insufficient current
+variation and speeds above 0.005 rad/s are rejected. Holdout predictions use
+unchanged training coefficients. A negative gain is reported as candidate
+polarity, not silently flipped. All results are **not deployable** and no
+calibration is claimed without trustworthy external reference data. Do not
+invent reference readings to make the checker pass.
+
+#### Offline comparison with SI2017 Li/Takesue/Nakamura
+
+`compare_paper_identification.py` compares `sign(velocity)` (paper equation 10)
+against the existing tanh approximation, on identical moving samples. It fits
+the training recording only and evaluates unchanged coefficients on a different
+recording. Defaults are position-derived velocity, a 1 s window, a 0.005 rad/s
+moving threshold, and tanh deadzone 0.005 rad/s. These are analysis settings,
+not parameters stated in the paper. Neither the dashboard fitter nor its
+defaults are changed by this comparison tool.
+
+```bash
+ros2 run om6dof_controllers compare_paper_identification.py TRAIN.csv TEST.csv \
+  --model v2 --joint joint3 --output NEW_REPORT.yaml
+```
+
+Two gravity representations are compared: a single nominal-URDF scale, and
+an analytic URDF regressor with per-link `[mass, mass*cx, mass*cy, mass*cz]`
+columns. The latter includes fixed branches/payloads and reconstructs nominal
+gravity when multiplied by URDF inertial parameters. It is a **full redundant
+link basis**, not an identified minimal base-parameter model. Unit-column SVD
+reports rank and nonunique coefficients; its minimum-norm output must not be
+interpreted as physical masses or centers of mass. Unrecorded gripper joints
+are held at zero and gravity points along base -Z. Runtime payload/orientation
+and URDF identity at recording time are not established by the CSV.
+
+All outputs remain `offline_diagnostic_not_deployable`. Current-domain fits
+are independent per joint. A shared physical parameter fit as in the paper
+requires known signed current-to-joint-torque gains; no such calibration is
+inferred here. Negative friction is exposed, not clipped to pass a gate.
+Existing output paths and identical training/validation CSV hashes are refused.
+
+Source audit: `DynamixelHardware` maps ROS effort to Present Current;
+`xm430_w350.model` and `xm430_w210.model` specify signed raw current with scale
+1 and offset 0. The standard arm transmission matrix is identity. This is
+not an Nm conversion or a physical polarity verification, and does not prove
+which settings were active during a past recording. Gripper mA overrides
+must not be applied to arm data. No hardware configuration is changed here.
+
+The hardware wrapper currently includes `om6dof_v2.urdf.xacro`. The leader
+controller still has the historical 2026-08-28 gains/scales, not validated on
+V2. Torque teaching now uses nominal URDF gravity without fitted gains, with
+approximate datasheet-based current conversion (see "URDF-only teaching
+baseline" below); this is not hardware validation either. V2 changes joint3's
+mounting transform and the wrist payload; selecting the V2 description alone
+does not validate the fitted current coefficients. Link3 CoM and the camera
+payload assumptions also need physical verification.
+
+Fit only a newly recorded dataset from the intended physical configuration.
+Select the model explicitly, for example:
+
+```bash
+ros2 run om6dof_controllers fit_gravity_friction.py /path/to/new_v2_run.csv \
+  --model v2 --joints joint2 joint3 joint5 --output /path/to/v2_candidate.yaml
+```
+
+The output records the expanded URDF and input CSV SHA-256 hashes and is marked
+`candidate_unvalidated`. This is an offline candidate, not automatic deployment
+or a validation result. Do not relabel the August dataset as V2. Check current
+units/polarity, independent held-out poses, residuals, and current saturation
+before updating the controller. Keep friction/bias disabled until separately
+validated. Collect identification under the position controller, before the
+supported transition to pure-current teaching. The multisine preview only
+checks joint limits; it does not check self-collision or workspace clearance.
+
+The dashboard now checks for a local serial-port owner and an existing
+`ros2_control_node` before spawning teaching. This check is not an atomic
+device lock and does not protect direct CLI launches. A running launch process
+is not proof that the teaching controller is active.
+
 `g(q)` comes from the URDF via KDL (`kdl_parser` -> `KDL::ChainDynParam`), for
 the chain `base_link` -> `tip_link`.
 
@@ -110,6 +342,7 @@ not a runnable calibration dependency.
 
 ### The shipped numbers, and where they came from
 
+The legacy mode-5 `om6dof_gravity_compensation_controller` block in
 `config/om6dof_controllers.yaml` carries measured values, not datasheet ones,
 taken from `~/om6dof_identification/identified_gravity_friction.yaml` (fitted
 2026-08-20). That fit expresses everything in raw Dynamixel current ticks
@@ -373,6 +606,143 @@ The model's raw output, in newton-metres and before `gain`, `effort_scale` and
 `max_effort`, is published on `~/gravity_torque` at `publish_rate` -- that is
 the topic to watch while trimming the gains.
 
+### URDF-only teaching baseline
+
+#### Control and diagnostic rates
+
+Torque teaching explicitly sets `update_rate: 100` Hz, matching the hardware
+controller manager's 100 Hz read/update/write loop, and `publish_rate: 100.0`.
+Effort command interfaces are written on every control update regardless of
+whether diagnostics are published. With publication rate at or above the
+controller rate, `commanded_effort` and `gravity_torque` each get one
+**nonblocking publish attempt per update**. This avoids the old timestamp gate
+skipping a cycle when a nominal 10 ms interval is slightly short due to jitter.
+It does not increase servo firmware's internal loop rate or command faster than
+controller_manager, nor add catch-up bursts after a delay.
+
+A requested publication rate below the controller rate keeps timestamp gating;
+zero disables diagnostics. Busy realtime publishers, DDS or subscriber load can
+still drop/delay diagnostics: 100 Hz is a target, not a hard delivery guarantee.
+Publication failure never blocks the motor-command path. Changes require a
+safely supported controller reload; changing `publish_rate` live is rejected.
+The full-rate behavior requires the updated binary, not just YAML. Verify
+actual topic frequency again after deployment; offline timing tests are not a
+measurement on the running robot.
+
+#### Physical parameter sources
+
+The shipped `om6dof_torque_teaching_controller` block uses the URDF published
+on `/robot_description` as its sole source of link masses, CoMs and joint
+geometry. Normal hardware bringup expands
+`om6dof_description/urdf/om6dof_v2.urdf.xacro`. To correct a measured CoM, edit
+the appropriate link's `<inertial><origin xyz="...">` there, not a joint origin
+or visual origin. No physical URDF values were changed in this configuration
+cleanup. Incorrect inertial values still require measurement/correction.
+
+YAML keeps the joint/controller setup, base/tip selection, installation gravity
+vector, motor Nm-to-raw-current conversion, current limits, startup ramp and
+diagnostic publish rate. It no longer supplies `com_offsets`, `gain`, physical
+friction coefficients or `bias` for torque teaching. Tested defaults are no CoM
+overlay, gain **1 on all six joints**, and bias **0**. In particular J1/J4/J6
+are no longer gravity-disabled; the solver determines their torque and the
+existing current caps still apply.
+
+Teaching selects `friction.source: urdf`: each controlled joint's
+`<dynamics friction="C" damping="B">` supplies Coulomb and viscous coefficients.
+For revolute joints these are Nm and Nm*s/rad respectively. Missing dynamics or
+missing attributes mean zero; negative/nonfinite coefficients, unknown joints,
+unsupported joint types and duplicate names fail configuration. Explicit YAML
+`friction.coulomb` / `friction.viscous` arrays are rejected in URDF mode rather
+than silently overriding the source. No URDF physical values are changed.
+
+`friction.deadzone: 0.05` (rad/s) remains a controller smoothing setting, not a
+measured physical coefficient. The output before the existing ramp/current cap
+is `effort_scale * (g_URDF(q) + C*tanh(v/deadzone) + B*v)`. The friction terms
+**assist motion to compensate mechanical resistance**, including viscous
+resistance described by URDF damping. They are not artificial braking `-D*v`.
+There is no static breakaway kick at zero velocity, no double application of
+URDF damping by KDL gravity, and no inertia/Coriolis feed-forward. Runtime uses
+measured servo velocity, so quantization can affect the current command.
+
+Configure logs each joint's effective C/B/smoothing. Model/friction changes via
+parameter services are rejected after initialization to avoid misleading or
+sudden live torque changes. To return to gravity-only teaching set
+`friction.source: parameters` with no coefficient arrays and reload safely.
+The gravity-only pre-change YAML is archived at
+`calibration_reports/urdf_friction_teaching/baseline_controllers.yaml`.
+Other legacy controller blocks keep their parameter-based friction behavior.
+
+The URDF numbers may be simulation defaults, not measured friction of this arm;
+reading them successfully does not validate them or solve a wrong-CoM drift.
+Conversion remains the approximate nominal-12-V datasheet conversion, not a verified
+torque calibration. The previous YAML is preserved at
+`calibration_reports/urdf_only_teaching/baseline_controllers.yaml`. Other
+controller blocks and previous calibration artifacts have not been changed.
+
+Editing YAML/URDF does **not** update a running solver. YAML must be reloaded;
+URDF changes also require the robot-description publisher to reload the xacro
+and the controller to rebuild its model. Physically support the arm before any
+stop/restart: mode 0 has no position hold and deactivation writes zero current.
+Unlike the earlier gravity-only YAML cleanup, reading URDF joint dynamics
+**requires installing the newly compiled controller binary**. An old binary
+does not implement `friction.source` and must not be assumed to apply it just
+because YAML has been edited. Build/test in separate directories while hardware
+may be running; do not overwrite a loaded controller shared library.
+
+### Optional CoM-overlay capability (not used by the shipped teaching YAML)
+
+`om6dof_torque_teaching_controller.ros__parameters.com_offsets` in
+an experimental controller configuration adds an XYZ displacement to each
+named link's original URDF inertial origin, **in metres along the link frame axes**:
+
+```yaml
+com_offsets:
+  links: [link3, link7]
+  xyz_m: [
+    0.0, 0.0, 0.0,  # link3: dx, dy, dz
+    0.0, 0.0, 0.0   # link7: dx, dy, dz
+  ]
+```
+
+For example, changing link3's triple to `[0.001, 0.0, 0.0]` means an additive
+**1 mm along link3 +X**, not +X of the world, not necessarily "forward", and
+not a 1 mm change to the joint origin. This is a syntax example, not a
+recommended correction. One link's CoM can affect several upstream joints.
+Offsets are always relative to a fresh URDF copy, so reloads do not accumulate
+them. All zeros restore the baseline; the URDF file is never overwritten.
+
+The shipped teaching YAML omits these parameters, so no overlay is applied.
+The code and tests are retained for historical experiments, not as a second
+source of CoM values for the URDF-only workflow. This feature changes only this
+controller's gravity model, including off-chain gripper/camera masses before folding.
+It does not change masses, mesh poses, joint zero offsets, robot_description,
+MoveIt/RViz/web kinematics, friction, gains, effort scales, or current limits.
+The leader and spring controller configurations are unaffected. As before,
+off-chain moving joints are approximated at zero by the gravity model.
+
+Each entry needs exactly three finite numbers, a unique existing massive link
+that contributes to the selected chain, and a displacement norm <= 0.05 m.
+Invalid input fails configuration. The 5 cm bound only catches gross unit
+mistakes; it is **not** a safety envelope. Configure logs the original, delta
+and effective CoM for each entry in link-local metres.
+
+These parameters are **startup-only**. `ros2 param set` is explicitly rejected
+instead of reporting success while leaving the solver unchanged. Editing YAML
+also does not alter a running controller: a controlled unload/reload (or launch
+restart) is needed. Before any stop/reload, physically support the arm safely:
+mode 0 has no position hold and deactivation writes zero current. Never adjust
+by repeatedly allowing an unsupported arm to drift. Do not increase current
+limits to hide a model mismatch. Verify against several poses/load measurements,
+not just the pose where it happens to balance.
+
+Build the changed C++ package only when the hardware stack is safely stopped,
+or use separate build/install directories for offline validation. A new shared
+library must not overwrite one mapped by a running hardware process. The YAML
+alone cannot add this feature to an old controller binary. Existing offline
+identification scripts still use nominal URDF CoMs and do **not** consume this
+overlay; retain the offset YAML with any experiment and do not call such fits
+validation of the adjusted model.
+
 ## SpringActuatorController
 
     tau = K (q_rest - q) - D qd [+ g(q)]
@@ -407,5 +777,7 @@ colcon test --packages-select om6dof_controllers && colcon test-result --verbose
 
 The gtest suites cover the pieces that hold the arithmetic -- trajectory
 interpolation, the KDL gravity chain against a hand-computed two-link case, and
-per-joint parameter expansion. The controllers' lifecycle and realtime paths are
-not covered; those need a controller_manager fixture and are still to do.
+per-joint parameter expansion. Configuration tests also load the actual teaching
+YAML, check URDF-only defaults and motor limits, and reject runtime CoM edits.
+Hardware activation/switching and realtime paths are not covered; those need a
+controller_manager fixture and are still to do.

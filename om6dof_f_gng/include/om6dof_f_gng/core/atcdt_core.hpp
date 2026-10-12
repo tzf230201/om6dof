@@ -72,6 +72,22 @@ public:
     std::vector<std::pair<size_t,size_t>> normalEdges() const { return keys(normalEdges_); }
     std::vector<std::pair<size_t,size_t>> traversabilityEdges() const { return keys(traversabilityEdges_); }
 
+    void removeNodes(const std::vector<bool>& remove) {
+        if (remove.size()!=nodes_.size()) throw std::invalid_argument("ATC deletion mask size mismatch");
+        std::vector<int> map(nodes_.size(),-1); std::vector<Node> kept;
+        kept.reserve(nodes_.size());
+        for (size_t i=0;i<nodes_.size();++i) if (!remove[i]) { map[i]=static_cast<int>(kept.size()); kept.push_back(nodes_[i]); }
+        if (kept.size()<2 || kept.size()==nodes_.size()) return;
+        std::vector<std::map<size_t,uint32_t>> adjacency(kept.size());
+        for (size_t a=0;a<nodes_.size();++a) if (map[a]>=0)
+            for (const auto& [b,age]:adjacency_[a]) if (map[b]>=0)
+                adjacency[static_cast<size_t>(map[a])][static_cast<size_t>(map[b])]=age;
+        nodes_.swap(kept); adjacency_.swap(adjacency);
+        positionEdges_.clear(); normalEdges_.clear(); traversabilityEdges_.clear();
+        for (size_t a=0;a<adjacency_.size();++a) for (const auto& [b,age]:adjacency_[a]) if (a<b)
+            positionEdges_[edge(a,b)]=age;
+    }
+
 private:
     using Edge = std::pair<size_t,size_t>;
     static Edge edge(size_t a, size_t b) { return a < b ? Edge{a,b} : Edge{b,a}; }
@@ -122,6 +138,7 @@ private:
         std::uniform_int_distribution<size_t> pick(0,valid.size()-1);
         nodes_.push_back({valid[pick(random_)],{},nextId_++,1,false});
         nodes_.push_back({valid[pick(random_)],{},nextId_++,1,false});
+        adjacency_.resize(2);
     }
 
     void learnOne(const Point& point) {
@@ -141,31 +158,30 @@ private:
         if (firstDistance>=config_.vigilance) {
             // Eq. (3). At the runtime cap, retain the stable learnt map rather
             // than silently replacing old nodes (a behaviour not in the paper).
-            if (nodes_.size()<config_.maxNodes) nodes_.push_back({point,{},nextId_++,1,false});
+            if (nodes_.size()<config_.maxNodes) { nodes_.push_back({point,{},nextId_++,1,false}); adjacency_.emplace_back(); }
             return;
         }
 
-        // Eq. (4), then M_s1 is incremented after its winner update.
-        const float winnerRate=1.0F/(10.0F*static_cast<float>(nodes_[first].wins));
-        move(nodes_[first].position,point,winnerRate);
+        // Paper Eq. (4): winner-rate decays with its win count.
+        move(nodes_[first].position,point,1.0F/(10.0F*static_cast<float>(nodes_[first].wins)));
         ++nodes_[first].wins;
 
         if (secondDistance<config_.vigilance) {
             // Eq. (5): only existing position neighbours of the winner move.
-            std::vector<size_t> neighbours;
-            for (const auto& [current, age] : positionEdges_) {
+            for (const auto& [index, age] : adjacency_[first]) {
                 (void)age;
-                if (current.first==first) neighbours.push_back(current.second);
-                else if (current.second==first) neighbours.push_back(current.first);
-            }
-            for (const auto index : neighbours)
                 move(nodes_[index].position,point,1.0F/(100.0F*static_cast<float>(nodes_[index].wins)));
+            }
         }
 
         // Eq. (6) and the position edge rule in Step 5.
-        for (auto& [current, age] : positionEdges_)
-            if (current.first==first || current.second==first) ++age;
-        if (secondDistance<config_.vigilance) positionEdges_[edge(first,second)]=1;
+        for (auto& [neighbor, age] : adjacency_[first]) {
+            ++age; adjacency_[neighbor][first]=age; positionEdges_[edge(first,neighbor)]=age;
+        }
+        if (secondDistance<config_.vigilance) {
+            adjacency_[first][second]=adjacency_[second][first]=1;
+            positionEdges_[edge(first,second)]=1;
+        }
 
         // Eq. (9)--(10), then Step 6. The threshold is recomputed from current
         // incident ages and deleted-edge ages, exactly as the paper describes.
@@ -182,8 +198,7 @@ private:
 
     void pruneAgedEdges(size_t winner) {
         std::vector<uint32_t> current;
-        for (const auto& [key, age] : positionEdges_)
-            if (key.first==winner || key.second==winner) current.push_back(age);
+        for (const auto& [neighbor, age] : adjacency_[winner]) { (void)neighbor; current.push_back(age); }
         const float q1=percentile(current,0.25F), q3=percentile(current,0.75F);
         const float gthr=q3+(q3-q1);
         const float deletedMean=deletedAges_.empty() ? gthr :
@@ -192,10 +207,11 @@ private:
         const float gmax=denominator>0 ? deletedMean*static_cast<float>(deletedAges_.size())/denominator+
             gthr*static_cast<float>(current.size())/denominator : gthr;
         std::vector<Edge> expired;
-        for (const auto& [key, age] : positionEdges_)
-            if ((key.first==winner || key.second==winner) && static_cast<float>(age)>gmax) expired.push_back(key);
+        for (const auto& [neighbor, age] : adjacency_[winner])
+            if (static_cast<float>(age)>gmax) expired.push_back(edge(winner,neighbor));
         for (const auto& key : expired) {
             deletedAges_.push_back(positionEdges_.at(key)); positionEdges_.erase(key);
+            adjacency_[key.first].erase(key.second); adjacency_[key.second].erase(key.first);
             normalEdges_.erase(key); traversabilityEdges_.erase(key);
         }
     }
@@ -236,10 +252,8 @@ private:
 
     void updateLocalAttributes(size_t index) {
         std::vector<size_t> neighbours;
-        for (const auto& [key, age] : positionEdges_) { (void)age;
-            if (key.first==index) neighbours.push_back(key.second);
-            else if (key.second==index) neighbours.push_back(key.first);
-        }
+        neighbours.reserve(adjacency_[index].size());
+        for (const auto& [neighbor, age] : adjacency_[index]) { (void)age; neighbours.push_back(neighbor); }
         if (neighbours.size()<2) { nodes_[index].normal={}; nodes_[index].traversable=false; return; }
         std::array<std::array<float,3>,3> covariance{};
         for (const auto neighbour : neighbours) {
@@ -267,6 +281,9 @@ private:
     Config config_;
     std::vector<Node> nodes_;
     std::map<Edge,uint32_t> positionEdges_,normalEdges_,traversabilityEdges_;
+    // Sparse neighbour lookup preserves the exact same undirected edges while
+    // avoiding a full graph scan for every ATC-DT winner update.
+    std::vector<std::map<size_t,uint32_t>> adjacency_;
     std::vector<uint32_t> deletedAges_;
     uint64_t nextId_=1;
     std::mt19937 random_;

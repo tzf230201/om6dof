@@ -67,7 +67,7 @@ moveit::core::RobotModelPtr archivedModel(bool rotate_base = false)
     fixed->second->parent_to_joint_origin_transform.rotation.setFromRPY(0.2, -0.1, 0.3);
   }
   auto srdf = std::make_shared<srdf::Model>();
-  if (!srdf->initString(*urdf, readText(repositoryRoot() / "om6dof_moveit_config/config/om6dof.srdf"))) {
+  if (!srdf->initString(*urdf, readText(repositoryRoot() / "om6dof_moveit/config/om6dof.srdf"))) {
     throw std::runtime_error("SRDF fixture could not be parsed");
   }
   return std::make_shared<moveit::core::RobotModel>(urdf, srdf);

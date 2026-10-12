@@ -1,6 +1,30 @@
+# ROS / CMake output (build from the workspace, not the source tree).
 build/
 install/
 log/
+/om6dof_dd_gng/build_linux/
+
+# Local assistant scratch directories and historical working copies.
+.codex/
+.codex_*/
+
+# Python caches and local environments.
 __pycache__/
-*.pyc
+*.py[cod]
 *.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+# Machine-local secrets; keep example configurations shareable.
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Editor / OS temporary files.
+*.swp
+*.swo
+*~
+.DS_Store

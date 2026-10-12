@@ -217,7 +217,7 @@ class DirectPickNode(Node):
         self.declare_parameter("arm_joint_names",
                                ["joint1", "joint2", "joint3",
                                 "joint4", "joint5", "joint6"])
-        from om6dof_controller.ik_solver import IKSolver
+        from om6dof_controllers.ik_solver import IKSolver
         self.ik = IKSolver(
             base_link=str(self.get_parameter("ik_base_link").value),
             tip_link=str(self.get_parameter("ik_tip_link").value),

@@ -9,6 +9,7 @@
 
 #include <array>
 #include <numeric>
+#include <unordered_map>
 
 namespace comparison {
 
@@ -22,6 +23,8 @@ struct Config {
     int dblEdgeCutPeriodFrames=10;  // Valid depth frames per accumulated-strength cut.
     atcdt::Config atcdt;            // Toda & Masuyama (2024), Sec. IV.
     size_t atcUpdates=750;          // Random current-cloud samples per depth frame.
+    float atcFreeSpaceMargin=0.02F; // D435 free-space depth margin, metres.
+    int atcMissingFrames=3;
 };
 
 inline dblgng::Config dblConfig(const fgng::Config& source) {
@@ -105,6 +108,7 @@ public:
                 // processing every image pixel makes online ATC-DT intractable.
                 const auto atcCurrent=boundedCurrent(incoming,config_.atcUpdates);
                 atc_->learn(atcCurrent);
+                removeAbsentAtcNodes(frame);
                 stats.replayPoints=atcCurrent.size();
             } else for (int epoch=0;epoch<cfg.epochsPerFrame;++epoch) {
                 const auto batch=memory_ ? memory_->replay(cfg.replayBudget,replayEpoch_++) : current;
@@ -165,6 +169,9 @@ private:
             throw std::invalid_argument("dbl_edge_cut_period_frames must be in [1,10000]");
         if (config.atcUpdates<3 || config.atcUpdates>1000000)
             throw std::invalid_argument("atc_updates must be in [3,1000000]");
+        if (!std::isfinite(config.atcFreeSpaceMargin) || config.atcFreeSpaceMargin<=0 ||
+            config.atcFreeSpaceMargin>2 || config.atcMissingFrames<1 || config.atcMissingFrames>1000)
+            throw std::invalid_argument("invalid ATC free-space deletion settings");
         const auto& c=config.mapping;
         if (c.inputBudget<3 || c.inputBudget>4000000 || c.memoryCapacity>4000000 ||
             c.replayBudget>4000000 || c.epochsPerFrame>100)
@@ -216,6 +223,37 @@ private:
             for (const auto& p:batch) points.push_back({p.x,p.y,p.z});
             dbl_->learnBatch(points);
         }
+    }
+
+    void removeAbsentAtcNodes(const bio_fgng::DepthFrame& frame) {
+        if (!atc_) return;
+        const auto& nodes=atc_->nodes(); const auto& k=frame.intrinsics;
+        std::vector<bool> remove(nodes.size());
+        for (size_t i=0;i<nodes.size();++i) {
+            const auto camera=frame.pose.toCamera(nodes[i].position);
+            if (camera.z<=0) continue;
+            const int u=static_cast<int>(std::lround(k.fx*camera.x/camera.z+k.cx));
+            const int v=static_cast<int>(std::lround(k.fy*camera.y/camera.z+k.cy));
+            if (u<0 || v<0 || u>=k.width || v>=k.height) continue;
+            // A small conservative window absorbs calibration/pixel rounding.
+            // Its minimum depth prevents a foreground occluder from deleting
+            // a node merely because the centre pixel sees farther background.
+            float observed=std::numeric_limits<float>::infinity();
+            for (int dy=-2;dy<=2;++dy) for (int dx=-2;dx<=2;++dx) {
+                const int x=u+dx,y=v+dy;
+                if (x<0 || y<0 || x>=k.width || y>=k.height) continue;
+                const float depth=frame.depth[static_cast<size_t>(y)*static_cast<size_t>(k.width)+static_cast<size_t>(x)];
+                if (std::isfinite(depth)) observed=std::min(observed,depth);
+            }
+            auto& count=atcMissing_[nodes[i].id];
+            if (std::isfinite(observed) && observed>=config_.mapping.focus.minDepth &&
+                observed<=config_.mapping.focus.maxDepth && observed>camera.z+config_.atcFreeSpaceMargin)
+                ++count;
+            else count=0; // Invalid depth and foreground occlusion never delete a node.
+            remove[i]=count>=config_.atcMissingFrames;
+        }
+        for (size_t i=0;i<nodes.size();++i) if (remove[i]) atcMissing_.erase(nodes[i].id);
+        atc_->removeNodes(remove);
     }
 
     static world_fgng::Point subtract(const world_fgng::Point& a,const world_fgng::Point& b) {
@@ -328,6 +366,7 @@ private:
     struct SuspectedRegion { world_fgng::Point center; float radius; };
     std::vector<world_fgng::Point> nodeNormals_;
     std::vector<world_fgng::Point> atcNormals_;
+    std::unordered_map<uint64_t,int> atcMissing_;
     std::vector<SuspectedRegion> suspected_;
     uint64_t ddFrames_=0;
 };

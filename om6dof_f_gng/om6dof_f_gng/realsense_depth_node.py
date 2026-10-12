@@ -46,6 +46,37 @@ def frame_messages(frame, camera_frame):
     return image, info
 
 
+def color_messages(frame, color_frame_id):
+    """RGB8 image plus its own calibration; a viewing stream, not a measurement."""
+    if not color_frame_id or color_frame_id.startswith('/'):
+        raise ValueError('color_frame must be a nonempty TF frame without a leading slash')
+    pixels = np.ascontiguousarray(frame.color, dtype=np.uint8)
+    if pixels.ndim != 3 or pixels.shape[2] != 3 or min(pixels.shape[:2]) < 1:
+        raise ValueError('Colour must be a nonempty RGB8 image')
+    image = Image()
+    ns = round(frame.color_timestamp * 1_000_000_000)
+    if ns <= 0:
+        raise ValueError('A positive colour acquisition timestamp is required')
+    image.header.stamp.sec, image.header.stamp.nanosec = divmod(ns, 1_000_000_000)
+    image.header.frame_id = color_frame_id
+    image.height, image.width = pixels.shape[:2]
+    image.encoding = 'rgb8'
+    image.is_bigendian = 0
+    image.step = image.width * 3
+    image.data = pixels.tobytes()
+    intrinsics = frame.color_intrinsics
+    fx, fy, cx, cy = (intrinsics[key] for key in ('fx', 'fy', 'cx', 'cy'))
+    info = CameraInfo()
+    info.header = image.header
+    info.height, info.width = image.height, image.width
+    info.distortion_model = 'plumb_bob'
+    info.d = [0.] * 5
+    info.k = [fx, 0., cx, 0., fy, cy, 0., 0., 1.]
+    info.r = [1., 0., 0., 0., 1., 0., 0., 0., 1.]
+    info.p = [fx, 0., cx, 0., 0., fy, cy, 0., 0., 0., 1., 0.]
+    return image, info
+
+
 class RealSenseDepthNode(Node):
     def __init__(self):
         super().__init__('realsense_depth')
@@ -61,13 +92,20 @@ class RealSenseDepthNode(Node):
             'min_depth': .15, 'max_depth': 3., 'warmup_frames': 15,
             'depth_filter': 'supported', 'max_frame_age': .5,
             'camera_frame': 'd435_depth_optical_frame',
+            'enable_color': False,
+            'color_frame': 'd435_color_optical_frame',
         }
         for key, value in defaults.items():
             self.declare_parameter(key, value, ParameterDescriptor(read_only=True))
         options = {key: self.get_parameter(key).value for key in defaults}
         self.camera_frame = options.pop('camera_frame')
+        self.color_frame = options.pop('color_frame')
         if not self.camera_frame or self.camera_frame.startswith('/'):
             raise ValueError('camera_frame must be a nonempty TF frame without a leading slash')
+        self.enable_color = bool(options.pop('enable_color'))
+        if self.enable_color and (not self.color_frame or self.color_frame.startswith('/')):
+            raise ValueError('color_frame must be a nonempty TF frame without a leading slash')
+        options['color'] = self.enable_color
         options['z_min'] = options.pop('min_depth')
         options['z_max'] = options.pop('max_depth')
         self._max_frame_age = options['max_frame_age']
@@ -85,6 +123,10 @@ class RealSenseDepthNode(Node):
                          durability=DurabilityPolicy.VOLATILE)
         self._image_pub = self.create_publisher(Image, 'depth/image_raw', qos)
         self._info_pub = self.create_publisher(CameraInfo, 'depth/camera_info', qos)
+        self._color_pub = self._color_info_pub = None
+        if self.enable_color:
+            self._color_pub = self.create_publisher(Image, 'color/image_raw', qos)
+            self._color_info_pub = self.create_publisher(CameraInfo, 'color/camera_info', qos)
         self._timer = self.create_timer(1. / 60., self._publish_pending)
         self._worker = threading.Thread(target=self._capture, name='realsense-capture', daemon=True)
         self._worker.start()
@@ -122,12 +164,17 @@ class RealSenseDepthNode(Node):
         self._info_pub.publish(info)
         self._image_pub.publish(image)
         self._published_frames += 1
+        if self._color_pub is not None and frame.color is not None:
+            color_image, color_info = color_messages(frame, self.color_frame)
+            self._color_info_pub.publish(color_info)
+            self._color_pub.publish(color_image)
         if not self._announced:
             self._announced = True
             self.get_logger().info(
                 f"{metadata['sensor_name']}: {image.width}x{image.height} depth, "
                 f"{metadata['fps']} FPS, metres, {metadata['timestamp_domain']}, "
-                f"frame={self.camera_frame}, filter={metadata['depth_filter']}")
+                f"frame={self.camera_frame}, filter={metadata['depth_filter']}, "
+                f"colour={'on ' + self.color_frame if self.enable_color else 'off'}")
 
     def close(self):
         self._stop.set()

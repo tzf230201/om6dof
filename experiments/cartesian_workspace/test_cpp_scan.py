@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from workspace_scan import IKSolver, cartesian_rpy_to_tip_rotation, conditioning
-from om6dof_controller import ik_solver
+from om6dof_controllers import ik_solver
 
 
 @pytest.fixture(scope='module')

@@ -47,11 +47,13 @@
 // instant per loop iteration.
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <iomanip>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -71,6 +73,8 @@
 
 #include <geometry_msgs/msg/point.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -271,6 +275,27 @@ Box3D segment3DBox(
     box.min[axis] = center - size * 0.5F;
     box.max[axis] = center + size * 0.5F;
   }
+
+  // Depth only ever resolves an object's FRONT surface -- nothing behind the
+  // silhouette is ever measured -- so the z spread above runs from the
+  // nearest point to the silhouette edge. On a convex object that distance is
+  // its radius, not its full depth, and taking the midpoint of it puts "the
+  // centre" half a radius in front of where the object's axis really is: a
+  // 51 mm wide bottle measured 23 mm of depth here and its centre came out
+  // 14 mm too close to the lens, which is a grasp that closes on thin air.
+  //
+  // Push the centre back by exactly what depth did resolve, so min stays on
+  // the measured front surface and max reaches the far side a convex object
+  // of that radius must have. Deliberately NOT half the object's WIDTH: that
+  // assumes a round cross-section and would shove a flat object's centre far
+  // behind it (the monitor in this scene: 76 mm). A flat object resolves
+  // almost no depth spread, so this correction leaves it essentially alone --
+  // the estimate degrades towards "the surface we can actually see".
+  box.center[2] += box.size[2] * 0.5F;
+  box.size[2] *= 2.0F;
+  box.min[2] = box.center[2] - box.size[2] * 0.5F;
+  box.max[2] = box.center[2] + box.size[2] * 0.5F;
+
   box.point_count = static_cast<int>(xs.size());
   box.valid = true;
   return box;
@@ -345,6 +370,66 @@ void drawProjectedBox(
   }
 }
 
+// world <- colour-optical, sampled from the robot's TF tree for one frame.
+// Held as plain floats so the drawing code needs no tf2 types: a centre in
+// camera metres becomes a centre in robot-base metres with one multiply.
+struct WorldPose
+{
+  bool valid = false;
+  float rotation[9]{};   // row-major
+  float translation[3]{};
+
+  std::array<float, 3> apply(const float (&point)[3]) const
+  {
+    return {
+      rotation[0] * point[0] + rotation[1] * point[1] + rotation[2] * point[2] + translation[0],
+      rotation[3] * point[0] + rotation[4] * point[1] + rotation[5] * point[2] + translation[1],
+      rotation[6] * point[0] + rotation[7] * point[1] + rotation[8] * point[2] + translation[2]};
+  }
+};
+
+// Project a Box3D's centre point and mark it with a filled dot + a white
+// outline ring, so it reads clearly even against a similarly-coloured
+// object. This is the same box.center segment3DBox() already computes
+// (2nd/98th-percentile midpoint of the segmented front surface, in metres,
+// colour-optical frame) -- just made visible without needing RViz.
+void drawCenterPoint(
+  cv::Mat & image, const Box3D & box, const rs2_intrinsics & color_intrinsics,
+  const cv::Scalar & color, const WorldPose & world_pose)
+{
+  const float point[3] = {box.center[0], box.center[1], box.center[2]};
+  float pixel[2];
+  rs2_project_point_to_pixel(pixel, &color_intrinsics, point);
+  const cv::Point uv(
+    std::clamp(static_cast<int>(std::lround(pixel[0])), -10000, 10000),
+    std::clamp(static_cast<int>(std::lround(pixel[1])), -10000, 10000));
+  cv::circle(image, uv, 6, cv::Scalar(255, 255, 255), 2, cv::LINE_AA);
+  cv::circle(image, uv, 4, color, cv::FILLED, cv::LINE_AA);
+
+  // The centre's metric coordinates, printed next to the dot that owns them.
+  // Preferred frame is the robot's world/base frame, taken from the robot's
+  // own TF: those are the numbers worth reading, because they are what the
+  // arm is actually commanded against. Raw colour-optical coordinates are
+  // measured relative to the lens and look nothing like the object's place
+  // in the workcell, so they get shown only when TF cannot supply a pose
+  // (the node run standalone, no robot publishing). The prefix always says
+  // which frame is on screen, so the two can never be confused.
+  std::ostringstream text;
+  text << std::fixed << std::setprecision(3);
+  if (world_pose.valid) {
+    const std::array<float, 3> world = world_pose.apply(point);
+    text << "world X" << world[0] << " Y" << world[1] << " Z" << world[2] << "m";
+  } else {
+    text << "cam X" << box.center[0] << " Y" << box.center[1] << " Z" << box.center[2] << "m";
+  }
+  const cv::Point anchor(uv.x + 11, uv.y + 5);
+  cv::putText(
+    image, text.str(), anchor, cv::FONT_HERSHEY_SIMPLEX, 0.45,
+    cv::Scalar(0, 0, 0), 3, cv::LINE_AA);
+  cv::putText(
+    image, text.str(), anchor, cv::FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv::LINE_AA);
+}
+
 std::string jsonEscape(const std::string & value)
 {
   std::string out;
@@ -363,7 +448,16 @@ std::string jsonEscape(const std::string & value)
 class Yolo3DBoxNode final : public rclcpp::Node
 {
 public:
-  Yolo3DBoxNode()
+  // `headless` comes from a plain `--headless` argv flag (checked in main(),
+  // before rclcpp::init's --ros-args parsing ever sees it), not a ROS
+  // parameter: the display window is the default experience running this
+  // node standalone, so opting OUT should be as short as the other scripts'
+  // --headless convenience, not a `--ros-args -p display_window:=false`
+  // round-trip. --headless is applied after `display_window` is read below,
+  // so it always wins over `-p display_window:=true` if both are given --
+  // a deliberate escape hatch never gets silently overridden by a leftover
+  // launch-file parameter.
+  explicit Yolo3DBoxNode(bool headless = false)
   : Node("yolo_3d_box")
   {
     model_version_ = declare_parameter<std::string>("model_version", "v2");
@@ -380,13 +474,22 @@ public:
     z_max_ = static_cast<float>(declare_parameter<double>("z_max", 4.0));
     depth_band_m_ = static_cast<float>(declare_parameter<double>("depth_band_m", 0.12));
     min_points_ = declare_parameter<int>("min_points", 40);
+    world_frame_ = declare_parameter<std::string>("world_frame", "world");
+    camera_tf_frame_ = declare_parameter<std::string>(
+      "camera_tf_frame", "d435_color_optical_frame");
     image_topic_ = declare_parameter<std::string>(
       "image_topic", "/om6dof_yolo3d/debug_image/compressed");
     objects_topic_ = declare_parameter<std::string>(
       "objects_topic", "/om6dof_yolo3d/objects");
+    center_markers_topic_ = declare_parameter<std::string>(
+      "center_markers_topic", "/om6dof_yolo3d/box_centers");
+    publish_center_markers_ = declare_parameter<bool>("publish_center_markers", true);
     jpeg_quality_ = declare_parameter<int>("jpeg_quality", 70);
     publish_overlay_ = declare_parameter<bool>("publish_overlay", true);
-    display_window_ = declare_parameter<bool>("display_window", false);
+    display_window_ = declare_parameter<bool>("display_window", true);
+    if (headless) {
+      display_window_ = false;
+    }
 
     enable_dd_gng_ = declare_parameter<bool>("enable_dd_gng", true);
     gng_max_nodes_ = declare_parameter<int>("gng_max_nodes", 500);
@@ -434,6 +537,13 @@ public:
 
     image_publisher_ = create_publisher<sensor_msgs::msg::CompressedImage>(image_topic_, 2);
     objects_publisher_ = create_publisher<std_msgs::msg::String>(objects_topic_, 2);
+    // Independent of enable_dd_gng_: the box centre is computed by
+    // segment3DBox() regardless, and it is the one number a pick pipeline
+    // actually needs -- always available, not tied to the graph feature.
+    if (publish_center_markers_) {
+      center_markers_publisher_ =
+        create_publisher<visualization_msgs::msg::MarkerArray>(center_markers_topic_, 2);
+    }
     if (enable_dd_gng_) {
       om6dof_dd_gng::DynamicDensityGngParameters gng_parameters;
       gng_parameters.max_nodes = gng_max_nodes_;
@@ -456,6 +566,12 @@ public:
       get_logger(), "YOLOX-S TensorRT engine loaded: %s", engine_path_.c_str());
 
     startCamera();
+
+    // Reads whichever /tf this node is remapped onto, so under the pickup
+    // launch it sees the same private v2 tree the pick planner uses. Filled
+    // by the executor thread while captureLoop runs on its own.
+    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, this);
 
     running_ = true;
     worker_ = std::thread(&Yolo3DBoxNode::captureLoop, this);
@@ -516,6 +632,45 @@ private:
       depth_scale_);
   }
 
+  // Latest world <- camera from TF, or an invalid pose if the robot is not
+  // publishing one. Asked for with a zero timeout and the latest available
+  // stamp, never a blocking wait: this runs inside the 30 fps capture loop,
+  // and a display label is never worth stalling the pipeline for. A missing
+  // pose simply falls back to showing camera-frame numbers.
+  WorldPose lookupWorldPose()
+  {
+    WorldPose pose;
+    if (!tf_buffer_) {
+      return pose;
+    }
+    geometry_msgs::msg::TransformStamped transform;
+    try {
+      transform = tf_buffer_->lookupTransform(
+        world_frame_, camera_tf_frame_, tf2::TimePointZero);
+    } catch (const tf2::TransformException &) {
+      return pose;
+    }
+    const auto & q = transform.transform.rotation;
+    const auto & t = transform.transform.translation;
+    const double n = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+    if (!(n > 0.5)) {
+      return pose;
+    }
+    const double x = q.x / n, y = q.y / n, z = q.z / n, w = q.w / n;
+    const double r[9] = {
+      1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
+      2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
+      2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)};
+    for (int i = 0; i < 9; ++i) {
+      pose.rotation[i] = static_cast<float>(r[i]);
+    }
+    pose.translation[0] = static_cast<float>(t.x);
+    pose.translation[1] = static_cast<float>(t.y);
+    pose.translation[2] = static_cast<float>(t.z);
+    pose.valid = true;
+    return pose;
+  }
+
   void captureLoop()
   {
     rs2::align align_to_color(RS2_STREAM_COLOR);
@@ -565,6 +720,7 @@ private:
 
       std::ostringstream json;
       json << "{\"stamp\":" << stamp.seconds()
+           << ",\"stamp_ns\":" << stamp.nanoseconds()
            << ",\"camera_model\":\"" << jsonEscape(camera_model_resolved())
            << "\",\"camera_serial\":\"" << jsonEscape(camera_serial_)
            << "\",\"frame\":\"colour_optical\",\"coordinate_space\":\"camera_optical\""
@@ -572,6 +728,14 @@ private:
            << ",\"objects\":[";
       std::vector<Box3D> boxes;
       boxes.reserve(detections.size());
+      visualization_msgs::msg::MarkerArray center_markers;
+      if (publish_center_markers_ && center_markers_publisher_) {
+        visualization_msgs::msg::Marker clear;
+        clear.action = visualization_msgs::msg::Marker::DELETEALL;
+        center_markers.markers.push_back(clear);
+      }
+      // One lookup per frame, shared by every object drawn from it.
+      const WorldPose world_pose = lookupWorldPose();
       bool first_object = true;
       for (const auto & detection : detections) {
         const Box3D box = segment3DBox(
@@ -597,7 +761,49 @@ private:
             cv::FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2, cv::LINE_AA);
           if (box.valid) {
             drawProjectedBox(overlay, box, color_intrinsics_, color_bgr);
+            drawCenterPoint(overlay, box, color_intrinsics_, color_bgr, world_pose);
           }
+        }
+        if (box.valid && publish_center_markers_ && center_markers_publisher_) {
+          visualization_msgs::msg::Marker marker;
+          marker.header.frame_id = "colour_optical";
+          marker.header.stamp = stamp;
+          marker.ns = "box_centers";
+          marker.id = static_cast<int>(center_markers.markers.size());
+          marker.type = visualization_msgs::msg::Marker::SPHERE;
+          marker.action = visualization_msgs::msg::Marker::ADD;
+          marker.pose.position.x = box.center[0];
+          marker.pose.position.y = box.center[1];
+          marker.pose.position.z = box.center[2];
+          marker.pose.orientation.w = 1.0;
+          marker.scale.x = marker.scale.y = marker.scale.z = 0.02;
+          marker.color = semanticNodeColor(detection.class_id);
+          // A quarter-second lifetime, not zero (forever): a box RViz never
+          // gets told to clear (this node killed, network drop, ...) should
+          // still vanish on its own instead of hanging as a stale ghost.
+          marker.lifetime = rclcpp::Duration::from_seconds(0.25);
+          center_markers.markers.push_back(marker);
+
+          visualization_msgs::msg::Marker label;
+          label.header = marker.header;
+          label.ns = "box_center_labels";
+          label.id = marker.id;
+          label.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+          label.action = visualization_msgs::msg::Marker::ADD;
+          label.pose.position.x = box.center[0];
+          label.pose.position.y = box.center[1];
+          label.pose.position.z = box.center[2] - std::max(box.size[2] * 0.5F, 0.02F) - 0.015F;
+          label.pose.orientation.w = 1.0;
+          label.scale.z = 0.02;
+          label.color = marker.color;
+          label.lifetime = marker.lifetime;
+          std::ostringstream text;
+          text << detection.className() << " ("
+               << std::round(box.center[0] * 1000.0F) << ", "
+               << std::round(box.center[1] * 1000.0F) << ", "
+               << std::round(box.center[2] * 1000.0F) << ") mm";
+          label.text = text.str();
+          center_markers.markers.push_back(label);
         }
         if (!first_object) {
           json << ",";
@@ -625,6 +831,10 @@ private:
       std_msgs::msg::String objects_msg;
       objects_msg.data = json.str();
       objects_publisher_->publish(objects_msg);
+
+      if (publish_center_markers_ && center_markers_publisher_) {
+        center_markers_publisher_->publish(center_markers);
+      }
 
       double gng_ms = 0.0;
       if (enable_dd_gng_) {
@@ -978,6 +1188,8 @@ private:
   int min_points_ = 40;
   std::string image_topic_;
   std::string objects_topic_;
+  std::string center_markers_topic_;
+  bool publish_center_markers_ = true;
   int jpeg_quality_ = 70;
   bool publish_overlay_ = true;
   bool display_window_ = false;
@@ -1015,11 +1227,17 @@ private:
   double depth_scale_ = 0.0;
   rs2_intrinsics color_intrinsics_{};
 
+  std::string world_frame_;
+  std::string camera_tf_frame_;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
   std::shared_ptr<om6dof_dd_gng::YoloDetector> detector_;
   std::unique_ptr<om6dof_dd_gng::DynamicDensityGrowingNeuralGas> gng_;
 
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr image_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr objects_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr center_markers_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr graph_markers_publisher_;
   rclcpp::Publisher<om6dof_dd_gng::msg::EnvironmentGraph>::SharedPtr graph_data_publisher_;
 
@@ -1029,10 +1247,16 @@ private:
 
 int main(int argc, char ** argv)
 {
+  bool headless = false;
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "--headless") {
+      headless = true;
+    }
+  }
   rclcpp::init(argc, argv);
   int result = 0;
   try {
-    auto node = std::make_shared<Yolo3DBoxNode>();
+    auto node = std::make_shared<Yolo3DBoxNode>(headless);
     rclcpp::spin(node);
   } catch (const std::exception & e) {
     RCLCPP_FATAL(rclcpp::get_logger("yolo_3d_box"), "Fatal startup error: %s", e.what());

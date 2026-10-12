@@ -1,0 +1,26 @@
+# Stage 1 of om6dof_topo_vslam: RealSense depth plus the robot TF tree only.
+# No GNG, no topological map yet. Lengths are metres; no world axis is mirrored.
+/om6dof_topo_vslam/realsense_depth:
+  ros__parameters:
+    fps: 15
+    stride: 2
+    min_depth: 0.15
+    max_depth: 3.0
+    serial: ""
+    camera_frame: d435_depth_optical_frame
+    depth_filter: supported
+    # RGB is a viewing stream from the same device: never aligned to depth and
+    # never used for the measured cloud.
+    enable_color: true
+    color_frame: d435_color_optical_frame
+
+/om6dof_topo_vslam/topo_vslam:
+  ros__parameters:
+    world_frame: world
+    camera_frame: d435_depth_optical_frame
+    min_depth: 0.15
+    max_depth: 3.0
+    # Pixel decimation on top of the camera node's own stride.
+    stride: 2
+    tf_timeout: 0.5
+    max_pose_age: 0.5

@@ -8,6 +8,7 @@
     Local YOLOX acquires targets, an OpenCV tracker follows them in real time,
     RealSense depth deprojects detections to 3D, with optional end-effector
     output when a supported detector class is configured.
+    Includes BOXER 3D perception, camera viewers, and pseudo-event utilities.
   </description>
   <maintainer email="biancanobelia@gmail.com">unitree</maintainer>
   <license>Apache-2.0</license>
@@ -26,6 +27,16 @@
   <exec_depend>om6dof_description</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>sensor_msgs_py</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>tf2_ros_py</exec_depend>
+  <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <!-- Optional BOXER automatic/pickup integration requires om6dof_dd_gng.
+       It already depends on this package's camera utilities, so making it a
+       mandatory dependency here would create a cycle. See docs/boxer.md. -->
   <test_depend>python3-pytest</test_depend>
 
   <export>

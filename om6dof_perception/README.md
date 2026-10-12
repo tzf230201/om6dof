@@ -1,5 +1,21 @@
 # om6dof_perception
 
+This package also contains the former vision utilities and BOXER pipeline:
+
+- [Manual/automatic BOXER 3D perception](docs/boxer.md)
+- [RealSense viewers and pseudo-event camera](docs/camera_utilities.md)
+
+```bash
+source ~/ros2_ws/install/setup.bash
+# Choose one camera pipeline at a time:
+ros2 launch om6dof_perception boxer_only.launch.py
+# Automatic BOXER path (also requires om6dof_dd_gng):
+ros2 launch om6dof_perception yolox_boxer3d_onnx.launch.py
+```
+
+The existing `perception.launch.py`, `perception_v2.launch.py`, ROS node names,
+topics, calibration checks, and model/runtime directories are unchanged.
+
 > **Leader-profile note:** perception itself does not own U2D2, but any action
 > that invokes MoveIt/pickup requires the normal position-control profile. Do not
 > command pickup while the isolated Mode 0 leader stack is active. See the

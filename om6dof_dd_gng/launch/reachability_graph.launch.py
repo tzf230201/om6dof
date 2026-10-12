@@ -85,7 +85,7 @@ def _launch_setup(context, *, moveit_share, description_share, dd_gng_share):
 
 def generate_launch_description():
     share_dir = get_package_share_directory("om6dof_dd_gng")
-    moveit_share = get_package_share_directory("om6dof_moveit_config")
+    moveit_share = get_package_share_directory("om6dof_moveit")
 
     description_share = get_package_share_directory("om6dof_description")
 

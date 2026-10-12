@@ -133,7 +133,7 @@ class CalibGui(Node):
         self._latest_q = None
         self._ik = None
         try:
-            from om6dof_controller.ik_solver import IKSolver
+            from om6dof_controllers.ik_solver import IKSolver
             self._ik = IKSolver(
                 xacro_rel=str(self.get_parameter("ik_xacro_rel").value)
             )

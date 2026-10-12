@@ -79,7 +79,7 @@ def generate_launch_description():
         DeclareLaunchArgument("world_frame", default_value="world"),
         DeclareLaunchArgument("camera_frame", default_value="d435_depth_optical_frame"),
         DeclareLaunchArgument("camera_serial", default_value=""),
-        DeclareLaunchArgument("max_nodes", default_value="100",
+        DeclareLaunchArgument("max_nodes", default_value="500",
                               description="Maximum number of graph nodes."),
         DeclareLaunchArgument(
             "memory_mode", default_value="world", choices=["world", "current"],
@@ -87,8 +87,8 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "edge_support_radius", default_value="0.0",
             description="Exported edge surface support radius in metres; 0 disables this filter."),
-        DeclareLaunchArgument("dd_updates", default_value="300",
-                              description="DD-GNG paper lambda: accepted samples per frame epoch."),
+        DeclareLaunchArgument("dd_updates", default_value="500",
+                              description="Accepted samples per frame epoch (DepthSensor_Buggy primary pass)."),
         DeclareLaunchArgument(
             "params_file", default_value=str(share / "config" / "dd_gng.yaml"),
             description="ROS parameter file for the camera and DD-GNG mapper nodes."),

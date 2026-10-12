@@ -76,7 +76,7 @@ def generate_launch_description():
     )
     moveit = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([
-            FindPackageShare("om6dof_moveit_config"),
+            FindPackageShare("om6dof_moveit"),
             "launch", "om6dof_moveit.launch.py",
         ])),
         launch_arguments={"start_rviz": "false"}.items(),

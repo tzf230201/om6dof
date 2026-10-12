@@ -58,7 +58,7 @@ def main():
     output = Path(args.output_dir or tempfile.mkdtemp(prefix='boxer_pick_preview_smoke_'))
     output.mkdir(parents=True, exist_ok=True)
     description = Path(get_package_share_directory('om6dof_description'))
-    config = (MoveItConfigsBuilder('om6dof_v2', package_name='om6dof_moveit_config')
+    config = (MoveItConfigsBuilder('om6dof_v2', package_name='om6dof_moveit')
               .robot_description(file_path=str(description / 'urdf/om6dof_v2.urdf.xacro'))
               .robot_description_semantic(file_path='config/om6dof.srdf')
               .robot_description_kinematics(file_path='config/kinematics.yaml')

@@ -1,5 +1,23 @@
 # om6dof_pick_and_place
 
+Package ini mencakup jalur pickup biasa dan grasping dengan Gemini/GraspNet
+yang sebelumnya terpisah. Semua nama node/service, parameter kalibrasi, dan
+pengaman gerakan dipertahankan. Panduan Gemini ada di [docs/gemini.md](docs/gemini.md).
+
+Perintah Gemini sekarang memakai package yang sama:
+
+```bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch om6dof_pick_and_place gemini_pick.launch.py
+# Alternatif: pilih objek berdasarkan instruksi teks
+ros2 launch om6dof_pick_and_place gemini_target_pick.launch.py
+```
+
+Default tetap `auto:=false` dan `execute_motion:=false`. Launch ini dapat membuka
+kamera dan menjalankan MoveIt; gunakan hanya satu pemilik kamera dan profile
+position-control yang sesuai. Lokasi API key, model, dan runtime eksternal tidak
+berubah; penggabungan package tidak menginstal model atau memanggil Gemini.
+
 ## Verifikasi titik tengah depth memakai URDF V2
 
 Alat read-only ini menandai pusat RGB, mengambil median depth pada patch
@@ -41,7 +59,7 @@ Escape, atau Ctrl-C untuk berhenti.
 > [leader-arm gravity-compensation record](../docs/leader_arm_gravity_compensation.md).
 
 Pick-and-place state machine for the 6-DOF OM6DOF. Sits on top
-of `om6dof_moveit_config` (MoveIt 2) and
+of `om6dof_moveit` (MoveIt 2) and
 [`om6dof_bringup`](../om6dof_bringup/) (ros2_control + Dynamixels), and
 drives a configurable waypoint sequence through the `MoveGroup` action.
 
@@ -206,7 +224,7 @@ node starts.
 | Param | Default | Notes |
 |---|---|---|
 | `waypoints_file`     | `<share>/config/waypoints.yaml`           | Path to the YAML |
-| `srdf_file`          | auto (`om6dof_moveit_config`) | Used to resolve `named:` waypoints client-side |
+| `srdf_file`          | auto (`om6dof_moveit`) | Used to resolve `named:` waypoints client-side |
 | `auto_run`           | `true`                                    | Run once at startup (uses a 2-second timer) |
 | `arm_group`          | `arm`                                     | SRDF planning group |
 | `gripper_group`      | `gripper`                                 | SRDF planning group for the gripper |
@@ -530,7 +548,7 @@ approach (`grasp_pitch: 2.4` ≈ 45°) or move the tag closer to the arm.
 ## See also
 
 - [`om6dof_bringup`](../om6dof_bringup/) — hardware bringup
-- `om6dof_moveit_config` — MoveIt 2 layer
+- `om6dof_moveit` — MoveIt 2 layer
 - `om6dof_bringup` — ros2_control hardware layer
 - [`om6dof_teleop`](../om6dof_teleop/) — JOINT/CARTESIAN/CYLINDRICAL remote
   control with an exclusive ros2_control switch between remote and autonomous
@@ -600,7 +618,7 @@ pusat, menolak Execute ketika dinonaktifkan, dan mengirim **0 goal arm/gripper**
 Kotak penghalang tambahan ditolak pada uji collision. Sensor dan controller
 fisik tidak dijalankan oleh pengujian ini. Script:
 `test/boxer_pick_preview_smoke.py`; uji komunikasi latched Boxer ada di
-`../om6dof_boxer/test/boxer_pick_dds_smoke.py`.
+`../om6dof_perception/test/boxer_pick_dds_smoke.py`.
 
 Keterbatasan library terpasang: binary MoveIt Humble 2.5.9 pada AGX mengeluarkan
 SIGSEGV saat destructor setelah SIGINT, meskipun Preview sudah selesai dan

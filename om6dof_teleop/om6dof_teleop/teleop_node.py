@@ -40,7 +40,7 @@ from rclpy.qos import (
 from std_msgs.msg import Bool, Float64MultiArray, String
 from unitree_go.msg import LowState, WirelessController
 
-from om6dof_controller.control_math import (
+from om6dof_controllers.control_math import (
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
     MODE_CYLINDRICAL,

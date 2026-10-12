@@ -1,0 +1,297 @@
+"""ROS-independent protocol and math helpers for :mod:`om6dof_controllers`."""
+
+from __future__ import annotations
+
+import math
+from typing import Optional, Sequence, Tuple
+
+import numpy as np
+
+
+MODE_AUTONOMOUS = "AUTONOMOUS"
+MODE_JOINT = "JOINT"
+MODE_CARTESIAN = "CARTESIAN"
+MODE_CYLINDRICAL = "CYLINDRICAL"
+# Cylindrical position, but the wrist is held at absolute angles instead of
+# drifting: yaw rides along with theta so the tool keeps its heading
+# relative to the radial direction, while pitch and roll stay referenced
+# to zero in the base frame.
+MODE_SEMI_CYLINDRICAL = "SEMI_CYLINDRICAL"
+# Pitch is held clear of +/-90 degrees, where the Z-Y-X decomposition stops
+# separating roll from yaw and the wrist target would become ambiguous.
+SEMI_PITCH_LIMIT = math.pi / 2 - 0.05
+MODE_READY = "READY"
+MODE_STARTUP = "STARTUP"
+# Return to the captured startup/rest pose, then hand controller ownership
+# back to the autonomous trajectory controller.
+MODE_REST = "REST"
+# Lead-through: the position command tracks the measured position, so the
+# servo's own error term stays near zero and the arm can be pushed by hand.
+# Not a motion mode -- nothing streams into it, and it has no target form --
+# so it stays out of MOTION_MODES and the mode cycle.
+MODE_FLOAT = "FLOAT"
+MOTION_MODES = (
+    MODE_JOINT,
+    MODE_CARTESIAN,
+    MODE_CYLINDRICAL,
+    MODE_SEMI_CYLINDRICAL,
+)
+# Modes driven through IK rather than joint-by-joint, and the subset that
+# integrates position in cylindrical coordinates. Naming them once keeps a
+# new mode from silently missing one of the branches that test for them.
+COORDINATE_MODES = (MODE_CARTESIAN, MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL)
+CYLINDRICAL_MODES = (MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL)
+OPERATION_MODES = (
+    MODE_AUTONOMOUS,
+    *MOTION_MODES,
+    MODE_READY,
+    MODE_STARTUP,
+    MODE_REST,
+    MODE_FLOAT,
+)
+
+
+def normalize_operation_mode(value: str) -> str:
+    normalized = str(value).strip().upper().replace("-", "_")
+    aliases = {
+        "AUTO": MODE_AUTONOMOUS,
+        "AUTONOMY": MODE_AUTONOMOUS,
+        "AUTONOMOUS": MODE_AUTONOMOUS,
+        "OFF": MODE_AUTONOMOUS,
+        "JOINT": MODE_JOINT,
+        "JOINTS": MODE_JOINT,
+        "CART": MODE_CARTESIAN,
+        "IK": MODE_CARTESIAN,
+        "CARTESIAN": MODE_CARTESIAN,
+        "CYL": MODE_CYLINDRICAL,
+        "CYLINDER": MODE_CYLINDRICAL,
+        "CYLINDRICAL": MODE_CYLINDRICAL,
+        "SILINDER": MODE_CYLINDRICAL,
+        "SILINDRIS": MODE_CYLINDRICAL,
+        "SEMI": MODE_SEMI_CYLINDRICAL,
+        "SEMI_CYL": MODE_SEMI_CYLINDRICAL,
+        "SEMI_CYLINDER": MODE_SEMI_CYLINDRICAL,
+        "SEMI_CYLINDRICAL": MODE_SEMI_CYLINDRICAL,
+        "SEMI_SILINDER": MODE_SEMI_CYLINDRICAL,
+        "READY": MODE_READY,
+        "STARTUP": MODE_STARTUP,
+        "REST": MODE_REST,
+        "HOME": MODE_REST,
+        "FLOAT": MODE_FLOAT,
+        "LEAD": MODE_FLOAT,
+        "LEADTHROUGH": MODE_FLOAT,
+        "TEACH": MODE_FLOAT,
+        "START": MODE_STARTUP,
+    }
+    try:
+        return aliases[normalized]
+    except KeyError as exc:
+        expected = ", ".join(OPERATION_MODES)
+        raise ValueError(
+            f"unknown operation mode '{value}'; expected {expected}"
+        ) from exc
+
+
+def next_motion_mode(current: str) -> str:
+    mode = normalize_operation_mode(current)
+    if mode not in MOTION_MODES:
+        return MODE_JOINT
+    return MOTION_MODES[(MOTION_MODES.index(mode) + 1) % len(MOTION_MODES)]
+
+
+def validated_control_command(values: Sequence[float]) -> np.ndarray:
+    result = np.asarray(values, dtype=float)
+    if result.shape != (6,) or not np.all(np.isfinite(result)):
+        raise ValueError("control_cmd must contain exactly six finite values")
+    return result.copy()
+
+
+def validated_joint_positions(values: Sequence[float], label: str) -> list[float]:
+    result = [float(value) for value in values]
+    if len(result) != 6:
+        raise ValueError(f"{label} must contain six joint positions")
+    if not all(math.isfinite(value) for value in result):
+        raise ValueError(f"{label} must contain only finite values")
+    return result
+
+
+def clamp_positions(
+    values: Sequence[float], lower: Sequence[float], upper: Sequence[float]
+) -> list[float]:
+    return [
+        max(float(lo), min(float(hi), float(value)))
+        for value, lo, hi in zip(values, lower, upper)
+    ]
+
+
+def step_toward(
+    current: Sequence[float], target: Sequence[float], maximum_step: float
+) -> list[float]:
+    step = max(0.0, float(maximum_step))
+    result = []
+    for present, goal in zip(current, target):
+        error = float(goal) - float(present)
+        result.append(float(present) + max(-step, min(step, error)))
+    return result
+
+
+def limit_norm(values: Sequence[float], maximum: float) -> np.ndarray:
+    vector = np.asarray(values, dtype=float)
+    limit = max(0.0, float(maximum))
+    norm = float(np.linalg.norm(vector))
+    if norm > limit and norm > 0.0:
+        return vector * (limit / norm)
+    return vector
+
+
+def rotation_from_rotvec(rotvec: Sequence[float]) -> np.ndarray:
+    vector = np.asarray(rotvec, dtype=float)
+    theta = float(np.linalg.norm(vector))
+    if theta < 1e-12:
+        return np.eye(3)
+    axis = vector / theta
+    skew = np.array([
+        [0.0, -axis[2], axis[1]],
+        [axis[2], 0.0, -axis[0]],
+        [-axis[1], axis[0], 0.0],
+    ])
+    return (
+        np.eye(3)
+        + math.sin(theta) * skew
+        + (1.0 - math.cos(theta)) * (skew @ skew)
+    )
+
+
+def rotation_error(target: np.ndarray, present: np.ndarray) -> np.ndarray:
+    relative = np.asarray(target, dtype=float) @ np.asarray(
+        present, dtype=float
+    ).T
+    cosine = max(-1.0, min(1.0, (float(np.trace(relative)) - 1.0) / 2.0))
+    angle = math.acos(cosine)
+    if angle < 1e-9:
+        return np.zeros(3)
+    sine = math.sin(angle)
+    if abs(sine) < 1e-7:
+        axis = np.sqrt(np.maximum(0.0, (np.diag(relative) + 1.0) / 2.0))
+        if float(np.linalg.norm(axis)) < 1e-9:
+            return np.zeros(3)
+        axis /= np.linalg.norm(axis)
+        return axis * angle
+    axis = np.array([
+        relative[2, 1] - relative[1, 2],
+        relative[0, 2] - relative[2, 0],
+        relative[1, 0] - relative[0, 1],
+    ]) / (2.0 * sine)
+    return axis * angle
+
+
+def integrate_cylindrical_position(
+    position: Sequence[float],
+    radial_velocity: float,
+    theta_velocity: float,
+    vertical_velocity: float,
+    dt: float,
+    origin_xy: Sequence[float],
+    minimum_radius: float,
+    theta_hint: Optional[float] = None,
+) -> Tuple[np.ndarray, float]:
+    """Integrate radius and angle exactly, avoiding Euler radial drift."""
+    current = np.asarray(position, dtype=float)
+    origin = np.asarray(origin_xy, dtype=float)
+    if current.shape != (3,) or origin.shape != (2,):
+        raise ValueError("position must have 3 values and origin_xy 2 values")
+    dx = float(current[0] - origin[0])
+    dy = float(current[1] - origin[1])
+    radius = math.hypot(dx, dy)
+    theta = (
+        float(theta_hint)
+        if radius < minimum_radius and theta_hint is not None
+        else math.atan2(dy, dx)
+    )
+    safe_dt = max(0.0, float(dt))
+    radial_floor = float(minimum_radius) if radius >= minimum_radius else radius
+    new_radius = max(radial_floor, radius + float(radial_velocity) * safe_dt)
+    new_theta = theta + float(theta_velocity) * safe_dt
+    return np.array([
+        float(origin[0]) + new_radius * math.cos(new_theta),
+        float(origin[1]) + new_radius * math.sin(new_theta),
+        float(current[2]) + float(vertical_velocity) * safe_dt,
+    ]), new_theta
+
+
+def rotation_from_zyx(roll: float, pitch: float, yaw: float) -> np.ndarray:
+    """Build a rotation from RPY angles as ``Rz(yaw) @ Ry(pitch) @ Rx(roll)``.
+
+    The same matrix has two equivalent descriptions: intrinsic Z-Y-X or
+    extrinsic/fixed X-Y-Z. Cartesian target inputs use the latter: Roll,
+    Pitch and Yaw are respectively rotations about the base/global X, Y and
+    Z axes. SEMI_CYLINDRICAL reuses the matrix with its own theta semantics.
+    """
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    return np.array([
+        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+        [-sp, cp * sr, cp * cr],
+    ])
+
+
+# Cartesian target frame at the same origin as end_effector_link:
+# X points along the gripper (URDF +Z), Y is URDF +Y, Z is URDF -X.
+# A horizontal forward-facing gripper therefore has RPY=(0, 0, 0).
+# This fixed frame rotation does not alter the URDF, FK, or jogging axes.
+_TIP_FROM_CARTESIAN_FRAME = np.array([
+    [0.0, 0.0, -1.0],
+    [0.0, 1.0, 0.0],
+    [1.0, 0.0, 0.0],
+])
+
+
+def cartesian_rpy_to_tip_rotation(roll: float, pitch: float, yaw: float) -> np.ndarray:
+    """Convert absolute gripper-forward RPY into the URDF tip rotation for IK."""
+    return rotation_from_zyx(roll, pitch, yaw) @ _TIP_FROM_CARTESIAN_FRAME.T
+
+
+def tip_rotation_to_cartesian_rpy(rotation: np.ndarray) -> tuple:
+    """Express FK orientation as RPY of the gripper-forward Cartesian frame."""
+    return rotation_to_zyx(np.asarray(rotation) @ _TIP_FROM_CARTESIAN_FRAME)
+
+
+def rotation_to_zyx(matrix: Sequence[Sequence[float]]) -> tuple:
+    """Decompose a rotation into (roll, pitch, yaw), inverse of the above.
+
+    At pitch = +/-90 degrees roll and yaw stop being separable. Rather than
+    divide by a vanishing cosine and hand the control loop a NaN, yaw is
+    pinned to zero there and the whole rotation folded into roll -- which
+    still reconstructs the same matrix.
+    """
+    array = np.asarray(matrix, dtype=float)
+    sp = max(-1.0, min(1.0, -float(array[2, 0])))
+    pitch = math.asin(sp)
+    if abs(sp) > 1.0 - 1e-9:
+        return (math.atan2(-array[1, 2], array[1, 1]), pitch, 0.0)
+    roll = math.atan2(array[2, 1], array[2, 2])
+    yaw = math.atan2(array[1, 0], array[0, 0])
+    return (roll, pitch, yaw)
+
+
+def semi_cylindrical_rotation(
+    theta: float, roll: float, pitch: float, yaw_offset: float
+) -> np.ndarray:
+    """Orientation for MODE_SEMI_CYLINDRICAL at cylindrical angle ``theta``.
+
+    Yaw is measured relative to theta, so sweeping around the cylinder axis
+    carries the heading along and leaves pitch and roll untouched.
+    """
+    return rotation_from_zyx(roll, pitch, theta + yaw_offset)
+
+
+def wrap_angle(value: float) -> float:
+    """Fold an angle into [-pi, pi).
+
+    The semi-cylindrical targets are integrated every cycle, so without this
+    a slow continuous roll would grow without bound and eventually lose
+    precision.
+    """
+    return math.remainder(float(value), 2.0 * math.pi)

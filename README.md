@@ -133,6 +133,20 @@ Already cloned without `--recursive`?
 git submodule update --init --recursive
 ```
 
+## Repository housekeeping
+
+Keep source code, URDF/configuration, tests, reference data, and license notices
+in this repository. Build from the workspace root; `build/`, `install/`, `log/`,
+Python caches, local environments, and `.codex_*` scratch directories are ignored.
+Store temporary backups and debugging snapshots outside the repository and
+outside the workspace's `src/` directory.
+
+Before publishing, review `git status --short` and `git diff`, including new
+source files and intentional deletions. Ignore rules do not remove files already
+tracked by Git or erase previous commits. Avoid uploading the entire working
+directory as a ZIP: ignored local artifacts would still be included. Preserve
+the submodules and follow the [licensing notes](docs/LICENSING.md) when sharing.
+
 ## Install
 
 ```bash
@@ -165,7 +179,7 @@ ros2 launch om6dof_teleop full_stack.launch.py start_go2w_teleop:=false
 Then open the dashboard at `http://<agx-ip>:8080`.
 
 The arm starts in `AUTONOMOUS` (MoveIt owns it). Switch to `JOINT` to take
-streamed control. See [om6dof_controller](om6dof_controller/README.md) for the
+streamed control. See [command conversion](om6dof_controllers/docs/command_converter.md) for the
 full mode list.
 
 ## Packages
@@ -174,13 +188,11 @@ full mode list.
 |---|---|
 | [om6dof_description](om6dof_description/README.md) | URDF, meshes, kinematics |
 | [om6dof_bringup](om6dof_bringup/README.md) | U2D2 hardware owner, ros2_control setup |
-| [om6dof_controller](om6dof_controller/README.md) | Operation modes, IK, limits, watchdogs |
-| [om6dof_controllers](om6dof_controllers/README.md) | C++ controller plugins |
+| [om6dof_controllers](om6dof_controllers/README.md) | Python command conversion, IK, limits, watchdogs, and C++ controller plugins |
 | [om6dof_teleop](om6dof_teleop/README.md) | Joystick and Go2W remote adapter |
-| [om6dof_moveit_config](om6dof_moveit_config/README.md) | MoveIt configuration |
-| [om6dof_perception](om6dof_perception/README.md) | RealSense RGB-D and YOLOX detection |
-| [om6dof_pick_and_place](om6dof_pick_and_place/README.md) | Pickup via MoveIt and perception |
-| [om6dof_pick_and_place_gemini](om6dof_pick_and_place_gemini/README.md) | Grasping from a point cloud, reasoning by Gemini |
+| [om6dof_moveit](om6dof_moveit/README.md) | MoveIt configuration |
+| [om6dof_perception](om6dof_perception/README.md) | RealSense RGB-D, YOLOX, BOXER 3D perception, camera utilities, and pseudo-events |
+| [om6dof_pick_and_place](om6dof_pick_and_place/README.md) | Pickup via MoveIt/perception and point-cloud grasping with Gemini reasoning |
 | [om6dof_dd_gng](om6dof_dd_gng/README.md) | DD-GNG semantic mapping |
 | [om6dof_phosphobot_bridge](om6dof_phosphobot_bridge/README.md) | Phosphobot bridge |
 

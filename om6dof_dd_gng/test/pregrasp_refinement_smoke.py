@@ -98,7 +98,7 @@ def make_config(run, subset, enabled, prepare_config):
     parameters.update({
         "robot_description": (SOURCE / "model.urdf").read_text(),
         "robot_description_semantic":
-            (REPO / "om6dof_moveit_config/config/om6dof.srdf").read_text(),
+            (REPO / "om6dof_moveit/config/om6dof.srdf").read_text(),
         "planning_period_sec": 0.3,
         "pregrasp_refinement_enabled": enabled,
         "exclude_selected_target_from_collision": True,

@@ -1,7 +1,0 @@
-cmake_minimum_required(VERSION 3.8)
-project(om6dof_boxer)
-find_package(ament_cmake REQUIRED)
-install(DIRECTORY launch rviz DESTINATION share/${PROJECT_NAME})
-install(PROGRAMS scripts/boxer_preview.py scripts/barath_boxer3d_preview.py DESTINATION lib/${PROJECT_NAME})
-install(FILES scripts/boxer_adapter.py scripts/barath_boxer3d_adapter.py scripts/boxer_pick_geometry.py DESTINATION lib/${PROJECT_NAME})
-ament_package()

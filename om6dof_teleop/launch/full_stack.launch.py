@@ -50,7 +50,7 @@ def generate_launch_description():
     )
     controller = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([
-            FindPackageShare("om6dof_controller"), "launch", "controller.launch.py",
+            FindPackageShare("om6dof_controllers"), "launch", "controller.launch.py",
         ])),
     )
     teleop = IncludeLaunchDescription(

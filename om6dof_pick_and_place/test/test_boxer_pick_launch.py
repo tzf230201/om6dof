@@ -6,18 +6,19 @@ import pytest
 from launch import LaunchContext
 
 
-def load_launch():
-    path = Path(__file__).parents[1] / 'launch/yolox_boxer3d_pickup.launch.py'
+def load_launch(filename):
+    path = Path(__file__).parents[1] / 'launch' / filename
     spec = importlib.util.spec_from_file_location('simple_boxer_pick_launch', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def test_isolated_launch_uses_calibration_and_never_starts_hardware(monkeypatch, tmp_path):
+@pytest.mark.parametrize('filename', ['yolox_boxer3d_pickup.launch.py', 'yolo3d_pickup.launch.py'])
+def test_isolated_launch_uses_calibration_and_never_starts_hardware(monkeypatch, tmp_path, filename):
     import yaml
     monkeypatch.setenv('ROS_LOG_DIR', str(tmp_path / 'roslog'))
-    module = load_launch()
+    module = load_launch(filename)
     calibration = tmp_path / 'camera.yaml'
     calibration.write_text(yaml.safe_dump({
         'schema': 'om6dof.hand_eye.v1', 'camera': {'serial':'test','model':'D435i'},
@@ -28,14 +29,18 @@ def test_isolated_launch_uses_calibration_and_never_starts_hardware(monkeypatch,
     context = LaunchContext()
     context.launch_configurations.update({
         'camera_calibration_file': str(calibration), 'camera_serial':'', 'target_class':'bottle',
-        'execution_enabled':'false','max_boxes':'3','onnx_threads':'8','display_window':'false'})
+        'execution_enabled':'false','max_boxes':'3','onnx_threads':'8','display_window':'false',
+        'confidence':'0.35','nms_threshold':'0.5'})
     constructed = []
     def node(**kwargs):
         constructed.append(kwargs)
         return SimpleNamespace(**kwargs)
     monkeypatch.setattr(module, 'Node', node)
     result = module.launch_setup(context)
-    assert len(result) == 5
+    assert len(result) == (7 if filename == 'yolo3d_pickup.launch.py' else 5)
+    if filename == 'yolo3d_pickup.launch.py':
+        bridge = next(x for x in constructed if x['executable'] == 'yolo3d_pickup_bridge.py')
+        assert bridge['package'] == 'om6dof_perception'
     assert not any(x['package'] in ['controller_manager','om6dof_bringup'] for x in constructed)
     group = next(x for x in constructed if x['executable'] == 'move_group')
     assert group['namespace'] == 'boxer_pick'
