@@ -119,6 +119,76 @@ silent and `projection_status` explains why. For camera-only operation:
 ros2 launch om6dof_perception perception_v2.launch.py publish_world_point:=false
 ```
 
+## YOLOE open-vocabulary instance segmentation
+
+The V2 launch defaults to YOLOE with the promptable `yoloe-26n-seg.pt`
+checkpoint. The generic V1 launch retains YOLOX. The `yoloe` backend produces
+an instance mask and uses it to select valid
+depth pixels, so an overlapping foreground/background object inside a detection
+rectangle does not distort the camera-frame 3D estimate. The fast CSRT tracker
+warps the most recently acquired mask to its current rectangle between YOLOE
+refreshes; this keeps the camera loop responsive without queuing GPU work.
+
+With a `.pt` checkpoint the browser accepts arbitrary text, such as `glass jar`,
+`red mug`, or `screwdriver`. Press **Set target** or Enter. The node encodes
+the new prompt on its background worker, clears the previous observations,
+and starts segmenting the new category without restarting. The text encoder
+is reused; it is not run on every image. Names are not restricted to COCO.
+Open vocabulary does not guarantee a detection for every description; concise
+English object names usually make useful starting prompts.
+
+Install a CUDA-enabled PyTorch build for the Jetson and the Ultralytics runtime.
+Place `yoloe-26n-seg.pt` and `mobileclip2_b.ts` in
+`~/.cache/om6dof_perception/`. The adapter uses that encoder path regardless of
+the launch working directory. CLIP's tokenizer must also be installed.
+
+```bash
+ros2 launch om6dof_perception perception_v2.launch.py
+ros2 run om6dof_perception perception_view  # separate terminal; http://<robot-ip>:8083
+
+# Same free-text control through ROS:
+ros2 topic pub --once /om6dof_perception/set_target std_msgs/msg/String \
+  '{data: "glass jar with a black lid"}'
+```
+
+`yoloe_classes` supplies initial prompts. After a text change, only the requested
+target (and an enabled YOLO gripper class, if configured) is included. The status
+reports `detector.open_vocabulary`, `configured_classes`,
+`prompt_update_pending`, and any runtime `error`. Frames/results from an older
+prompt are discarded. The default segmentation request is 10 Hz; actual
+throughput depends on PyTorch, tracking, and camera/stream processing.
+
+### Optional frozen TensorRT engine
+
+To prioritize speed over changing labels, export on the target Jetson. Exported
+engines have their prompts baked in, so `yoloe_classes` and `target_class` must
+match the export exactly. The viewer switches to a dropdown for this mode.
+
+```bash
+# One-time, on the AGX Orin. The engine is device/TensorRT-version specific.
+pip install ultralytics
+python3 - <<'PY'
+from ultralytics import YOLOE
+model = YOLOE('yoloe-26n-seg.pt')
+model.set_classes(['bottle', 'cup', 'person'])
+model.export(format='engine', half=True, imgsz=640)
+PY
+
+ros2 launch om6dof_perception perception_v2.launch.py \
+  detector_backend:=yoloe \
+  yoloe_model_path:=yoloe-26n-seg.engine \
+  yoloe_classes:='["bottle", "cup", "person"]' target_class:=bottle \
+  frame_rate_hz:=30 segmentation_rate_hz:=30
+```
+
+`segmentation_rate_hz` is a request, not a claimed throughput.
+`detector.last_inference_ms` measures inference only; camera processing and
+CSRT also contribute to the actual refresh rate. A value below 33 ms by itself
+does not establish 30 segmentation updates per second.
+
+Adding another label to a frozen engine requires re-exporting it. Use the
+default `.pt` mode to enter new labels immediately instead.
+
 Status JSON includes `model_version`, `camera_model`, `camera_frame`, connection
 state, and live SDK geometry. Projection status separately reports the URDF
 hash, matching timestamps, `transform_source: urdf_nominal`, and

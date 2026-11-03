@@ -25,6 +25,7 @@
       read_packet_timeout_ms:=30.0
       read_transport_mode:=multi_sync
       use_fake_hardware:=false
+      gravity_current_budget:=false
       arm_operating_mode:=5
       torque_off_diagnostic_mode:=false">
 
@@ -75,6 +76,7 @@
           </param>
           <param name="ros_update_freq">200</param>
           <param name="disable_torque_at_init">true</param>
+          <param name="gravity_current_budget">${'true' if gravity_current_budget else 'false'}</param>
           <param name="dynamixel_state_pub_msg_name">dynamixel_hardware_interface/dxl_state</param>
           <param name="get_dynamixel_data_srv_name">dynamixel_hardware_interface/get_dxl_data</param>
           <param name="set_dynamixel_data_srv_name">dynamixel_hardware_interface/set_dxl_data</param>
@@ -99,6 +101,9 @@
       <joint name="${prefix}joint1">
         <command_interface name="position"/>
         <command_interface name="position_offset"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="effort"/>
+        </xacro:if>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
@@ -108,6 +113,9 @@
       <joint name="${prefix}joint2">
         <command_interface name="position"/>
         <command_interface name="position_offset"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="effort"/>
+        </xacro:if>
         <state_interface name="position">
           <param name="initial_value">-0.6806</param>
         </state_interface>
@@ -117,6 +125,9 @@
       <joint name="${prefix}joint3">
         <command_interface name="position"/>
         <command_interface name="position_offset"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="effort"/>
+        </xacro:if>
         <state_interface name="position">
           <param name="initial_value">1.3613</param>
         </state_interface>
@@ -126,6 +137,9 @@
       <joint name="${prefix}joint4">
         <command_interface name="position"/>
         <command_interface name="position_offset"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="effort"/>
+        </xacro:if>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
@@ -135,6 +149,9 @@
       <joint name="${prefix}joint5">
         <command_interface name="position"/>
         <command_interface name="position_offset"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="effort"/>
+        </xacro:if>
         <state_interface name="position">
           <param name="initial_value">0.8901</param>
         </state_interface>
@@ -144,6 +161,9 @@
       <joint name="${prefix}joint6">
         <command_interface name="position"/>
         <command_interface name="position_offset"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="effort"/>
+        </xacro:if>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
@@ -175,16 +195,22 @@
         <param name="ID">31</param>
         <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="Goal Current"/>
+        </xacro:if>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Operating Mode">3</param>
-        <param name="Position P Gain">800</param>
-        <param name="Position I Gain">100</param>
-        <param name="Position D Gain">100</param>
+        <param name="Operating Mode">${3 if torque_off_diagnostic_mode else int(arm_operating_mode)}</param>
+        <xacro:if value="${not torque_off_diagnostic_mode and int(arm_operating_mode) == 5}">
+          <param name="Goal Current">${0 if gravity_current_budget else 'current_limit'}</param>
+          <param name="Position P Gain">150</param>
+          <param name="Position D Gain">1400</param>
+        </xacro:if>
+        <!-- Mode 5 overrides joint1 P/D only; retain firmware I gain. -->
         <param name="Profile Velocity">150</param>
         <param name="Profile Acceleration">50</param>
         <param name="Drive Mode">4</param>
@@ -195,16 +221,20 @@
         <param name="ID">32</param>
         <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="Goal Current"/>
+        </xacro:if>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Operating Mode">3</param>
-        <param name="Position P Gain">800</param>
-        <param name="Position I Gain">100</param>
-        <param name="Position D Gain">100</param>
+        <param name="Operating Mode">${3 if torque_off_diagnostic_mode else int(arm_operating_mode)}</param>
+        <xacro:if value="${not torque_off_diagnostic_mode and int(arm_operating_mode) == 5}">
+          <param name="Goal Current">${0 if gravity_current_budget else 'current_limit'}</param>
+        </xacro:if>
+        <!-- Retain firmware position gains; no application PID overrides. -->
         <param name="Profile Velocity">150</param>
         <param name="Profile Acceleration">50</param>
         <param name="Drive Mode">4</param>
@@ -215,16 +245,20 @@
         <param name="ID">33</param>
         <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="Goal Current"/>
+        </xacro:if>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Operating Mode">3</param>
-        <param name="Position P Gain">800</param>
-        <param name="Position I Gain">100</param>
-        <param name="Position D Gain">100</param>
+        <param name="Operating Mode">${3 if torque_off_diagnostic_mode else int(arm_operating_mode)}</param>
+        <xacro:if value="${not torque_off_diagnostic_mode and int(arm_operating_mode) == 5}">
+          <param name="Goal Current">${0 if gravity_current_budget else 'current_limit'}</param>
+        </xacro:if>
+        <!-- Retain firmware position gains; no application PID overrides. -->
         <param name="Profile Velocity">150</param>
         <param name="Profile Acceleration">50</param>
         <param name="Drive Mode">4</param>
@@ -235,16 +269,22 @@
         <param name="ID">24</param>
         <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="Goal Current"/>
+        </xacro:if>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Operating Mode">3</param>
-        <param name="Position P Gain">800</param>
-        <param name="Position I Gain">100</param>
-        <param name="Position D Gain">100</param>
+        <param name="Operating Mode">${3 if torque_off_diagnostic_mode else int(arm_operating_mode)}</param>
+        <xacro:if value="${not torque_off_diagnostic_mode and int(arm_operating_mode) == 5}">
+          <param name="Goal Current">${0 if gravity_current_budget else 'current_limit'}</param>
+          <param name="Position P Gain">150</param>
+          <param name="Position D Gain">1400</param>
+        </xacro:if>
+        <!-- Mode 5 overrides joint4 P/D only; retain firmware I gain. -->
         <param name="Profile Velocity">150</param>
         <param name="Profile Acceleration">50</param>
         <param name="Drive Mode">4</param>
@@ -255,16 +295,20 @@
         <param name="ID">35</param>
         <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="Goal Current"/>
+        </xacro:if>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Operating Mode">3</param>
-        <param name="Position P Gain">800</param>
-        <param name="Position I Gain">100</param>
-        <param name="Position D Gain">100</param>
+        <param name="Operating Mode">${3 if torque_off_diagnostic_mode else int(arm_operating_mode)}</param>
+        <xacro:if value="${not torque_off_diagnostic_mode and int(arm_operating_mode) == 5}">
+          <param name="Goal Current">${0 if gravity_current_budget else 'current_limit'}</param>
+        </xacro:if>
+        <!-- Retain firmware position gains; no application PID overrides. -->
         <param name="Profile Velocity">150</param>
         <param name="Profile Acceleration">50</param>
         <param name="Drive Mode">4</param>
@@ -275,16 +319,22 @@
         <param name="ID">26</param>
         <param name="Bus Watchdog">10</param>
         <command_interface name="Goal Position"/>
+        <xacro:if value="${gravity_current_budget}">
+          <command_interface name="Goal Current"/>
+        </xacro:if>
         <state_interface name="Present Position"/>
         <state_interface name="Present Velocity"/>
         <state_interface name="Present Current"/>
         <state_interface name="Torque Enable"/>
         <state_interface name="Present Input Voltage"/>
         <state_interface name="Hardware Error Status"/>
-        <param name="Operating Mode">3</param>
-        <param name="Position P Gain">800</param>
-        <param name="Position I Gain">100</param>
-        <param name="Position D Gain">100</param>
+        <param name="Operating Mode">${3 if torque_off_diagnostic_mode else int(arm_operating_mode)}</param>
+        <xacro:if value="${not torque_off_diagnostic_mode and int(arm_operating_mode) == 5}">
+          <param name="Goal Current">${0 if gravity_current_budget else 'current_limit'}</param>
+          <param name="Position P Gain">150</param>
+          <param name="Position D Gain">1400</param>
+        </xacro:if>
+        <!-- Mode 5 overrides joint6 P/D only; retain firmware I gain. -->
         <param name="Profile Velocity">150</param>
         <param name="Profile Acceleration">50</param>
         <param name="Drive Mode">4</param>

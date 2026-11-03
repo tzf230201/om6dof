@@ -4,6 +4,29 @@ import numpy as np
 import pytest
 
 from om6dof_controllers.ik_solver import IKSolver
+from om6dof_controllers.control_math import cartesian_rpy_to_tip_rotation
+
+
+def test_semi_cylindrical_uses_forward_gripper_frame():
+    solver = IKSolver.__new__(IKSolver)
+    solver.fk_pose = lambda q: (
+        np.array([0.3, 0.0, 0.2]), cartesian_rpy_to_tip_rotation(0.0, 0.0, 0.0))
+    result = solver.semi_cylindrical_fk(np.zeros(6), (0.0, 0.0))
+    assert result == pytest.approx([0.3, 0.0, 0.2, 0.0, 0.0], abs=1e-9)
+
+
+def test_semi_cylindrical_pitch_rate_is_controllable_and_neutral_holds():
+    solver = IKSolver.__new__(IKSolver)
+    solver.damping = 0.0
+    solver.semi_cylindrical_jacobian = lambda q, origin: np.eye(5)
+    q = np.zeros(6)
+    positive = solver.semi_cylindrical_velocity_ik(q, [0, 0, 0, 0, 0.2])
+    negative = solver.semi_cylindrical_velocity_ik(q, [0, 0, 0, 0, -0.2])
+    neutral = solver.semi_cylindrical_velocity_ik(q, [0, 0, 0, 0, 0])
+    assert positive[5] == pytest.approx(0.2)
+    assert negative[5] == pytest.approx(-0.2)
+    assert neutral == pytest.approx(np.zeros(6))
+    assert positive[3] == 0.0
 
 
 def _rotation_from_rotvec(rotvec: np.ndarray) -> np.ndarray:
@@ -88,8 +111,9 @@ def test_orientation_difference_rejects_wrong_matrix_shape():
         IKSolver.orientation_difference(np.eye(4), np.eye(3))
 
 
-def test_v2_zero_joint_fk_uses_the_forward_mount_geometry():
-    solver = IKSolver(xacro_rel="urdf/om6dof_v2.urdf.xacro")
+def test_default_fk_uses_the_v2_forward_mount_geometry():
+    """A caller that omits xacro_rel must never silently fall back to V1."""
+    solver = IKSolver()
 
     position, rotation = solver.fk_pose(np.zeros(6))
 

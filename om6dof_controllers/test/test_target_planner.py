@@ -11,8 +11,9 @@ from om6dof_controllers.target_planner import (
 )
 
 
-def test_real_urdf_150_0_300_target_escapes_negative_elbow_local_minimum():
-    ik = IKSolver()
+def test_v1_150_0_300_target_escapes_negative_elbow_local_minimum():
+    """This regression target belongs to the retired V1 workspace."""
+    ik = IKSolver(xacro_rel="urdf/om6dof.urdf.xacro")
     ik.q_min += 0.02
     ik.q_max -= 0.02
     start = np.array([0, 0.2868, -0.8958, 0, 2.08486, 0])

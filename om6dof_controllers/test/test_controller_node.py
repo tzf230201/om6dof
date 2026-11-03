@@ -10,11 +10,13 @@ import json
 import math
 import threading
 import time
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from action_msgs.msg import GoalStatus, GoalStatusArray
 from control_msgs.msg import JointTrajectoryControllerState
+from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray, String
 from trajectory_msgs.msg import JointTrajectoryPoint
 
@@ -410,11 +412,72 @@ def test_cylindrical_theta_sweeps_around_the_column():
     assert float(np.linalg.norm(node.offset)) > 0.0
 
 
-def test_semi_cylindrical_pitch_and_yaw_nudge_the_wrist_joints():
+def test_semi_cylindrical_jog_uses_five_coordinate_solver():
     node = _controller(mode=MODE_SEMI_CYLINDRICAL)
-    _jog(node, [0, 0, 0, 0, 0.5, 0.25], dt=0.1)
-    assert node.offset[4] == pytest.approx(0.05, abs=1e-6)
-    assert node.offset[5] == pytest.approx(0.025, abs=1e-6)
+    node.joint_positions['joint4'] = 0.0
+    received = []
+    node.ik.semi_cylindrical_fk = lambda q, origin: [0.2, 0, 0, 0, 0]
+    def solve(q, rates, origin):
+        received.append(rates.copy())
+        return np.array([0, 0, 0, 0, rates[4], rates[3]])
+    node.ik.semi_cylindrical_velocity_ik = solve
+    _jog(node, [0, 0, 0, 0.3, 0.5, 0.9], dt=0.1)
+    assert received[0] == pytest.approx([0, 0, 0, 0.3, 0.5])
+    assert node.offset[3] == 0
+    assert node.offset[4] == pytest.approx(0.05)
+    assert node.offset[5] == pytest.approx(0.03)
+
+
+def test_semi_cylindrical_rejects_nonzero_joint4():
+    node = _controller()
+    node._on_operation_mode(String(data=MODE_SEMI_CYLINDRICAL))
+    assert node.motion_mode == MODE_JOINT
+    assert any('joint 4' in msg for msg in node._logger.warnings)
+
+
+def test_custom_height_hold_tracks_vertical_jog_and_bounds_correction():
+    node = _controller(mode=MODE_SEMI_CYLINDRICAL)
+    node.joint_positions['joint4'] = 0.0
+    height = [0.20]
+    seen = []
+    node.ik.semi_cylindrical_fk = lambda q, origin: [0.2, 0, height[0], 0, 0]
+    node.ik.semi_cylindrical_velocity_ik = lambda q, rates, origin: (
+        seen.append(rates.copy()) or np.zeros(6))
+    feedback = node._joint_vector_locked()
+    node._offset_delta_locked(feedback, np.array([.03, 0, 0, 0, 0, 0]), .02)
+    assert seen[-1][2] == 0
+    height[0] = 0.197
+    node._offset_delta_locked(feedback, np.array([.03, 0, 0, 0, 0, 0]), .02)
+    assert seen[-1][2] == pytest.approx(.006)
+    height[0] = 0.19
+    node._offset_delta_locked(feedback, np.array([.03, 0, 0, 0, 0, 0]), .02)
+    assert seen[-1][2] == pytest.approx(.01)
+    height[0] = 0.21
+    node._offset_delta_locked(feedback, np.array([0, 0, .025, 0, 0, 0]), .02)
+    assert seen[-1][2] == pytest.approx(.025)
+    assert node._custom_z_target == pytest.approx(.21)
+    height[0] = 0.2095
+    node._offset_delta_locked(feedback, np.zeros(6), .02)
+    assert seen[-1][2] == 0
+
+
+def test_custom_height_hold_rebases_after_large_displacement_and_timeout():
+    node = _controller(mode=MODE_SEMI_CYLINDRICAL)
+    node.joint_positions['joint4'] = 0.0
+    height = [0.20]
+    seen = []
+    node.ik.semi_cylindrical_fk = lambda q, origin: [0.2, 0, height[0], 0, 0]
+    node.ik.semi_cylindrical_velocity_ik = lambda q, rates, origin: (
+        seen.append(rates.copy()) or np.zeros(6))
+    feedback = node._joint_vector_locked()
+    node._offset_delta_locked(feedback, np.zeros(6), .02)
+    height[0] = .15
+    node._offset_delta_locked(feedback, np.zeros(6), .02)
+    assert seen[-1][2] == 0
+    assert node._custom_z_target == pytest.approx(.15)
+    node.last_control_cmd = 0.0
+    node._tick()
+    assert node._custom_z_target is None
 
 
 # ------------------------------------------------------------ absolute poses
@@ -435,6 +498,39 @@ def test_ready_sends_a_trajectory_goal_and_clears_the_offset():
     assert node.offset == pytest.approx(np.zeros(6))
 
 
+def test_ready_waits_for_success_and_joint4_feedback_before_custom():
+    node = _controller()
+    node._on_operation_mode(String(data=MODE_READY))
+    generation = node._ready_generation
+    assert node.motion_mode == MODE_JOINT
+    assert node._ready_pending
+    node._on_control_cmd(Float64MultiArray(data=[0.1] * 6))
+    assert node.control_velocity == pytest.approx(np.zeros(6))
+    completed = SimpleNamespace(result=lambda: SimpleNamespace(
+        status=GoalStatus.STATUS_SUCCEEDED, result=SimpleNamespace(error_code=0)))
+    node._ready_goal_result(generation, completed)
+    assert node.motion_mode == MODE_JOINT
+    assert node._ready_pending
+    node.joint_positions['joint4'] = 0.0
+    node.arm_reference = list(INITIAL)
+    node._try_finish_ready_locked()
+    assert node._ready_pending
+    node.arm_reference[3] = 0.0
+    node._try_finish_ready_locked()
+    assert node.motion_mode == MODE_SEMI_CYLINDRICAL
+    assert not node._ready_pending
+
+
+def test_failed_ready_never_selects_custom():
+    node = _controller()
+    node._on_operation_mode(String(data=MODE_READY))
+    failed = SimpleNamespace(result=lambda: SimpleNamespace(
+        status=GoalStatus.STATUS_ABORTED, result=SimpleNamespace(error_code=-1)))
+    node._ready_goal_result(node._ready_generation, failed)
+    assert node.motion_mode == MODE_JOINT
+    assert not node._ready_pending
+
+
 def test_rest_and_startup_target_the_captured_startup_pose():
     for mode in (MODE_REST, MODE_STARTUP):
         node = _controller()
@@ -443,6 +539,25 @@ def test_rest_and_startup_target_the_captured_startup_pose():
         assert list(goal.trajectory.points[-1].positions) == pytest.approx(
             node.startup_pose
         )
+
+
+def test_rest_uses_first_joint_feedback_for_each_controller_start():
+    first = _controller()
+    first.startup_pose = None
+    first._publish_target_status_locked = lambda *args: None
+    initial = [0.1, -0.7, 0.8, 0.2, 0.3, -0.1]
+    first._on_joint_state(JointState(name=first.joint_names, position=initial))
+    first._on_joint_state(JointState(name=first.joint_names, position=[0.0] * 6))
+    first._on_operation_mode(String(data=MODE_REST))
+    assert list(first.arm_client.goals[-1].trajectory.points[-1].positions) == pytest.approx(initial)
+
+    restarted = _controller()
+    restarted.startup_pose = None
+    restarted._publish_target_status_locked = lambda *args: None
+    new_initial = [-0.2, -0.4, 0.5, 0.1, 0.7, 0.2]
+    restarted._on_joint_state(JointState(name=restarted.joint_names, position=new_initial))
+    restarted._on_operation_mode(String(data=MODE_REST))
+    assert list(restarted.arm_client.goals[-1].trajectory.points[-1].positions) == pytest.approx(new_initial)
 
 
 def test_rest_is_refused_until_a_startup_pose_exists():
@@ -498,11 +613,41 @@ def test_absolute_joint_target_sends_one_trajectory_goal():
         node, action="move", mode=MODE_JOINT, values=goal_positions,
         reach_duration=5.0, request_id="abc",
     )
-    assert status["state"] == "running"
+    assert status["state"] == "requesting"
+    assert status["active"]
     assert len(node.arm_client.goals) == 1
     points = node.arm_client.goals[0].trajectory.points
     assert len(points) == 1                      # straight there, no detour
     assert list(points[0].positions) == pytest.approx(goal_positions)
+
+
+def test_semi_target_uses_five_values_and_zero_joint4():
+    node = _controller()
+    node.joint_positions['joint4'] = 0.0
+    values = [0.2, 0.1, 0.3, 0.4, 0.2]
+    expected = np.array([0.1, -0.4, 0.3, 0.0, 0.5, -0.1])
+    calls = []
+    def solve(q, target, origin):
+        calls.append(target.copy())
+        return expected.copy(), True
+    node.ik.solve_semi_cylindrical_ik = solve
+    status = _target(node, action='move', mode=MODE_SEMI_CYLINDRICAL,
+                     values=values, reach_duration=5.0)
+    assert status['state'] == 'requesting'
+    assert calls[0] == pytest.approx(values)
+    assert list(node.arm_client.goals[-1].trajectory.points[-1].positions) == pytest.approx(expected)
+
+
+def test_ready_goal_requires_measured_position_arrival_for_all_joints():
+    node = _controller()
+    node._on_operation_mode(String(data=MODE_READY))
+    goal = node.arm_client.goals[-1]
+    tolerances = {item.name: item.position for item in goal.goal_tolerance}
+    assert set(tolerances) == set(node.joint_names)
+    # A joint tens of degrees away from READY must fail the goal check,
+    # whereas an encoder-size residual must remain acceptable.
+    for tolerance in tolerances.values():
+        assert math.radians(0.1) < tolerance < math.radians(2.0)
 
 
 def test_target_clears_the_operator_offset():
@@ -535,12 +680,15 @@ def test_target_too_fast_for_the_joint_ceiling_is_rejected():
     assert "velocity" in status["message"]
 
 
-def test_target_stop_clears_the_offset():
+def test_target_stop_preserves_offset_and_clears_jog_velocity():
     node = _controller()
     _jog(node, [0.5, 0, 0, 0, 0, 0], dt=0.1)
+    offset_before = node.offset.copy()
     status = _target(node, action="stop")
     assert status["state"] == "stopped"
-    assert node.offset == pytest.approx(np.zeros(6))
+    assert node.offset == pytest.approx(offset_before)
+    assert node.control_velocity == pytest.approx(np.zeros(6))
+    assert node.last_control_cmd == 0.0
 
 
 def test_malformed_target_is_rejected_not_crashed():

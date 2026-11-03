@@ -1,7 +1,7 @@
 import os
 import time
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
@@ -43,6 +43,7 @@ def generate_launch_description():
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
     current_control = LaunchConfiguration("current_control")
     arm_operating_mode = LaunchConfiguration("arm_operating_mode")
+    gravity_current_budget = LaunchConfiguration("gravity_current_budget")
     start_arm_controller = LaunchConfiguration("start_arm_controller")
     package_share = FindPackageShare("om6dof_bringup")
 
@@ -55,6 +56,7 @@ def generate_launch_description():
             " use_fake_hardware:=", use_fake_hardware,
             " current_control:=", current_control,
             " arm_operating_mode:=", arm_operating_mode,
+            " gravity_current_budget:=", gravity_current_budget,
         ]),
         value_type=str,
     )
@@ -77,6 +79,19 @@ def generate_launch_description():
         package="controller_manager", executable="spawner",
         arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
     )
+    gravity_budget_spawner = Node(
+        package="controller_manager", executable="spawner",
+        arguments=["gravity_current_budget_controller", "--controller-manager", "/controller_manager"],
+        condition=IfCondition(gravity_current_budget),
+    )
+    def validate_budget(context):
+        if gravity_current_budget.perform(context).lower() == "true":
+            if (current_control.perform(context).lower() != "false" or
+                    arm_operating_mode.perform(context) != "5" or
+                    use_fake_hardware.perform(context).lower() != "false"):
+                raise RuntimeError("gravity_current_budget requires normal real-hardware Mode 5; "
+                                   "current_control:=false, arm_operating_mode:=5")
+        return []
     arm_spawner = Node(
         package="controller_manager", executable="spawner",
         arguments=["arm_controller", "--controller-manager", "/controller_manager"],
@@ -123,7 +138,7 @@ def generate_launch_description():
         OnProcessExit(
             target_action=joint_state_spawner,
             on_exit=[arm_spawner, gripper_spawner, forward_position_spawner,
-                     forward_offset_spawner, forward_effort_spawner],
+                     forward_offset_spawner, forward_effort_spawner, gravity_budget_spawner],
         )
     )
     stop_launch_if_hardware_exits = RegisterEventHandler(
@@ -145,11 +160,16 @@ def generate_launch_description():
         # as soon as it comes up, so it is opt-in.
         DeclareLaunchArgument("current_control",
                               default_value=current_control_default()),
+        # Normal arm uses Mode 5; supervised READY preparation explicitly selects 3.
         DeclareLaunchArgument("arm_operating_mode", default_value="5"),
+        # Explicit opt-in: starts at zero current, needs physical support.
+        # Does not change PID or EEPROM Current Limit; not a torque-mode controller.
+        DeclareLaunchArgument("gravity_current_budget", default_value="false"),
         # A teaching/leader session supplies its own controller, which claims
         # the same arm command interfaces as arm_controller.  Keep the
         # conventional controller enabled for every normal hardware launch.
         DeclareLaunchArgument("start_arm_controller", default_value="true"),
+        OpaqueFunction(function=validate_budget),
         state_publisher,
         control_node,
         joint_state_spawner,

@@ -6,6 +6,7 @@ from om6dof_perception.perception_node import (
     associated_detection,
     bbox_iou,
     estimate_bbox3d,
+    mask_for_bbox,
     project_bbox3d,
 )
 
@@ -76,6 +77,34 @@ def test_bbox3d_returns_none_without_valid_depth():
     assert estimate_bbox3d(
         depth, Intrinsics(), 0.001, (30, 20, 40, 60)
     ) is None
+
+
+def test_instance_mask_excludes_nearer_distractor_inside_detection_box():
+    depth = np.full((100, 100), 2000, dtype=np.uint16)
+    # A nearer object overlaps the detector's rectangle, but it is outside the
+    # segmentation mask for the target on the right.
+    depth[30:70, 40:50] = 500
+    depth[30:70, 50:60] = 800
+    mask = np.zeros((100, 100), dtype=bool)
+    mask[30:70, 50:60] = True
+
+    box = estimate_bbox3d(depth, Intrinsics(), 0.001, (40, 30, 20, 40),
+                          mask=mask, depth_band_m=0.05)
+
+    assert box is not None
+    assert np.isclose(box["front_z"], 0.8)
+    assert box["point_count"] == 324
+
+
+def test_mask_follows_a_moved_tracker_bbox():
+    mask = np.zeros((100, 100), dtype=bool)
+    mask[10:20, 10:20] = True
+
+    moved = mask_for_bbox(mask, (10, 10, 10, 10), (40, 30, 20, 30), (100, 100))
+
+    assert moved.shape == (100, 100)
+    assert moved[30:60, 40:60].all()
+    assert not moved[10:20, 10:20].any()
 
 
 def test_project_bbox3d_returns_front_and_back_faces():

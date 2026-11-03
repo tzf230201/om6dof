@@ -34,6 +34,26 @@ om6dof_controller:
     pose_profile_duration_seconds: 4.0
     target_reach_duration_seconds: 5.0
 
+    # Mode-5 outer admittance: opt-in until current polarity, no-contact bias
+    # and thresholds have been checked on this particular arm. The existing
+    # motor PID and the gravity-current caps are not changed by this option.
+    admittance:
+      enabled: false
+      calibration_verified: false
+      observer_timeout_seconds: 0.12
+      torque_bias: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Nm; fixed after free-arm commissioning
+      torque_on: [0.04, 0.12, 0.12, 0.03, 0.08, 0.03]  # Initial candidates, NOT calibrated
+      torque_off: [0.02, 0.06, 0.06, 0.015, 0.04, 0.015]
+      inertia: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+      damping: [4.0, 4.0, 4.0, 4.0, 4.0, 4.0]
+      stiffness: [4.0, 4.0, 4.0, 4.0, 4.0, 4.0]
+      max_displacement: [0.15, 0.15, 0.15, 0.15, 0.15, 0.15]  # rad
+      max_velocity: [0.10, 0.10, 0.10, 0.10, 0.10, 0.10]  # rad/s
+      max_acceleration: [0.30, 0.30, 0.30, 0.30, 0.30, 0.30]  # rad/s²
+      reference_velocity: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+      reference_acceleration: [0.15, 0.15, 0.15, 0.15, 0.15, 0.15]
+      max_tracking_error: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+
     ik_enabled: true
     ik_base_link: world
     ik_tip_link: end_effector_link

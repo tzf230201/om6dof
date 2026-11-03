@@ -35,11 +35,17 @@ On the F710, `Start` takes/releases manual ownership, `Logo` cycles motion
 mode, and `Back` performs `REST`: return to the captured startup/rest pose,
 then hand ownership back to autonomous control.
 
+The normal controller starts in `CUSTOM` when IK is available. `CUSTOM` is
+the former `SEMI_CYLINDRICAL` mode; the old operation-mode command remains an
+alias. Joint 4 and its commanded position must be near zero for CUSTOM jogs.
+On the F710, X/B control roll and Y/A control pitch. In CUSTOM, the left stick
+vertical axis controls Z; the right stick controls R and theta.
+
 ## Keyboard
 
 `g` toggles manual ownership, `m` cycles JOINT/CARTESIAN/CYLINDRICAL, `r`
 requests READY/STARTUP, `[` and `]` operate the gripper, and `Esc` exits.
-Use `+`/`-` to increase/decrease arm speed by 10%; the default is 100% and
+Use `+`/`-` to increase/decrease arm speed by 100 percentage points; the default is 100% and
 the maximum is 500%.
 On the F710, holding D-pad up/down repeats the adjustment every 0.2 seconds.
 

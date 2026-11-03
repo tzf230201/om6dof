@@ -97,6 +97,8 @@ if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
   find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_stored_current_limit test/test_stored_current_limit.cpp)
+  target_include_directories(test_stored_current_limit PUBLIC include)
   ament_add_gtest(test_bus_health test/test_bus_health.cpp)
   target_include_directories(test_bus_health PUBLIC include)
   ament_add_gtest(test_read_packet_timeout test/test_read_packet_timeout.cpp)
@@ -109,6 +111,8 @@ if(BUILD_TESTING)
   )
   target_include_directories(test_sequential_read_transaction PUBLIC include)
   find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(
+    test_stored_current_limit_contract test/test_stored_current_limit_contract.py)
   ament_add_pytest_test(
     test_read_packet_timeout_contract
     test/test_read_packet_timeout_contract.py

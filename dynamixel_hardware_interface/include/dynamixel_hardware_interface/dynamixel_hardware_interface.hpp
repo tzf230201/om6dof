@@ -200,6 +200,11 @@ public:
     const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
 private:
+  // Opt-in Mode-5 budget: startup-verified EEPROM ceilings, never written.
+  bool gravity_current_budget_{false};
+  std::map<std::string, double> gravity_current_limits_;
+  double gravity_budget_read_ok_{0.0};
+  std::chrono::steady_clock::time_point gravity_budget_read_time_{};
   ///// ros
   rclcpp::Logger logger_;
   rclcpp::Clock clock_;

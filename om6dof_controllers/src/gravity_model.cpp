@@ -34,8 +34,10 @@ std::string GravityModel::configure(
   const std::vector<std::string> & com_links, const std::vector<double> & com_xyz_m)
 {
   dyn_param_.reset();
+  jacobian_solver_.reset();
   chain_joint_names_.clear();
   chain_to_controller_.clear();
+  controller_joint_count_ = 0;
   com_adjustments_.clear();
   folded_mass_ = 0.0;
   folded_links_.clear();
@@ -135,11 +137,24 @@ std::string GravityModel::configure(
 
   dyn_param_ = std::make_unique<KDL::ChainDynParam>(
     chain_, KDL::Vector(gravity[0], gravity[1], gravity[2]));
+  jacobian_solver_ = std::make_unique<KDL::ChainJntToJacSolver>(chain_);
 
   q_.resize(chain_.getNrOfJoints());
   gravity_torque_.resize(chain_.getNrOfJoints());
+  qd_.resize(chain_.getNrOfJoints());
+  qdd_.resize(chain_.getNrOfJoints());
+  coriolis_torque_.resize(chain_.getNrOfJoints());
+  dynamics_torque_.resize(chain_.getNrOfJoints());
+  mass_matrix_.resize(chain_.getNrOfJoints());
+  jacobian_.resize(chain_.getNrOfJoints());
   KDL::SetToZero(q_);
   KDL::SetToZero(gravity_torque_);
+  KDL::SetToZero(qd_);
+  KDL::SetToZero(qdd_);
+  KDL::SetToZero(coriolis_torque_);
+  KDL::SetToZero(dynamics_torque_);
+  KDL::SetToZero(mass_matrix_);
+  controller_joint_count_ = joint_names.size();
   com_adjustments_ = std::move(adjustments);
 
   return "";
@@ -244,22 +259,108 @@ void GravityModel::foldOffChainMass(const KDL::Tree & tree)
 
 void GravityModel::compute(const std::vector<double> & positions, std::vector<double> & torques)
 {
+  (void)computeChecked(positions, torques);
+}
+
+bool GravityModel::computeChecked(const std::vector<double> & positions, std::vector<double> & torques)
+{
   std::fill(torques.begin(), torques.end(), 0.0);
   if (!dyn_param_) {
-    return;
+    return false;
   }
 
   for (size_t i = 0; i < chain_to_controller_.size(); ++i) {
+    if (chain_to_controller_[i] >= positions.size() ||
+      chain_to_controller_[i] >= torques.size() ||
+      !std::isfinite(positions[chain_to_controller_[i]]))
+    {
+      return false;
+    }
     q_(i) = positions[chain_to_controller_[i]];
   }
 
   if (dyn_param_->JntToGravity(q_, gravity_torque_) < 0) {
-    return;
+    return false;
   }
 
   for (size_t i = 0; i < chain_to_controller_.size(); ++i) {
+    if (!std::isfinite(gravity_torque_(i))) {return false;}
+  }
+  for (size_t i = 0; i < chain_to_controller_.size(); ++i) {
     torques[chain_to_controller_[i]] = gravity_torque_(i);
   }
+  return true;
+}
+
+bool GravityModel::computeDynamicsChecked(
+  const std::vector<double> & positions, const std::vector<double> & velocities,
+  const std::vector<double> & accelerations, std::vector<double> & torques)
+{
+  // An aliased output cannot be used as an input: fail explicitly instead of
+  // silently evaluating dynamics from values zeroed here.
+  const bool aliased = &torques == &positions || &torques == &velocities || &torques == &accelerations;
+  std::fill(torques.begin(), torques.end(), 0.0);
+  const auto finite = [](const auto & values) {
+      return std::all_of(values.begin(), values.end(), [](double v) {return std::isfinite(v);});
+    };
+  if (aliased || !dyn_param_ || positions.size() != controller_joint_count_ ||
+    velocities.size() != controller_joint_count_ || accelerations.size() != controller_joint_count_ ||
+    torques.size() != controller_joint_count_ || !finite(positions) || !finite(velocities) ||
+    !finite(accelerations))
+  {
+    return false;
+  }
+  for (size_t i = 0; i < chain_to_controller_.size(); ++i) {
+    const auto index = chain_to_controller_[i];
+    q_(i) = positions[index];
+    qd_(i) = velocities[index];
+    qdd_(i) = accelerations[index];
+  }
+  if (dyn_param_->JntToMass(q_, mass_matrix_) < 0 ||
+    dyn_param_->JntToCoriolis(q_, qd_, coriolis_torque_) < 0 ||
+    dyn_param_->JntToGravity(q_, gravity_torque_) < 0)
+  {
+    return false;
+  }
+  // Validate all rows before writing any caller-visible torque so failures
+  // never leave a partially updated output.
+  for (size_t i = 0; i < chain_to_controller_.size(); ++i) {
+    double torque = coriolis_torque_(i) + gravity_torque_(i);
+    for (size_t j = 0; j < chain_to_controller_.size(); ++j) {
+      torque += mass_matrix_(i, j) * qdd_(j);
+    }
+    if (!std::isfinite(torque)) {return false;}
+    dynamics_torque_(i) = torque;
+  }
+  for (size_t i = 0; i < chain_to_controller_.size(); ++i) {
+    torques[chain_to_controller_[i]] = dynamics_torque_(i);
+  }
+  return true;
+}
+
+bool GravityModel::computeJacobianChecked(
+  const std::vector<double> & positions, std::vector<double> & jacobian)
+{
+  std::fill(jacobian.begin(), jacobian.end(), 0.0);
+  if (!jacobian_solver_ || positions.size() != controller_joint_count_ ||
+    jacobian.size() != 6 * controller_joint_count_ ||
+    !std::all_of(positions.begin(), positions.end(), [](double value) {return std::isfinite(value);}))
+  {
+    return false;
+  }
+  for (size_t i = 0; i < chain_to_controller_.size(); ++i) {
+    q_(i) = positions[chain_to_controller_[i]];
+  }
+  if (jacobian_solver_->JntToJac(q_, jacobian_) < 0) {return false;}
+  for (size_t column = 0; column < chain_to_controller_.size(); ++column) {
+    const size_t controller = chain_to_controller_[column];
+    for (size_t row = 0; row < 6; ++row) {
+      const double value = jacobian_(row, column);
+      if (!std::isfinite(value)) {std::fill(jacobian.begin(), jacobian.end(), 0.0); return false;}
+      jacobian[row * controller_joint_count_ + controller] = value;
+    }
+  }
+  return true;
 }
 
 std::string GravityModel::readUrdfFriction(

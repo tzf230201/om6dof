@@ -205,6 +205,23 @@ TEST(GravityModel, ReportsTheChainJoints)
   EXPECT_EQ("joint2", model.chain_joint_names()[1]);
 }
 
+TEST(GravityModel, ComputesBaseFrameTcpJacobianForVirtualWork)
+{
+  GravityModel model;
+  ASSERT_TRUE(model.configure(kUrdf, "base_link", "link2", {"joint1", "joint2"}, kGravity).empty());
+  std::vector<double> jacobian(12, 0.0);
+  ASSERT_TRUE(model.computeJacobianChecked({0.0, 0.0}, jacobian));
+  // At q=0 link2's origin is (1,0,0). joint1 is a Y-axis hinge at the
+  // origin, so v = y×p = -Z; joint2 is at the TCP and has no linear lever.
+  EXPECT_NEAR(-1.0, jacobian[2 * 2 + 0], 1e-12);
+  EXPECT_NEAR(0.0, jacobian[2 * 2 + 1], 1e-12);
+  EXPECT_NEAR(1.0, jacobian[4 * 2 + 0], 1e-12);
+  EXPECT_NEAR(1.0, jacobian[4 * 2 + 1], 1e-12);
+  EXPECT_FALSE(model.computeJacobianChecked({0.0}, jacobian));
+  std::vector<double> wrong_size(11, 0.0);
+  EXPECT_FALSE(model.computeJacobianChecked({0.0, 0.0}, wrong_size));
+}
+
 TEST(GravityModel, HorizontalArmNeedsTheHandComputedTorque)
 {
   GravityModel model;

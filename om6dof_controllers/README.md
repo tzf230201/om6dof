@@ -1,7 +1,38 @@
 # om6dof_controllers
 
-Unified OM6DOF package: Python command conversion/kinematics and four C++
+Cartesian commanded-wrench mode is documented in
+[docs/cartesian_force.md](docs/cartesian_force.md). It is disabled with zero
+limits by default and requires the existing Mode-0 impedance commissioning
+path; it is not a measured force-feedback controller.
+
+Unified OM6DOF package: Python command conversion/kinematics and five C++
 ros2_control controller plugins.
+
+## Experimental Mode-5 admittance
+
+An opt-in outer loop yields to estimated external joint torque while retaining
+the absolute target, then returns gradually after release. It keeps the motor
+PID and current-based position mode unchanged. Current/model validity and
+explicit position-controller ownership gate motion; Stop restores the normal
+trajectory controller only after a settled hold and switch acknowledgement.
+It is disabled until physical calibration is verified. See
+[model, limits, commissioning, and tests](docs/admittance.md).
+
+## Experimental position impedance (Mode 0)
+
+`PositionImpedanceController` follows joint-position targets using URDF gravity
+plus a bounded spring/damper residual. The extra-torque budget adapts to measured
+pose and stays inside absolute joint/current caps. It retains the final target
+without reference windup while blocked, with command and bus-health watchdogs.
+It is **not a certified contact-safety controller** and has not been hardware tuned.
+
+The separate `position_impedance.launch.py` loads it **inactive** and starts the
+leased web-target bridge; it neither starts hardware nor changes modes. This
+legacy Mode-0 bridge is separate from the normal Mode-5 web Target workflow.
+See [control law, parameters, commissioning,
+and fault behavior](docs/position_impedance.md) before use. Existing torque-teaching
+configuration is unchanged. Never skip TRANSITION → READY in the normal position
+stack before a supported-arm torque-mode commissioning session.
 
 ## High-level command converter
 
@@ -23,6 +54,54 @@ See [command converter details](docs/command_converter.md) and the
 [combined reference preview](config/COMBINED_REFERENCE.md). Executables are
 `controller_node` and `combined_preview_node`. Do not start the position
 converter alongside the isolated Mode 0 torque-teaching stack.
+
+### Position target cancellation
+
+Absolute pose and target goals require measured arrival within 0.03 rad on
+every arm joint. Normal bringup applies the same position goal tolerance to
+other trajectory clients. JTC's default zero disables this check and could
+report success for a stationary arm far from READY; elapsed trajectory time
+alone is no longer enough. Current/headroom faults still require explicit
+supported recovery rather than automatically restarting a trajectory.
+
+The normal position target endpoint is `/om6dof/target_cmd`; feedback is on
+`/om6dof/target_status`. It sends trajectories to `arm_controller` without
+changing motor mode, PID gains, or current limits.
+
+The target state follows the action result: `requesting` while awaiting goal
+acceptance, `running` after acceptance, and `stopping` while cancellation is
+pending. `stopped` confirms a canceled result, or explicitly reports that no
+owned target was accepted/remains to cancel. Cancellation acknowledgement alone
+is not completion. A target that completes before cancellation reports completion,
+not a fictitious cancellation; fresh pose feedback is also required for `reached`.
+
+Stop cancels only this node's stored target goal handle, including a Stop that
+arrives before acceptance. It never cancels all goals or another client's READY,
+MoveIt, or calibration motion. New target/pose/mode requests and jog integration
+are blocked until the owned action ends; uncertain transport/results stay blocked
+without automatic retries or restart. A rejected cancellation can be retried
+with Stop. Targets cannot start in FLOAT mode.
+
+An absolute target still rebases the manual offset to zero at submission; this
+existing handoff is not redesigned here. The offset stays frozen through the
+target lifecycle. With no owned target, Stop clears cached jog velocity but
+preserves the offset, avoiding an unintended position step.
+
+This is an action cancellation, **not emergency stop or torque-off**. No other
+client is prevented from commanding the shared trajectory controller. The
+updated Python node must be restarted in an explicitly approved, supported-arm
+session before the fix affects a running robot; offline tests do not validate
+physical stopping distance or settling.
+
+Offline lifecycle regression (no ROS node/action server or hardware started):
+
+```bash
+source /opt/ros/humble/setup.bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD:$PYTHONPATH" python3 -m pytest -q \
+  test/test_controller_node.py test/test_target_action_lifecycle.py
+```
+
+Run from the `om6dof_controllers` package directory.
 
 ## ros2_control plugins
 
@@ -770,6 +849,16 @@ Shared by all three: `joints`, `base_link`, `tip_link`, `gravity`,
 with the OM6DOF values filled in.
 
 ## Tests
+
+The opt-in Mode-5 `GravityCurrentBudgetController` updates Goal Current from
+measured pose at the manager rate without owning position or writing motor PID.
+Its bringup configuration adds a static holding reserve and a bounded reserve
+from fresh trajectory velocity/acceleration, with slew limiting and per-joint
+caps. These initial reserve values need physical commissioning. They do not
+increase automatically from position error when a target is obstructed.
+See [gravity-current budget setup and limitations](docs/gravity_current_budget.md).
+This profile starts with zero current and requires physical support; it is not
+enabled by a normal stack restart.
 
 ```bash
 colcon test --packages-select om6dof_controllers && colcon test-result --verbose

@@ -3,7 +3,7 @@ import time
 """Canonical runtime: hardware owner -> command converter -> input adapter."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -37,6 +37,16 @@ def current_control_default() -> str:
     return "true" if requested and age <= CURRENT_CONTROL_TTL_S else "false"
 
 def generate_launch_description():
+    def validate_admittance(context):
+        if LaunchConfiguration('admittance_control').perform(context).lower() != 'true':
+            return []
+        required = {'gravity_current_budget': 'true', 'current_control': 'false',
+                    'start_go2w_teleop': 'true', 'input_source': 'web'}
+        if any(LaunchConfiguration(key).perform(context).lower() != value
+               for key, value in required.items()):
+            raise RuntimeError('Admittance requires Mode-5 gravity_current_budget:=true, '
+                               'current_control:=false, start_go2w_teleop:=true and input_source:=web')
+        return []
     hardware = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([
             FindPackageShare("om6dof_bringup"), "launch", "hardware.launch.py",
@@ -46,12 +56,14 @@ def generate_launch_description():
             "baud_rate": LaunchConfiguration("baud_rate"),
             "use_fake_hardware": LaunchConfiguration("use_fake_hardware"),
             "current_control": LaunchConfiguration("current_control"),
+            "gravity_current_budget": LaunchConfiguration("gravity_current_budget"),
         }.items(),
     )
     controller = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([
             FindPackageShare("om6dof_controllers"), "launch", "controller.launch.py",
         ])),
+        launch_arguments={'admittance_control': LaunchConfiguration('admittance_control')}.items(),
     )
     teleop = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([
@@ -71,6 +83,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("baud_rate", default_value="1000000"),
         DeclareLaunchArgument("use_fake_hardware", default_value="false"),
+        DeclareLaunchArgument("gravity_current_budget", default_value="false"),
+        DeclareLaunchArgument("admittance_control", default_value="false"),
         # Opt-in: loads the effort-capable description so gravity
         # compensation can reach the motors. The arm is softer with it on.
         DeclareLaunchArgument("current_control",
@@ -86,6 +100,7 @@ def generate_launch_description():
             default_value="true",
             description="Start the selected human-input adapter (including Logitech gamepad).",
         ),
+        OpaqueFunction(function=validate_admittance),
         hardware,
         controller,
         teleop,

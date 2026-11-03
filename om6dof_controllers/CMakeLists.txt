@@ -8,6 +8,7 @@ endif()
 set(THIS_PACKAGE_INCLUDE_DEPENDS
   control_msgs
   controller_interface
+  diagnostic_msgs
   hardware_interface
   kdl_parser
   lifecycle_msgs
@@ -35,8 +36,10 @@ endforeach()
 add_library(${PROJECT_NAME} SHARED
   src/controller_utils.cpp
   src/gravity_compensation_controller.cpp
+  src/gravity_current_budget_controller.cpp
   src/gravity_model.cpp
   src/leader_arm_controller.cpp
+  src/position_impedance_controller.cpp
   src/spring_actuator_controller.cpp
   src/trajectory_controller.cpp
   src/trajectory_sampler.cpp
@@ -72,6 +75,9 @@ install(
 install(
   PROGRAMS
     scripts/controller_node
+    scripts/impedance_target
+    scripts/cartesian_force_bridge
+    scripts/impedance_stack
     scripts/combined_preview_node
     scripts/compare_paper_identification.py
     scripts/identification_tracking.py
@@ -89,7 +95,7 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
   foreach(test_name control_math ik_solver target_planner combined_reference
-      combined_preview_node controller_node controller_launch)
+      combined_preview_node controller_node target_action_lifecycle admittance admittance_target controller_launch position_impedance_launch impedance_target impedance_stack cartesian_force_bridge)
     ament_add_pytest_test(${test_name} test/test_${test_name}.py
       TIMEOUT 120
       APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR})
@@ -100,6 +106,8 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_gravity_model test/test_gravity_model.cpp)
   target_link_libraries(test_gravity_model ${PROJECT_NAME})
+  ament_add_gtest(test_gravity_dynamics test/test_gravity_dynamics.cpp)
+  target_link_libraries(test_gravity_dynamics ${PROJECT_NAME})
 
   ament_add_gtest(test_com_configuration test/test_com_configuration.cpp)
   target_link_libraries(test_com_configuration ${PROJECT_NAME})
@@ -108,6 +116,16 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_controller_utils test/test_controller_utils.cpp)
   target_link_libraries(test_controller_utils ${PROJECT_NAME})
+
+  ament_add_gtest(test_position_impedance test/test_position_impedance.cpp)
+  ament_add_gtest(test_gravity_current_budget test/test_gravity_current_budget.cpp)
+  target_link_libraries(test_gravity_current_budget ${PROJECT_NAME})
+  target_compile_definitions(test_gravity_current_budget PRIVATE
+    TEST_BRINGUP_XACRO="${CMAKE_CURRENT_SOURCE_DIR}/../om6dof_bringup/urdf/om6dof.urdf.xacro")
+  target_link_libraries(test_position_impedance ${PROJECT_NAME})
+  target_compile_definitions(test_position_impedance PRIVATE
+    TEST_IMPEDANCE_CONFIG="${CMAKE_CURRENT_SOURCE_DIR}/config/position_impedance.yaml"
+    TEST_BRINGUP_XACRO="${CMAKE_CURRENT_SOURCE_DIR}/../om6dof_bringup/urdf/om6dof.urdf.xacro")
 endif()
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)

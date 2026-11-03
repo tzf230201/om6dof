@@ -12,6 +12,7 @@ from om6dof_controllers.control_math import (
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
     MODE_CYLINDRICAL,
+    MODE_FORCE,
     MODE_JOINT,
     MODE_READY,
     MODE_REST,
@@ -99,7 +100,7 @@ def _adapter(remote_enabled=False):
     node.speed_scale = 1.0
     node.speed_scale_min = 0.15
     node.speed_scale_max = 5.0
-    node.speed_scale_step = 0.10
+    node.speed_scale_step = 1.0
     node.speed_repeat_seconds = 0.20
     node.lowstate_preference_timeout = 0.1
     node.action_debounce = 0.0
@@ -183,6 +184,13 @@ def test_cartesian_and_cylindrical_modes_have_distinct_second_coordinate():
     assert cylindrical == pytest.approx([0.05, 0.25, 0.05, 0.5, 0.5, 0.5])
 
 
+def test_force_mode_maps_input_to_direction_only():
+    node = _adapter(remote_enabled=True)
+    node.control_mode = MODE_FORCE
+    assert node._remote_coordinate_velocity(BTN_Y | BTN_LEFT | BTN_UP | BTN_X | BTN_R1,
+                                             (0.0, 0.0, 0.0, 1.0)) == [1.0] * 6
+
+
 def test_f3_is_always_a_release_request_even_while_autonomous(monkeypatch):
     """No ownership handshake any more: F3 only ever releases to autonomous.
 
@@ -226,12 +234,12 @@ def test_f3_has_priority_over_mode_buttons_pressed_in_same_sample(monkeypatch):
     assert node.control_mode == MODE_JOINT
 
 
-def test_select_cycles_only_the_three_motion_modes(monkeypatch):
+def test_select_cycles_through_force_mode(monkeypatch):
     now = [100.0]
     monkeypatch.setattr(teleop_node.time, "monotonic", lambda: now[0])
     node = _adapter(remote_enabled=True)
 
-    expected = [MODE_CARTESIAN, MODE_CYLINDRICAL, MODE_JOINT]
+    expected = [MODE_CARTESIAN, MODE_CYLINDRICAL, teleop_node.MODE_SEMI_CYLINDRICAL, MODE_FORCE, MODE_JOINT]
     for mode in expected:
         _sample(node, BTN_SELECT)
         assert node.operation_pub.messages[-1].data == mode
@@ -372,6 +380,64 @@ def test_gamepad_start_sends_the_arm_to_ready():
     assert node.remote_waiting_for_neutral is True
 
 
+def test_gamepad_semi_uses_x_and_b_for_roll_not_right_stick():
+    class Stick:
+        def __init__(self):
+            self.buttons = set()
+            self.axes = [0.0] * 8
+
+        def snapshot(self):
+            return True, self.axes.copy(), self.buttons
+
+    node = _adapter(remote_enabled=True)
+    node.input_source = 'gamepad'
+    node.gamepad = Stick()
+    node.control_mode = teleop_node.MODE_SEMI_CYLINDRICAL
+    node._stick_velocity_locked()
+    node.gamepad.axes[3] = 1.0
+    values, _, _ = node._stick_velocity_locked()
+    assert values[3:] == pytest.approx([0, 0, 0])
+    node.gamepad.buttons = {2}  # X
+    assert node._stick_velocity_locked()[0][3] == pytest.approx(-0.35)
+    node.gamepad.buttons = {1}  # B
+    assert node._stick_velocity_locked()[0][3] == pytest.approx(0.35)
+    node.gamepad.buttons = {1, 2}
+    assert node._stick_velocity_locked()[0][3] == 0
+    node.gamepad.buttons = {3}  # Y
+    assert node._stick_velocity_locked()[0][4] == pytest.approx(-0.35)
+    node.gamepad.buttons = {0}  # A
+    assert node._stick_velocity_locked()[0][4] == pytest.approx(0.35)
+    node.gamepad.buttons = {0, 3}
+    assert node._stick_velocity_locked()[0][4] == 0
+
+
+def test_custom_gamepad_drone_mode_two_stick_mapping():
+    class Stick:
+        axes = [0.0] * 8
+
+        def snapshot(self):
+            return True, self.axes.copy(), set()
+
+    node = _adapter(remote_enabled=True)
+    node.input_source = 'gamepad'
+    node.gamepad = Stick()
+    node.control_mode = teleop_node.MODE_SEMI_CYLINDRICAL
+    node._stick_velocity_locked()
+    node.gamepad.axes[1] = -1.0  # left stick up
+    assert node._stick_velocity_locked()[0][:3] == pytest.approx([0, 0, .03])
+    node.gamepad.axes[1] = 0.0
+    node.gamepad.axes[0] = -1.0  # left horizontal is unused
+    assert node._stick_velocity_locked()[0][:3] == pytest.approx([0, 0, 0])
+    node.gamepad.axes[0] = 0.0
+    node.gamepad.axes[3] = -1.0  # right stick left
+    assert node._stick_velocity_locked()[0][:3] == pytest.approx([0, .20, 0])
+    node.gamepad.axes[3] = 1.0  # right stick right
+    assert node._stick_velocity_locked()[0][:3] == pytest.approx([0, -.20, 0])
+    node.gamepad.axes[3] = 0.0
+    node.gamepad.axes[4] = -1.0  # right stick forward
+    assert node._stick_velocity_locked()[0][:3] == pytest.approx([.03, 0, 0])
+
+
 def test_keyboard_uses_canonical_mode_and_velocity_commands(monkeypatch):
     monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
     node = _adapter(remote_enabled=False)
@@ -402,10 +468,23 @@ def test_keyboard_speed_adjustment_scales_published_velocity(monkeypatch):
     node._handle_keyboard_key("+")
     node._tick()
 
-    assert node.speed_scale == pytest.approx(1.1)
+    assert node.speed_scale == pytest.approx(2.0)
     assert node.control_pub.messages[-1].data == pytest.approx(
-        [0.55, 0, 0, 0, 0, 0]
+        [1.0, 0, 0, 0, 0, 0]
     )
+
+
+def test_speed_adjustment_uses_100_point_steps_and_keeps_bounds():
+    node = _adapter()
+    node._adjust_speed_locked(1)
+    assert node.speed_scale == pytest.approx(2.0)
+    node._adjust_speed_locked(-1)
+    assert node.speed_scale == pytest.approx(1.0)
+    node._adjust_speed_locked(-1)
+    assert node.speed_scale == pytest.approx(0.15)
+    for _ in range(10):
+        node._adjust_speed_locked(1)
+    assert node.speed_scale == pytest.approx(5.0)
 
 
 def test_web_input_is_mapped_only_by_teleop(monkeypatch):

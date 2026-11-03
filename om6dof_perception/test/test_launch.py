@@ -57,6 +57,20 @@ def test_v2_launch_wires_same_version_into_perception_and_projector():
         assert evaluate_parameters(context, node._Node__parameters)[0]["model_version"] == "v2"
 
 
+def test_yoloe_launch_preserves_static_prompt_and_30hz_contract():
+    module = _module("perception.launch.py")
+    context = _context(
+        module, model_version="v2", detector_backend="yoloe",
+        yoloe_classes='["bottle", "cup"]', target_class="bottle",
+        frame_rate_hz="30", segmentation_rate_hz="30",
+    )
+    params = evaluate_parameters(context, module._nodes(context)[0]._Node__parameters)[0]
+    assert params["detector_backend"] == "yoloe"
+    assert params["yoloe_classes"] == '["bottle", "cup"]'
+    assert params["frame_rate_hz"] == 30.0
+    assert params["segmentation_rate_hz"] == 30.0
+
+
 def test_v1_world_preview_is_rejected_instead_of_using_wrong_kinematics():
     module = _module("perception.launch.py")
     with pytest.raises(ValueError, match="V2 nominal"):
@@ -77,6 +91,9 @@ def test_v2_wrapper_sets_version_and_allows_disabling_projection(monkeypatch):
     context = _context(wrapper, publish_world_point="false")
     assert args["publish_world_point"].perform(context) == "false"
     assert args["camera_model"].perform(context) == "D435i"
+    assert args["detector_backend"].perform(context) == "yoloe"
+    assert args["yoloe_model_path"].perform(context).endswith("yoloe-26n-seg.pt")
+    assert args["segmentation_rate_hz"].perform(context) == "10.0"
     assert args["reacquire_period_sec"].perform(context) == "0.5"
     assert args["frame_rate_hz"].perform(context) == "15.0"
     assert args["web_stream_max_width"].perform(context) == "480"

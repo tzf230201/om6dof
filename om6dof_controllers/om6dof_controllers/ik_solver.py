@@ -6,7 +6,7 @@ each tick wants a small Δq from a button-derived velocity command — no need
 for full position IK (which can fail near singularities or pick weird
 elbow-up/down branches).
 
-URDF is rendered from `om6dof_description/urdf/om6dof.urdf.xacro` at startup
+URDF is rendered from `om6dof_description/urdf/om6dof_v2.urdf.xacro` at startup
 via the `xacro` CLI. We don't depend on `kdl_parser_py` (not packaged for
 Humble) — instead we walk the URDF with `urdf_parser_py` and build a
 `PyKDL.Chain` joint-by-joint.
@@ -23,6 +23,8 @@ import numpy as np
 import PyKDL
 from ament_index_python.packages import get_package_share_directory
 from urdf_parser_py.urdf import URDF
+
+from .control_math import tip_rotation_to_cartesian_rpy
 
 
 def _kdl_chain_from_urdf(urdf_str: str, base_link: str, tip_link: str) -> PyKDL.Chain:
@@ -78,13 +80,14 @@ def _kdl_chain_from_urdf(urdf_str: str, base_link: str, tip_link: str) -> PyKDL.
 
 def render_chain_urdf(
     pkg: str = "om6dof_description",
-    xacro_rel: str = "urdf/om6dof.urdf.xacro",
+    xacro_rel: str = "urdf/om6dof_v2.urdf.xacro",
     extra_args: List[str] | None = None,
 ) -> str:
     """Render the rig's URDF xacro to a string.
 
-    Default = the open-source 6dof description: the single canonical
-    kinematics source shared with ordinary MoveGroup planning."""
+    Default = the physical OM6DOF V2 description, the canonical model shared
+    with the runtime robot_state_publisher and MoveGroup planning. Callers
+    that intentionally work with V1 must request its xacro path explicitly."""
     share = Path(get_package_share_directory(pkg))
     xacro_path = share / xacro_rel
     if not xacro_path.exists():
@@ -101,7 +104,7 @@ def joint_limits_from_urdf(
     base_link: str = "world",
     tip_link: str = "end_effector_link",
     urdf_pkg: str = "om6dof_description",
-    xacro_rel: str = "urdf/om6dof.urdf.xacro",
+    xacro_rel: str = "urdf/om6dof_v2.urdf.xacro",
 ) -> Tuple[List[float], List[float]]:
     """Return hard limits for the requested arm joints from the rendered URDF.
 
@@ -134,7 +137,7 @@ def joint_limits_from_urdf(
 
 
 class IKSolver:
-    """Velocity-resolved IK for the arm group, joint1..joint6."""
+    """Velocity-resolved IK for the physical V2 arm group, joint1..joint6."""
 
     def __init__(
         self,
@@ -142,9 +145,10 @@ class IKSolver:
         tip_link: str = "end_effector_link",
         urdf_pkg: str = "om6dof_description",
         damping: float = 0.1,
-        xacro_rel: str = "urdf/om6dof.urdf.xacro",
+        xacro_rel: str = "urdf/om6dof_v2.urdf.xacro",
+        urdf_xml: str | None = None,
     ) -> None:
-        urdf_str = render_chain_urdf(urdf_pkg, xacro_rel)
+        urdf_str = urdf_xml if urdf_xml is not None else render_chain_urdf(urdf_pkg, xacro_rel)
         self.chain, self.q_min, self.q_max = _kdl_chain_from_urdf(
             urdf_str, base_link, tip_link
         )
@@ -202,6 +206,88 @@ class IKSolver:
             for c in range(self.n_joints):
                 out[r, c] = J[r, c]
         return out
+
+    def semi_cylindrical_fk(self, q: np.ndarray, origin_xy=(0.012, 0.0)) -> np.ndarray:
+        """Return [radius, theta, z, roll, pitch] with joint 4 fixed at zero.
+
+        Roll and pitch describe the gripper-forward frame: its X axis follows
+        the gripper (tip-link +Z). Yaw is not a target coordinate. Angles are
+        in radians and distances in metres.
+        """
+        joints = np.asarray(q, dtype=float).copy()
+        origin = np.asarray(origin_xy, dtype=float)
+        if joints.shape != (6,) or origin.shape != (2,) or not (
+                np.all(np.isfinite(joints)) and np.all(np.isfinite(origin))):
+            raise ValueError('expected finite six-joint pose and two-value origin')
+        joints[3] = 0.0
+        xyz, rotation = self.fk_pose(joints)
+        rpy = tip_rotation_to_cartesian_rpy(rotation)
+        dx, dy = xyz[:2] - origin
+        return np.array([math.hypot(dx, dy), math.atan2(dy, dx),
+                         xyz[2], rpy[0], rpy[1]])
+
+    @staticmethod
+    def _semi_error(target: np.ndarray, current: np.ndarray) -> np.ndarray:
+        error = np.asarray(target, dtype=float) - np.asarray(current, dtype=float)
+        error[[1, 3, 4]] = (error[[1, 3, 4]] + math.pi) % (2 * math.pi) - math.pi
+        return error
+
+    def semi_cylindrical_jacobian(self, q: np.ndarray, origin_xy=(0.012, 0.0)) -> np.ndarray:
+        """Five-coordinate Jacobian for joints 1, 2, 3, 5 and 6."""
+        q = np.asarray(q, dtype=float).copy()
+        current = self.semi_cylindrical_fk(q, origin_xy)
+        if current[0] < 1e-6:
+            raise ValueError('theta is undefined at the cylindrical axis')
+        columns = []
+        for index in (0, 1, 2, 4, 5):
+            trial = q.copy()
+            trial[index] += 1e-6
+            columns.append(self._semi_error(
+                self.semi_cylindrical_fk(trial, origin_xy), current) / 1e-6)
+        return np.column_stack(columns)
+
+    def semi_cylindrical_velocity_ik(
+        self, q: np.ndarray, rates: np.ndarray, origin_xy=(0.012, 0.0)
+    ) -> np.ndarray:
+        """Map [R, theta, Z, roll, pitch] jog rates to joint rates."""
+        rates = np.asarray(rates, dtype=float).copy()
+        if rates.shape != (5,) or not np.all(np.isfinite(rates)):
+            raise ValueError('expected five finite coordinate rates')
+        result = np.zeros(6)
+        result[[0, 1, 2, 4, 5]] = self.damped_pinv(
+            self.semi_cylindrical_jacobian(q, origin_xy)) @ rates
+        return result
+
+    def solve_semi_cylindrical_ik(
+        self, q_init: np.ndarray, target: np.ndarray, origin_xy=(0.012, 0.0),
+        max_iter: int = 200,
+    ) -> Tuple[np.ndarray, bool]:
+        """Solve a five-coordinate target with joint 4 fixed at zero.
+
+        Returns a solution and convergence flag; callers must check collision
+        and path feasibility before sending any motion command.
+        """
+        target = np.asarray(target, dtype=float).copy()
+        q = np.asarray(q_init, dtype=float).copy()
+        if target.shape != (5,) or not np.all(np.isfinite(target)) or target[0] <= 0:
+            raise ValueError('expected finite [R, theta, Z, roll, pitch] with R > 0')
+        if q.shape != (6,) or not np.all(np.isfinite(q)):
+            raise ValueError('expected six finite initial joints')
+        if not self.q_min[3] <= 0.0 <= self.q_max[3]:
+            raise ValueError('joint 4 zero is outside its limits')
+        q = np.clip(q, self.q_min, self.q_max)
+        q[3] = 0.0
+        active = [0, 1, 2, 4, 5]
+        for _ in range(max_iter):
+            error = self._semi_error(target, self.semi_cylindrical_fk(q, origin_xy))
+            if (abs(error[0]) <= 0.001 and abs(error[2]) <= 0.001
+                    and np.max(np.abs(error[[1, 3, 4]])) <= math.radians(0.5)):
+                return q, True
+            jac = self.semi_cylindrical_jacobian(q, origin_xy)
+            step = self.damped_pinv(jac) @ error
+            q[active] = np.clip(q[active] + np.clip(step, -0.1, 0.1),
+                                self.q_min[active], self.q_max[active])
+        return q, False
 
     # ---------------- velocity IK ----------------
     def damped_pinv(self, J: np.ndarray, damping: float | None = None) -> np.ndarray:

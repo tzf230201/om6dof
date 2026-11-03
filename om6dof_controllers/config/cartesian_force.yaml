@@ -1,0 +1,6 @@
+om6dof_cartesian_force_bridge:
+  ros__parameters:
+    # Must match max_cartesian_wrench in position_impedance.yaml.
+    wrench_limits: [4.0, 4.0, 4.0, 0.2, 0.2, 0.2]
+    input_timeout_seconds: 0.20
+    publish_rate_hz: 50.0

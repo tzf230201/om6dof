@@ -257,7 +257,7 @@ def make_handler(node: OM6DOFBridge):
             if path == "/mode":
                 mode = str(body.get("mode", "")).strip().upper()
                 allowed = {
-                    "JOINT", "CARTESIAN", "CYLINDRICAL", "SEMI_CYLINDRICAL",
+                    "JOINT", "CARTESIAN", "CYLINDRICAL", "CUSTOM", "SEMI_CYLINDRICAL",
                     "READY", "STARTUP", "AUTONOMOUS", "TOGGLE_REST_READY",
                 }
                 if mode not in allowed:

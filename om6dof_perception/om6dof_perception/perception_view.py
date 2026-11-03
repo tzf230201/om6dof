@@ -2,7 +2,8 @@
 """Live web viewer for om6dof_perception.
 
 Subscribes to the perception debug image + status topics and serves them in
-a browser: MJPEG stream, tracking status, and a box to retarget the VLM.
+    a browser: MJPEG stream, tracking status, and controls to retarget the
+    detector. YOLOE checkpoints accept free text; frozen engines use a menu.
 Camera-free (topics only), so it can run alongside perception_node.
 
   ros2 run om6dof_perception perception_view
@@ -33,7 +34,7 @@ img{max-width:640px;width:100%;border-radius:8px;background:#000}
 section{background:#1b1e27;border-radius:10px;padding:14px;min-width:300px;flex:1}
 .badge{padding:2px 10px;border-radius:10px;font-size:12px;background:#333}
 .ok{background:#1d4d2b}.warn{background:#5c4a17}
-input{width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #3a3f4d;background:#12141a;color:#dfe3ea;margin:6px 0}
+input,select{width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #3a3f4d;background:#12141a;color:#dfe3ea;margin:6px 0}
 button{padding:8px 16px;border:0;border-radius:6px;background:#2a5fd0;color:#fff;cursor:pointer}
 pre{background:#12141a;border-radius:6px;padding:10px;font-size:12px;overflow-x:auto}
 td{padding:2px 10px 2px 0}
@@ -46,10 +47,12 @@ td{padding:2px 10px 2px 0}
 <main>
  <section style="flex:1.4"><img src="/stream" alt="menunggu frame dari perception_node..."></section>
  <section>
-  <label>Ganti target (kelas COCO, contoh: bottle, cup, person)</label>
-  <input id="tgt" placeholder="red cube on the table">
+  <label id="target-label">Ganti target (kelas COCO, contoh: bottle, cup, person)</label>
+  <select id="labels" hidden onchange="retarget()"></select>
+  <input id="tgt" placeholder="red cup on the table" onkeydown="if(event.key==='Enter')retarget()">
   <button onclick="retarget()">Set target</button>
   <div id="msg" style="color:#9aa3b2;font-size:13px;margin:4px 0"></div>
+  <div id="prompt-status" role="status" style="color:#9aa3b2;font-size:13px"></div>
   <table>
    <tr><td>target</td><td id="ttgt">-</td></tr>
    <tr><td>gripper (EE)</td><td id="tee">-</td></tr>
@@ -60,16 +63,46 @@ td{padding:2px 10px 2px 0}
 </main>
 <script>
 async function retarget(){
- const v=document.getElementById('tgt').value.trim();
+ const labels=document.getElementById('labels');
+ const v=(labels.hidden?document.getElementById('tgt').value:labels.value).trim();
  if(!v)return;
- await fetch('/set_target',{method:'POST',body:JSON.stringify({target:v})});
- document.getElementById('msg').textContent='target dikirim: '+v;
+ try{
+  const r=await fetch('/set_target',{method:'POST',body:JSON.stringify({target:v})});
+  if(!r.ok)throw Error('HTTP '+r.status);
+  document.getElementById('msg').textContent='target dikirim: '+v;
+ }catch(e){document.getElementById('msg').textContent='gagal mengirim target';}
+}
+function labelsForYOLOE(s){
+ const labels=s.detector&&s.detector.configured_classes;
+ const select=document.getElementById('labels'),input=document.getElementById('tgt');
+ const yoloe=s.detector&&s.detector.backend==='yoloe';
+ const free=yoloe&&s.detector.open_vocabulary;
+ const enabled=yoloe&&!free&&Array.isArray(labels)&&labels.length;
+ select.hidden=!enabled; input.hidden=enabled;
+ document.getElementById('target-label').textContent=free?
+  'Label bebas YOLOE (contoh: glass jar, red mug, screwdriver)':enabled?
+  'Pilih label YOLOE (sudah dibekukan di TensorRT engine)':
+  'Ganti target (kelas COCO, contoh: bottle, cup, person)';
+ if(!input.dataset.initialized&&s.target){input.value=s.target.class||'';input.dataset.initialized='1';}
+ document.getElementById('prompt-status').textContent=s.detector&&s.detector.error?
+  'Gagal memproses target: '+s.detector.error:
+  (free?(s.detector.prompt_update_pending?'Memperbarui prompt...':
+    'Prompt aktif: '+(labels||[]).join(', ')):'');
+ if(!enabled)return;
+ const current=select.value, next=labels.map(String);
+ if(select.dataset.labels===JSON.stringify(next))return;
+ select.replaceChildren(...next.map(label=>{
+  const option=document.createElement('option');option.value=label;option.textContent=label;return option;
+ }));
+ select.dataset.labels=JSON.stringify(next);
+ select.value=next.includes(current)?current:(s.target&&next.includes(s.target.class)?s.target.class:next[0]);
 }
 const fmt=p=>p?`[${p.map(v=>v.toFixed(3)).join(', ')}] m`:'-';
 setInterval(async()=>{
  try{
   const s=await (await fetch('/status.json')).json();
   if(!s.target)return;
+  labelsForYOLOE(s);
   const bt=document.getElementById('btgt'),be=document.getElementById('bee');
   bt.textContent='target: '+s.target.state;
   bt.className='badge '+(s.target.state==='tracking'?'ok':'warn');
@@ -138,6 +171,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 

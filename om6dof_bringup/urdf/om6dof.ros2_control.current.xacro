@@ -44,6 +44,7 @@
       read_packet_timeout_ms:=30.0
       read_transport_mode:=multi_sync
       use_fake_hardware:=false
+      gravity_current_budget:=false
       arm_operating_mode:=5
       torque_off_diagnostic_mode:=false">
 

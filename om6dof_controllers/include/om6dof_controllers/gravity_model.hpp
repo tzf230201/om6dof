@@ -21,9 +21,12 @@
 #include <vector>
 
 #include "kdl/chain.hpp"
+#include "kdl/chainjnttojacsolver.hpp"
 #include "kdl/tree.hpp"
 #include "kdl/chaindynparam.hpp"
+#include "kdl/jacobian.hpp"
 #include "kdl/jntarray.hpp"
+#include "kdl/jntspaceinertiamatrix.hpp"
 
 #include "om6dof_controllers/visibility_control.h"
 
@@ -83,6 +86,27 @@ public:
   /// Allocation-free once configured, so it is safe from update().
   void compute(const std::vector<double> & positions, std::vector<double> & torques);
 
+  /// Checked variant for controllers that must fault on a solver failure.
+  bool computeChecked(const std::vector<double> & positions, std::vector<double> & torques);
+
+  /// Inverse dynamics M(q) qdd + C(q, qd) + g(q), in newton-metres.
+  /// Friction is deliberately excluded and can be added by the caller.
+  /// All four vectors must have exactly the configured controller joint count;
+  /// joints outside the chain get zero. Nonfinite inputs, wrong sizes and
+  /// solver failures return false and zero the existing output, without resizing.
+  /// Uses the same augmented chain/CoM adjustments as computeChecked() and
+  /// allocates no memory after configure(). Calls on one model are not reentrant.
+  bool computeDynamicsChecked(
+    const std::vector<double> & positions, const std::vector<double> & velocities,
+    const std::vector<double> & accelerations, std::vector<double> & torques);
+
+  /// Geometric TCP Jacobian in the chain base frame, stored row-major as
+  /// [vx, vy, vz, wx, wy, wz] × controller joint count.  This is intended
+  /// for the virtual-work mapping tau = J^T wrench.  The output must already
+  /// have exactly 6 * controller joint count entries.
+  bool computeJacobianChecked(
+    const std::vector<double> & positions, std::vector<double> & jacobian);
+
   /// Compensation torque in the direction of `velocity`, in newton-metres.
   /// This cancels modeled mechanical friction; it is NOT artificial damping.
   static double friction(double velocity, const FrictionParameters & parameters);
@@ -115,13 +139,21 @@ private:
   double folded_mass_{0.0};
   std::vector<std::string> folded_links_;
   std::unique_ptr<KDL::ChainDynParam> dyn_param_;
+  std::unique_ptr<KDL::ChainJntToJacSolver> jacobian_solver_;
   std::vector<std::string> chain_joint_names_;
 
   /// For each chain joint, the index into the controller's joint vector.
   std::vector<size_t> chain_to_controller_;
+  size_t controller_joint_count_{0};
 
   KDL::JntArray q_;
   KDL::JntArray gravity_torque_;
+  KDL::JntArray qd_;
+  KDL::JntArray qdd_;
+  KDL::JntArray coriolis_torque_;
+  KDL::JntArray dynamics_torque_;
+  KDL::JntSpaceInertiaMatrix mass_matrix_;
+  KDL::Jacobian jacobian_;
 };
 
 }  // namespace om6dof_controllers

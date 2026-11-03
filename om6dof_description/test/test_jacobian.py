@@ -52,6 +52,24 @@ def test_reference_frame_rotation_and_translation(v2_model):
     np.testing.assert_allclose(transformed_jacobian[3:], root[:3, :3] @ jacobian[3:], atol=1e-12)
 
 
+def test_zero_pose_downstream_link_axes_point_forward(v2_model):
+    share = Path(get_package_share_directory('om6dof_description'))
+    xml = subprocess.check_output(['xacro', str(share / 'urdf' / 'om6dof_v2.urdf.xacro')], text=True)
+    robot = URDF.from_xml_string(xml)
+    for link in ('link4', 'link5', 'link6', 'link7',
+                 'gripper_forward_link', 'gripper_left_link'):
+        model = GeometricJacobian(robot, link)
+        pose, _ = model.evaluate(dict.fromkeys(model.names, 0.0))
+        np.testing.assert_allclose(pose[:3, 0], [1, 0, 0], atol=1e-9)
+    # The right finger is a mimic joint and has the same frame rotation.
+    left = robot.joint_map['gripper_left_joint']
+    right = robot.joint_map['gripper_right_joint']
+    assert right.origin.rpy == pytest.approx(left.origin.rpy)
+    assert right.mimic.joint == left.name
+    pose, _ = v2_model.evaluate(dict.fromkeys(v2_model.names, 0.0))
+    np.testing.assert_allclose(pose[:3, 3], [0.303, 0.0, 0.2245], atol=1e-9)
+
+
 def test_prismatic_column_and_fixed_tip_offset():
     robot = URDF.from_xml_string('''<robot name="fixture">
       <link name="world"/><link name="slide"/><link name="tip"/>

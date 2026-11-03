@@ -32,6 +32,7 @@
 #include <stdexcept>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
+#include "dynamixel_hardware_interface/stored_current_limit.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace dynamixel_hardware_interface
@@ -138,6 +139,8 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
   }
 
   num_of_joints_ = static_cast<size_t>(stoi(info_.hardware_parameters["number_of_joints"]));
+  gravity_current_budget_ = info_.hardware_parameters.count("gravity_current_budget") &&
+    info_.hardware_parameters.at("gravity_current_budget") == "true";
   num_of_transmissions_ =
     static_cast<size_t>(stoi(info_.hardware_parameters["number_of_transmissions"]));
 
@@ -264,6 +267,8 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     restrict_critical_write_service_ =
       info_.hardware_parameters.at("restrict_critical_write_service") == "true";
   }
+
+  if (gravity_current_budget_) {restrict_critical_write_service_ = true;}
 
   if (info_.hardware_parameters.find("torque_off_diagnostic_mode") !=
     info_.hardware_parameters.end())
@@ -463,6 +468,10 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     }
   }
 
+  if (gravity_current_budget_ && gravity_current_limits_.size() != 6) {
+    RCLCPP_ERROR(logger_, "Gravity budget requires all six verified arm motors");
+    return hardware_interface::CallbackReturn::ERROR;
+  }
   if (!InitDxlReadItems()) {
     RCLCPP_ERROR_STREAM(logger_, "Error: InitDxlReadItems");
     return hardware_interface::CallbackReturn::ERROR;
@@ -666,12 +675,18 @@ hardware_interface::CallbackReturn DynamixelHardware::on_init(
     std::bind(&DynamixelHardware::set_dxl_torque_srv_callback, this, _1, _2));
 
   return hardware_interface::CallbackReturn::SUCCESS;
-}
+}  // NOLINT(readability/fn_size): keep the existing hardware initialization sequence intact.
 
 std::vector<hardware_interface::StateInterface>
 DynamixelHardware::export_state_interfaces()
 {
   std::vector<hardware_interface::StateInterface> state_interfaces;
+  if (gravity_current_budget_) {
+    for (auto & entry : gravity_current_limits_) {
+      state_interfaces.emplace_back(entry.first, "stored_current_limit", &entry.second);
+    }
+    state_interfaces.emplace_back("gravity_budget", "read_ok", &gravity_budget_read_ok_);
+  }
 
   try {
     for (auto it : hdl_trans_states_) {
@@ -927,6 +942,7 @@ hardware_interface::CallbackReturn DynamixelHardware::stop()
 hardware_interface::return_type DynamixelHardware::read(
   [[maybe_unused]] const rclcpp::Time & time, const rclcpp::Duration & period)
 {
+  gravity_budget_read_ok_ = 0.0;
   if (dxl_status_ == REBOOTING) {
     RCLCPP_ERROR_STREAM(logger_, "Dynamixel Read Fail : REBOOTING");
     return hardware_interface::return_type::ERROR;
@@ -1049,6 +1065,14 @@ hardware_interface::return_type DynamixelHardware::read(
   }
   PublishBusHealth(false, "OK");
 
+  if (!fail_safe_triggered_ && dxl_status_ == DXL_OK &&
+    consecutive_read_failures_ == 0 && consecutive_write_failures_ == 0 &&
+    torque_state_feedback_valid_ && dxl_torque_status_ == TORQUE_ENABLED)
+  {
+    gravity_budget_read_ok_ = 1.0;
+    gravity_budget_read_time_ = std::chrono::steady_clock::now();
+  }
+
   if (rclcpp::ok()) {
     rclcpp::spin_some(this->get_node_base_interface());
   }
@@ -1148,6 +1172,22 @@ hardware_interface::return_type DynamixelHardware::write(
     const auto saved_positions = ApplyPositionOffsets();
     CalcJointToTransmission();
     RestorePositionOffsets(saved_positions);
+
+    if (gravity_current_budget_) {
+      const bool fresh = gravity_budget_read_ok_ == 1.0 &&
+        std::chrono::duration<double>(
+        std::chrono::steady_clock::now() -
+        gravity_budget_read_time_).count() <= 0.1;
+      for (auto & transmission : hdl_trans_commands_) {
+        const auto ceiling = gravity_current_limits_.find(transmission.name);
+        if (ceiling == gravity_current_limits_.end()) {continue;}
+        for (size_t i = 0; i < transmission.interface_name_vec.size(); ++i) {
+          if (transmission.interface_name_vec[i] != "Goal Current") {continue;}
+          auto & value = *transmission.value_ptr_vec[i];
+          value = bounded_mode5_current(value, ceiling->second, fresh);
+        }
+      }
+    }
 
     const DxlError item_result = dxl_comm_->WriteItemBuf();
     const DxlError command_result = dxl_comm_->WriteMultiDxlData();
@@ -1531,6 +1571,30 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
     static_cast<uint8_t>(stoi(gpio.parameters.at("comm_id"))) : id;
 
   const auto operating_mode = gpio.parameters.find("Operating Mode");
+  const auto goal_current = gpio.parameters.find("Goal Current");
+  const bool stored_current_limit = goal_current != gpio.parameters.end() &&
+    goal_current->second == "current_limit";
+  const bool budget_motor = gravity_current_budget_ &&
+    (gpio.name == "dxl1" || gpio.name == "dxl2" || gpio.name == "dxl3" ||
+    gpio.name == "dxl4" || gpio.name == "dxl5" || gpio.name == "dxl6");
+  if (budget_motor && (operating_mode == gpio.parameters.end() ||
+    operating_mode->second != "5" || goal_current == gpio.parameters.end() ||
+    goal_current->second != "0" || gpio.parameters.count("Current Limit")))
+  {
+    RCLCPP_ERROR(
+      logger_,
+      "Gravity budget requires Mode 5, initial Goal Current 0, no EEPROM override");
+    return false;
+  }
+  if (stored_current_limit &&
+    (operating_mode == gpio.parameters.end() || operating_mode->second != "5" ||
+    gpio.parameters.count("Current Limit") != 0))
+  {
+    RCLCPP_ERROR_STREAM(
+      logger_, "Goal Current=current_limit requires Mode 5 and no Current Limit override; ID " <<
+        std::to_string(id));
+    return false;
+  }
   if (operating_mode != gpio.parameters.end() && std::stoi(operating_mode->second) == 0) {
     const auto zero_current = gpio.parameters.find("Goal Current");
     if (zero_current == gpio.parameters.end() || std::stoi(zero_current->second) != 0) {
@@ -1658,6 +1722,20 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
   for (const auto & param : gpio.parameters) {
     const std::string & param_name = param.first;
     if (param_name == "Operating Mode") {
+      if (budget_motor) {
+        // Even re-writing Mode 5 can reset RAM gains on some firmware.
+        // This profile requires the existing mode, and NEVER writes PID.
+        uint32_t actual_mode = 0;
+        if (dxl_comm_->ReadItem(comm_id, id, param_name, actual_mode) != DxlError::OK ||
+          actual_mode != 5)
+        {
+          RCLCPP_ERROR(
+            logger_,
+            "Gravity budget requires motors already in Mode 5; refusing mode/PID change");
+          return false;
+        }
+        continue;
+      }
       RCLCPP_INFO_STREAM(
         logger_,
         "[InitItem][comm_id:" << std::to_string(comm_id) << "][ID:" << std::to_string(id) <<
@@ -1713,11 +1791,31 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
     {
       continue;
     }
+    if (budget_motor && param_name.find("Gain") != std::string::npos) {continue;}
     RCLCPP_INFO_STREAM(
       logger_,
       "[InitItem][comm_id:" << std::to_string(comm_id) << "][ID:" << std::to_string(id) <<
         "] item_name: " << param_name.c_str() << "\tdata: " <<
         param.second);
+    if (param_name == "Goal Current" && stored_current_limit) {
+      const bool applied = apply_stored_current_limit(
+        [&](const char * item, uint32_t & value) {
+          return dxl_comm_->ReadItem(comm_id, id, item, value) == DxlError::OK;
+        },
+        [&](const char * item, uint32_t value) {
+          RCLCPP_INFO_STREAM(
+            logger_, "ID " << std::to_string(id) <<
+              ": Goal Current follows stored Current Limit: " << value << " raw");
+          return dxl_comm_->WriteItem(comm_id, id, item, value) == DxlError::OK;
+        });
+      if (!applied) {
+        RCLCPP_ERROR_STREAM(
+          logger_, "Cannot verify stored-limit Goal Current; ID " <<
+            std::to_string(id));
+        return false;
+      }
+      continue;
+    }
     const uint32_t requested_value = static_cast<uint32_t>(stoi(param.second));
     if (dxl_comm_->WriteItem(comm_id, id, param_name, requested_value) != DxlError::OK) {
       return false;
@@ -1728,11 +1826,22 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
         verified_value != requested_value)
       {
         RCLCPP_ERROR_STREAM(
-          logger_, "Failed to verify zero Goal Current for Dynamixel ID " <<
+          logger_, "Failed to verify Goal Current for Dynamixel ID " <<
             std::to_string(id));
         return false;
       }
     }
+  }
+  if (budget_motor) {
+    uint32_t mode = 0, limit = 0;
+    if (dxl_comm_->ReadItem(comm_id, id, "Operating Mode", mode) != DxlError::OK ||
+      mode != 5 || dxl_comm_->ReadItem(comm_id, id, "Current Limit", limit) != DxlError::OK ||
+      limit == 0 || limit > 32767)
+    {
+      RCLCPP_ERROR(logger_, "Cannot verify Mode 5 / stored Current Limit for gravity budget");
+      return false;
+    }
+    gravity_current_limits_[gpio.name] = static_cast<double>(limit);
   }
   return true;
 }
@@ -2370,6 +2479,10 @@ void DynamixelHardware::set_dxl_data_srv_callback(
     response->result = false;
     return;
   }
+  if (gravity_current_budget_ && request->item_name.find("Gain") != std::string::npos) {
+    response->result = false;
+    return;
+  }
   if (restrict_critical_write_service_ &&
     (request->item_name == "Torque Enable" || request->item_name == "Operating Mode" ||
     request->item_name == "Goal Current" || request->item_name == "Current Limit" ||
@@ -2393,6 +2506,11 @@ void DynamixelHardware::reboot_dxl_srv_callback(
   [[maybe_unused]] const std::shared_ptr<dynamixel_interfaces::srv::RebootDxl::Request> request,
   std::shared_ptr<dynamixel_interfaces::srv::RebootDxl::Response> response)
 {
+  if (gravity_current_budget_) {
+    RCLCPP_ERROR(logger_, "Stop the supported gravity-budget stack before rebooting motors");
+    response->result = false;
+    return;
+  }
   if (torque_off_diagnostic_mode_) {
     RCLCPP_ERROR(logger_, "Rejected Dynamixel reboot in torque-off diagnostic mode");
     response->result = false;

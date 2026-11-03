@@ -8,6 +8,7 @@ from launch.events.process import ProcessExited
 from launch_ros.actions import Node
 from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
 import yaml
+import pytest
 
 
 def _load_controller_launch_module():
@@ -76,3 +77,40 @@ def test_merged_launch_uses_new_package_and_preserves_parameter_node_name():
     parameters = yaml.safe_load(config.read_text())
     assert list(parameters) == ['om6dof_controller']
     assert 'ready_pose_degrees' in parameters['om6dof_controller']['ros__parameters']
+
+
+def test_bringup_checks_arrival_for_every_arm_joint():
+    config = Path(__file__).parents[2] / 'om6dof_bringup/config/controllers.yaml'
+    parameters = yaml.safe_load(config.read_text())['/**']['arm_controller']['ros__parameters']
+    constraints = parameters['constraints']
+    assert parameters['open_loop_control'] is False
+    for joint in parameters['joints']:
+        assert 0 < constraints[joint]['goal'] < 0.035
+
+
+def test_budget_service_profile_keeps_web_source_ack_adapter():
+    profile = (Path(__file__).parents[2]
+               / 'om6dof_bringup/config/gravity-current-budget.service.conf').read_text()
+    command = next(line for line in profile.splitlines() if line.startswith('ExecStart=/'))
+    assert 'start_go2w_teleop:=true' in command
+    assert 'input_source:=web' in command
+    assert 'admittance_control:=true' not in command  # Separate commissioning decision.
+
+
+@pytest.mark.parametrize('key,value', [('gravity_current_budget', 'false'),
+    ('current_control', 'true'), ('start_go2w_teleop', 'false'), ('input_source', 'gamepad')])
+def test_admittance_launch_rejects_missing_observer_or_disabled_input(key, value):
+    from launch.actions import OpaqueFunction
+    path = Path(__file__).parents[2] / 'om6dof_teleop/launch/full_stack.launch.py'
+    spec = importlib.util.spec_from_file_location('full_stack_admittance_test', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    actions = module.generate_launch_description().entities
+    check = next(action for action in actions if isinstance(action, OpaqueFunction))
+    context = LaunchContext()
+    context.launch_configurations.update({'admittance_control': 'true',
+        'gravity_current_budget': 'true', 'current_control': 'false',
+        'start_go2w_teleop': 'true', 'input_source': 'web'})
+    context.launch_configurations[key] = value
+    with pytest.raises(RuntimeError, match='Admittance requires'):
+        check.execute(context)

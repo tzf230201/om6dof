@@ -44,9 +44,11 @@ from om6dof_controllers.control_math import (
     MODE_AUTONOMOUS,
     MODE_CARTESIAN,
     MODE_CYLINDRICAL,
+    MODE_FORCE,
     MODE_JOINT,
     MODE_READY,
     MODE_REST,
+    MODE_SEMI_CYLINDRICAL,
     MODE_STARTUP,
 )
 
@@ -70,8 +72,8 @@ BTN_LEFT = 1 << 15
 
 
 def _next_teleop_mode(mode: str) -> str:
-    """Expose only the documented three velocity frames."""
-    modes = (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL)
+    """Cycle jog frames plus the separately armed Cartesian-wrench mode."""
+    modes = (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL, MODE_FORCE)
     try:
         return modes[(modes.index(mode) + 1) % len(modes)]
     except ValueError:
@@ -240,7 +242,7 @@ class TeleopNode(Node):
         self.declare_parameter("speed_scale", 1.0)
         self.declare_parameter("speed_scale_min", 0.15)
         self.declare_parameter("speed_scale_max", 5.0)
-        self.declare_parameter("speed_scale_step", 0.10)
+        self.declare_parameter("speed_scale_step", 1.0)
         self.declare_parameter("speed_repeat_seconds", 0.20)
         self.declare_parameter("remote_command_timeout_seconds", 0.5)
         self.declare_parameter("lowstate_preference_timeout_seconds", 0.1)
@@ -368,7 +370,7 @@ class TeleopNode(Node):
 
         self.lock = threading.RLock()
         self.remote_enabled = False
-        self.control_mode = MODE_JOINT
+        self.control_mode = MODE_SEMI_CYLINDRICAL
         self.f1_destination: Optional[str] = None
         self.mode_request_pending_until = 0.0
         self.remote_waiting_for_neutral = True
@@ -515,6 +517,17 @@ class TeleopNode(Node):
     def _remote_coordinate_velocity(
         self, keys: int, axes: Sequence[float]
     ) -> List[float]:
+        if self.control_mode == MODE_FORCE:
+            # Force bridge consumes only direction. Stick deflection must not
+            # silently raise commanded contact force.
+            sign = lambda value: float((value > 0.0) - (value < 0.0))
+            first = float(bool(keys & BTN_Y)) - float(bool(keys & BTN_A))
+            second = float(bool(keys & BTN_LEFT)) - float(bool(keys & BTN_RIGHT))
+            vertical = float(bool(keys & BTN_UP)) - float(bool(keys & BTN_DOWN))
+            roll = float(bool(keys & BTN_X)) - float(bool(keys & BTN_B))
+            pitch = sign(self._deadzone(float(axes[3]))) if len(axes) > 3 else 0.0
+            yaw = float(bool(keys & BTN_R1)) - float(bool(keys & BTN_R2))
+            return [first, second, vertical, roll, pitch, yaw]
         linear = self.cartesian_linear_speed
         angular = self.cartesian_angular_speed
         first = linear if keys & BTN_Y else 0.0
@@ -522,7 +535,7 @@ class TeleopNode(Node):
             first -= linear
         second_speed = (
             self.cylindrical_theta_speed
-            if self.control_mode == MODE_CYLINDRICAL
+            if self.control_mode in (MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL)
             else linear
         )
         second = second_speed if keys & BTN_LEFT else 0.0
@@ -712,7 +725,7 @@ class TeleopNode(Node):
             pair = int(data["axis_pair"])
             x, y = float(data["x"]), float(data["y"])
             scale = float(data.get("scale", 1.0))
-            if mode not in (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL):
+            if mode not in (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL, MODE_FORCE):
                 raise ValueError("invalid mode")
             if pair not in (0, 1, 2) or not all(
                 math.isfinite(value) and -1.0 <= value <= 1.0 for value in (x, y)
@@ -733,10 +746,17 @@ class TeleopNode(Node):
             return [0.0] * 6
         if data["mode"] != self.control_mode:
             return [0.0] * 6
+        if self.control_mode == MODE_FORCE:
+            result = [0.0] * 6
+            index = data["axis_pair"] * 2
+            result[index] = float((data["x"] > 0.0) - (data["x"] < 0.0))
+            result[index + 1] = float((data["y"] > 0.0) - (data["y"] < 0.0))
+            return result
         speed_pairs = {
             MODE_JOINT: ((0.25, 0.25),) * 3,
             MODE_CARTESIAN: ((0.03, 0.03), (0.03, 0.35), (0.35, 0.35)),
             MODE_CYLINDRICAL: ((0.025, 0.20), (0.025, 0.35), (0.35, 0.35)),
+            MODE_SEMI_CYLINDRICAL: ((0.025, 0.20), (0.025, 0.35), (0.35, 0.0)),
         }
         x_speed, y_speed = speed_pairs[self.control_mode][data["axis_pair"]]
         result = [0.0] * 6
@@ -751,7 +771,6 @@ class TeleopNode(Node):
             self.remote_enabled = bool(msg.data)
             self.mode_request_pending_until = 0.0
             if self.remote_enabled and not previous:
-                self.control_mode = MODE_JOINT
                 self.f1_destination = MODE_READY
                 self.remote_waiting_for_neutral = True
 
@@ -760,7 +779,7 @@ class TeleopNode(Node):
         with self.lock:
             if mode == MODE_AUTONOMOUS:
                 self.mode_request_pending_until = 0.0
-            elif mode in (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL):
+            elif mode in (MODE_JOINT, MODE_CARTESIAN, MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL, MODE_FORCE):
                 changed = mode != self.control_mode
                 self.control_mode = mode
                 if changed:
@@ -936,7 +955,7 @@ class TeleopNode(Node):
                     if key in keys:
                         index, sign = keys[key]
                         speed = (self.cylindrical_theta_speed if index == 1
-                                 and self.control_mode == MODE_CYLINDRICAL
+                                 and self.control_mode in (MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL)
                                  else self.cartesian_linear_speed if index < 3
                                  else self.cartesian_angular_speed)
                         vector[index] = sign * speed
@@ -1013,13 +1032,34 @@ class TeleopNode(Node):
             elif 4 in new:
                 gripper = "open"
             # F710 is spatial: protect against a misleading JOINT mapping.
-            if self.control_mode not in (MODE_CARTESIAN, MODE_CYLINDRICAL):
+            if self.control_mode not in (MODE_CARTESIAN, MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL, MODE_FORCE):
                 return [0.0] * 6, operation, gripper
 
             def trigger(index: int) -> float:
                 return max(0.0, min(1.0, (axes[index] + 1.0) / 2.0))
 
-            second = 0.20 if self.control_mode == MODE_CYLINDRICAL else 0.03
+            if self.control_mode == MODE_FORCE:
+                sign = lambda value: float((value > 0.0) - (value < 0.0))
+                pitch = float((1 if 0 in buttons else 0) - (1 if 3 in buttons else 0))
+                return [
+                    -sign(self._deadzone(axes[1])),
+                    -sign(self._deadzone(axes[0])),
+                    -sign(self._deadzone(axes[4])),
+                    sign(self._deadzone(axes[3])), pitch,
+                    sign(trigger(5) - trigger(2)),
+                ], operation, gripper
+
+            second = 0.20 if self.control_mode in (MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL) else 0.03
+            if self.control_mode == MODE_SEMI_CYLINDRICAL:
+                # F710 X=2 and B=1; right-stick horizontal no longer drives roll.
+                roll = float((1 in buttons) - (2 in buttons)) * 0.35
+                pitch = float((0 in buttons) - (3 in buttons)) * 0.35
+                return [
+                    -self._deadzone(axes[4]) * 0.03,
+                    -self._deadzone(axes[3]) * second,
+                    -self._deadzone(axes[1]) * 0.03,
+                    roll, pitch, 0.0,
+                ], operation, gripper
             pitch = float((1 if 0 in buttons else 0) -
                           (1 if 3 in buttons else 0))
             values = [
@@ -1035,11 +1075,20 @@ class TeleopNode(Node):
                 gripper = "close"
             elif 2 in new:
                 gripper = "open"
-            if self.control_mode not in (MODE_CARTESIAN, MODE_CYLINDRICAL):
+            if self.control_mode not in (MODE_CARTESIAN, MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL, MODE_FORCE):
                 return [0.0] * 6, operation, gripper
+            if self.control_mode == MODE_FORCE:
+                sign = lambda value: float((value > 0.0) - (value < 0.0))
+                z = float((1 if 1 in buttons else 0) - (1 if 0 in buttons else 0))
+                return [
+                    -sign(self._deadzone(axes[5])),
+                    -sign(self._deadzone(axes[4])), z,
+                    sign(self._deadzone(axes[2])), sign(self._deadzone(axes[1])),
+                    sign(self._deadzone(axes[0])),
+                ], operation, gripper
             z = float((1 if 1 in buttons else 0) -
                       (1 if 0 in buttons else 0))
-            second = 0.20 if self.control_mode == MODE_CYLINDRICAL else 0.03
+            second = 0.20 if self.control_mode in (MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL) else 0.03
             values = [
                 -self._deadzone(axes[5]) * 0.03,
                 -self._deadzone(axes[4]) * second,
@@ -1090,9 +1139,11 @@ class TeleopNode(Node):
             self.input_state_pub.publish(String(data=json.dumps(
                 self._input_state_locked(now), separators=(",", ":")
             )))
-        self.control_pub.publish(
-            Float64MultiArray(data=[value * self.speed_scale for value in velocity])
-        )
+        # FORCE conveys direction only; its bridge applies the configured
+        # bounded wrench and must never inherit a speed/throttle multiplier.
+        output = velocity if self.control_mode == MODE_FORCE else [
+            value * self.speed_scale for value in velocity]
+        self.control_pub.publish(Float64MultiArray(data=output))
         if operation:
             self.operation_pub.publish(String(data=operation))
         if gripper:

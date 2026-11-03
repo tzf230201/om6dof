@@ -11,6 +11,9 @@
       use_sim_time: False
       update_rate: 100  # Hz
 
+      gravity_current_budget_controller:
+        type: om6dof_controllers/GravityCurrentBudgetController
+
       joint_state_broadcaster:
         type: joint_state_broadcaster/JointStateBroadcaster
 
@@ -34,6 +37,20 @@
 
       gripper_controller:
         type: position_controllers/GripperActionController
+
+  # Opt-in Mode-5 budget: static support plus bounded trajectory-based reserve.
+  # Initial commissioning values, NOT identified motor/friction parameters.
+  # No PID/EEPROM writes. Each ceiling is also clipped to URDF and stored limits.
+  gravity_current_budget_controller:
+    ros__parameters:
+      gravity_scale: 1.2
+      holding_current_raw: [10.0, 20.0, 20.0, 8.0, 12.0, 8.0]
+      velocity_current_gain: [40.0, 120.0, 100.0, 40.0, 80.0, 40.0]  # raw / (rad/s)
+      acceleration_current_gain: [5.0, 20.0, 15.0, 5.0, 10.0, 5.0]  # raw / (rad/s²)
+      max_current_raw: [30.0, 360.0, 260.0, 30.0, 220.0, 30.0]
+      current_slew_raw_per_second: [40.0, 150.0, 150.0, 40.0, 100.0, 40.0]
+      reference_state_topic: /arm_controller/controller_state
+      reference_timeout_seconds: 0.25
 
   # ----- arm joint trajectory controller (6 DOF) -----
   arm_controller:
@@ -64,12 +81,18 @@
       constraints:
         stopped_velocity_tolerance: 0.01
         goal_time: 1.0
+        # Zero/default position tolerance disables the check. Require actual
+        # measured arrival for READY and every trajectory client.
+        joint1: {goal: 0.03}
+        joint2: {goal: 0.03}
+        joint3: {goal: 0.03}
+        joint4: {goal: 0.03}
+        joint5: {goal: 0.03}
+        joint6: {goal: 0.03}
 
-  # ----- legacy absolute-position controller (loaded inactive, unused) -----
-  # Superseded by forward_offset_controller below. It still claims the same six
-  # `position` interfaces as arm_controller, so it can never be active at the
-  # same time as arm_controller -- kept loaded-inactive only for older tools
-  # that expect the topic to exist.
+  # Direct absolute-position owner, inactive by default. Experimental Mode-5
+  # admittance uses an acknowledged STRICT switch to/from arm_controller;
+  # these two controllers must never own position at the same time.
   forward_position_controller:
     ros__parameters:
       joints:

@@ -2,8 +2,8 @@
 """om6dof_perception: camera-frame object + end-effector perception.
 
 Slow/fast split for real-time use:
-  * DETECT (background thread): local OpenCV-DNN YOLOX detects a configured
-    COCO target class. No Ollama/VLM request is used.
+  * DETECT (background worker): YOLOE segments a text-prompted target, or
+    OpenCV-DNN YOLOX detects a configured COCO class.
   * FAST  (every frame, ~20-30 Hz): an OpenCV CSRT tracker follows each bbox,
     aligned RealSense depth estimates a camera-frame 3D bounding box and its
     volume centre. The unseen back face is inferred from the visible width.
@@ -32,6 +32,7 @@ import os
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -51,6 +52,7 @@ from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import CompressedImage
 
 from .yolox_detector import YoloXDetector, resolve_coco_class
+from .yoloe_detector import YoloESegDetector
 from .camera_model import (
     camera_model_for, color_point_map, resolve_ee_mode, select_camera, select_stream_fps,
 )
@@ -79,6 +81,36 @@ def bbox_iou(first, second):
     return intersection / union if union > 0.0 else 0.0
 
 
+def mask_for_bbox(mask, source_bbox, current_bbox, image_shape):
+    """Warp a source-frame instance mask to the current tracker bbox.
+
+    CSRT follows only a rectangle between segmentation refreshes.  Restricting
+    depth to this scaled mask remains substantially safer than accepting all
+    pixels in the rectangle, while avoiding a second segmentation inference on
+    every camera frame.
+    """
+    if mask is None:
+        return None
+    height, width = image_shape[:2]
+    mask = np.asarray(mask, dtype=bool)
+    if mask.shape != (height, width):
+        return None
+    sx, sy, sw, sh = (int(value) for value in source_bbox)
+    dx, dy, dw, dh = (int(value) for value in current_bbox)
+    sx0, sy0 = max(0, sx), max(0, sy)
+    sx1, sy1 = min(width, sx + sw), min(height, sy + sh)
+    dx0, dy0 = max(0, dx), max(0, dy)
+    dx1, dy1 = min(width, dx + dw), min(height, dy + dh)
+    if sx1 <= sx0 or sy1 <= sy0 or dx1 <= dx0 or dy1 <= dy0:
+        return None
+    cropped = mask[sy0:sy1, sx0:sx1].astype(np.uint8)
+    resized = cv2.resize(cropped, (dx1 - dx0, dy1 - dy0),
+                         interpolation=cv2.INTER_NEAREST).astype(bool)
+    result = np.zeros((height, width), dtype=bool)
+    result[dy0:dy1, dx0:dx1] = resized
+    return result
+
+
 def associated_detection(detections, class_name, reference_bbox=None,
                          min_iou=0.10):
     """Select one class instance without jumping between identical objects.
@@ -100,7 +132,7 @@ def associated_detection(detections, class_name, reference_bbox=None,
     return selected if overlap >= float(min_iou) else None
 
 
-def estimate_bbox3d(depth, intr, depth_scale, bbox, *, roi_fraction=0.9,
+def estimate_bbox3d(depth, intr, depth_scale, bbox, *, mask=None, roi_fraction=0.9,
                     foreground_quantile=0.2, depth_band_m=0.05,
                     depth_ratio=1.0, min_thickness_m=0.025,
                     max_thickness_m=0.12, min_points=30, points_xyz=None):
@@ -128,6 +160,11 @@ def estimate_bbox3d(depth, intr, depth_scale, bbox, *, roi_fraction=0.9,
 
     raw = depth[y0:y1, x0:x1].astype(np.float64)
     valid = np.isfinite(raw) & (raw > 0)
+    if mask is not None:
+        mask = np.asarray(mask, dtype=bool)
+        if mask.shape != depth.shape[:2]:
+            return None
+        valid &= mask[y0:y1, x0:x1]
     if points_xyz is not None:
         valid &= np.isfinite(points_xyz[y0:y1, x0:x1]).all(axis=2)
     if int(np.count_nonzero(valid)) < int(min_points):
@@ -212,10 +249,13 @@ class Entity:
         self.confidence = None
         self.tracker = None
         self.bbox = None            # (x, y, w, h)
+        self.mask = None            # bool source-image instance mask, if available
+        self.mask_bbox = None       # bbox that the stored mask was inferred for
         self.bbox3d = None          # inferred camera-frame volume
         self.point = None           # [X, Y, Z] camera frame
         self.state = "acquiring"    # acquiring | tracking | lost
         self.last_acquire = 0.0
+        self.generation = 0        # discard inference started for an older prompt
 
 
 class PerceptionNode(Node):
@@ -254,6 +294,20 @@ class PerceptionNode(Node):
                 "~/.cache/om6dof_perception/yolox_s.onnx"
             ),
         )
+        self.declare_parameter("detector_backend", "yolox", startup_only)
+        self.declare_parameter(
+            "yoloe_model_path",
+            os.path.expanduser(
+                "~/.cache/om6dof_perception/yoloe-26n-seg.pt"
+            ),
+            startup_only,
+        )
+        # A JSON string keeps the launch argument and declared ROS parameter
+        # type identical; it is parsed into a tuple below.
+        self.declare_parameter("yoloe_classes", '["bottle", "cup", "person"]', startup_only)
+        self.declare_parameter("yoloe_imgsz", 640, startup_only)
+        self.declare_parameter("yoloe_device", "", startup_only)
+        self.declare_parameter("segmentation_rate_hz", 10.0, startup_only)
         self.declare_parameter("yolo_confidence", 0.35)
         self.declare_parameter("yolo_nms_threshold", 0.5)
         self.declare_parameter("reacquire_period_sec", 2.0)
@@ -283,19 +337,55 @@ class PerceptionNode(Node):
         self.camera_fps = int(self.get_parameter("camera_fps").value)
         if min(self.camera_width, self.camera_height, self.camera_fps) <= 0:
             raise ValueError("Camera dimensions and FPS must be positive")
-        self.model_path = str(self.get_parameter("yolo_model_path").value)
-        self.yolo = YoloXDetector(
-            self.model_path,
-            confidence=float(self.get_parameter("yolo_confidence").value),
-            nms_threshold=float(
-                self.get_parameter("yolo_nms_threshold").value
-            ),
+        self.detector_backend = str(
+            self.get_parameter("detector_backend").value).strip().lower()
+        if self.detector_backend not in ("yolox", "yoloe"):
+            raise ValueError("detector_backend must be yolox or yoloe")
+        configured_yoloe_classes = self.get_parameter("yoloe_classes").value
+        if isinstance(configured_yoloe_classes, str):
+            try:
+                configured_yoloe_classes = json.loads(configured_yoloe_classes)
+            except json.JSONDecodeError:
+                configured_yoloe_classes = configured_yoloe_classes.split(',')
+        if not isinstance(configured_yoloe_classes, (list, tuple)):
+            raise ValueError("yoloe_classes must be a JSON list or comma-separated labels")
+        self.yoloe_classes = tuple(
+            str(name).strip().lower()
+            for name in configured_yoloe_classes
+            if str(name).strip()
         )
-        self.reacquire = float(self.get_parameter("reacquire_period_sec").value)
+        confidence = float(self.get_parameter("yolo_confidence").value)
+        if self.detector_backend == "yoloe":
+            self.model_path = str(self.get_parameter("yoloe_model_path").value)
+            self.segmentation_rate = float(
+                self.get_parameter("segmentation_rate_hz").value)
+            if not np.isfinite(self.segmentation_rate) or self.segmentation_rate <= 0:
+                raise ValueError("segmentation_rate_hz must be finite and positive")
+            self.yolo = YoloESegDetector(
+                self.model_path, self.yoloe_classes, confidence=confidence,
+                imgsz=int(self.get_parameter("yoloe_imgsz").value),
+                device=str(self.get_parameter("yoloe_device").value),
+            )
+            # One detector thread is intentionally used to prevent GPU queueing.
+            # This is a maximum refresh request. Inference, tracking, and
+            # camera processing all contribute to the achieved refresh rate.
+            self.reacquire = 1.0 / self.segmentation_rate
+        else:
+            self.model_path = str(self.get_parameter("yolo_model_path").value)
+            self.yolo = YoloXDetector(
+                self.model_path, confidence=confidence,
+                nms_threshold=float(
+                    self.get_parameter("yolo_nms_threshold").value
+                ),
+            )
+            self.segmentation_rate = None
+            self.reacquire = float(self.get_parameter("reacquire_period_sec").value)
         self.debug_on = bool(self.get_parameter("publish_debug_image").value)
         self.rate = float(self.get_parameter("frame_rate_hz").value)
         if not np.isfinite(self.rate) or self.rate <= 0:
             raise ValueError("frame_rate_hz must be finite and positive")
+        if self.segmentation_rate is not None and self.rate < self.segmentation_rate:
+            raise ValueError("frame_rate_hz must be at least segmentation_rate_hz for YOLOE")
         self.web_stream_topic = str(
             self.get_parameter("web_stream_topic").value).strip()
         self.debug_quality = _clamp_quality(
@@ -311,15 +401,21 @@ class PerceptionNode(Node):
         configured_target_class = str(
             self.get_parameter("target_class").value
         ).strip().lower()
-        target_class = (
-            resolve_coco_class(configured_target_class)
-            or resolve_coco_class(target_description)
-            or configured_target_class
-        )
+        target_class = (configured_target_class if self.detector_backend == "yoloe" else
+                        (resolve_coco_class(configured_target_class)
+                         or resolve_coco_class(target_description)
+                         or configured_target_class))
+        self.open_vocabulary = bool(getattr(self.yolo, "supports_open_vocabulary", False))
+        if (self.detector_backend == "yoloe" and not self.open_vocabulary
+                and target_class not in self.yoloe_classes):
+            raise ValueError("target_class must exactly match one configured yoloe_classes prompt")
         self.target = Entity("target", target_description, target_class)
-        ee_class = resolve_coco_class(str(
-            self.get_parameter("ee_class").value
-        )) or ""
+        configured_ee_class = str(self.get_parameter("ee_class").value).strip().lower()
+        ee_class = (configured_ee_class if self.detector_backend == "yoloe" else
+                    (resolve_coco_class(configured_ee_class) or ""))
+        if (self.detector_backend == "yoloe" and not self.open_vocabulary and ee_class and
+                ee_class not in self.yoloe_classes):
+            raise ValueError("ee_class must exactly match one configured yoloe_classes prompt")
         self.ee = Entity("ee", "end effector", ee_class)
         self.ee_left_pixel = tuple(int(value) for value in
                                    self.get_parameter("ee_left_pixel").value)
@@ -373,7 +469,13 @@ class PerceptionNode(Node):
         self.create_subscription(String, "~/set_target", self._on_set_target, 10)
 
         self.detection_lock = threading.Lock()
-        self.frame_lock = threading.Lock()
+        # Keep one GPU thread across frames. Recreating threads can invalidate
+        # CUDA contexts/graph capture and allows overlapping initialization.
+        self.detector_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="perception_detector")
+        self.detection_future = None
+        self.detector_error = None
+        self.prompt_update_pending = False
+        self.frame_lock = threading.RLock()
         self.rgb = None
         self.depth = None
         self.intr = None
@@ -382,6 +484,7 @@ class PerceptionNode(Node):
         self.capture_stamp = None
         self.camera_metadata = {"connected": False}
         self.camera_epoch = 0
+        self.last_inference_ms = None
         self.stop_event = threading.Event()
 
         self.camera_thread = threading.Thread(target=self._camera_loop, daemon=True)
@@ -392,27 +495,39 @@ class PerceptionNode(Node):
             f"target_class={self.target.class_name!r} "
             f"ee_mode={self.ee_mode!r} "
             f"ee_class={self.ee.class_name or '-'} "
-            f"yolo={self.model_path} "
+            f"detector={self.detector_backend} model={self.model_path} "
+            f"segmentation_hz={self.segmentation_rate or '-'} "
             f"web_stream={self.web_stream_topic or 'disabled'}")
 
     # ------------------------------------------------------------ input
     def _on_set_target(self, msg):
-        self.target.description = msg.data.strip()
-        resolved = resolve_coco_class(self.target.description)
+        description = msg.data.strip()
+        if not description:
+            return
+        resolved = (description.lower() if self.detector_backend == "yoloe"
+                    else resolve_coco_class(description))
+        if (self.detector_backend == "yoloe" and not self.open_vocabulary
+                and resolved not in self.yoloe_classes):
+            resolved = None
+        with self.frame_lock:
+            self.target.generation += 1
+            self.target.description = description
+            self.target.class_name = resolved or ""
+            self.target.state = "acquiring" if resolved else "unsupported"
+            self.target.tracker = self.target.bbox = None
+            self.target.mask = self.target.mask_bbox = None
+            self.target.bbox3d = self.target.point = self.target.confidence = None
+            self.target.last_acquire = 0.0
+            self.detector_error = None
+            self.prompt_update_pending = bool(resolved and self.open_vocabulary)
         if resolved is None:
-            self.target.state = "unsupported"
-            self.target.tracker = None
             self.get_logger().warn(
-                f"target {self.target.description!r} is not a COCO class"
+                f"target {description!r} is not configured for "
+                f"{self.detector_backend}"
             )
             return
-        self.target.class_name = resolved
-        self.target.state = "acquiring"
-        self.target.tracker = None
-        self.target.bbox3d = None
-        self.target.last_acquire = 0.0
         self.get_logger().info(
-            f"new target: {self.target.description!r} -> {resolved!r}"
+            f"new target: {description!r} -> {resolved!r}"
         )
 
     # ----------------------------------------------------------- camera
@@ -423,7 +538,7 @@ class PerceptionNode(Node):
             self.camera_epoch += 1
             self.rgb = self.depth = self.intr = self.points_xyz = None
             for ent in (self.target, self.ee):
-                ent.tracker = ent.bbox = ent.bbox3d = ent.point = None
+                ent.tracker = ent.bbox = ent.mask = ent.mask_bbox = ent.bbox3d = ent.point = None
                 ent.confidence = None
                 ent.last_acquire = 0.0
                 ent.state = ("disabled" if ent is self.ee and
@@ -608,29 +723,31 @@ class PerceptionNode(Node):
             # kick a (re)acquire when needed, without blocking the loop
             stale = now - ent.last_acquire > self.reacquire
             if (ent.state in ("acquiring", "lost") or stale) and \
-                    not self.detection_lock.locked():
+                    (self.detection_future is None or self.detection_future.done()):
                 ent.last_acquire = now
-                threading.Thread(target=self._acquire,
-                                 args=(ent, rgb.copy(), self.camera_epoch),
-                                 daemon=True).start()
-            # fast path: advance the tracker
-            if ent.tracker is not None:
-                ok, box = ent.tracker.update(bgr)
-                if ok:
-                    ent.bbox = tuple(int(v) for v in box)
-                    ent.state = "tracking"
-                    if ent is self.target:
-                        ent.bbox3d = self._bbox_to_3d(ent.bbox)
-                        ent.point = (ent.bbox3d["center"]
-                                     if ent.bbox3d is not None
-                                     else self._bbox_to_point(ent.bbox))
+                self.detection_future = self.detector_worker.submit(
+                    self._acquire, ent, rgb.copy(), self.camera_epoch, ent.generation)
+            # Retargeting must invalidate tracker/geometry as one operation.
+            with self.frame_lock:
+                if ent.tracker is not None:
+                    ok, box = ent.tracker.update(bgr)
+                    if ok:
+                        ent.bbox = tuple(int(v) for v in box)
+                        ent.state = "tracking"
+                        if ent is self.target:
+                            ent.bbox3d = self._bbox_to_3d(
+                                ent.bbox, self._entity_mask(ent))
+                            ent.point = (ent.bbox3d["center"]
+                                         if ent.bbox3d is not None
+                                         else self._bbox_to_point(ent.bbox))
+                        else:
+                            ent.point = self._bbox_to_point(ent.bbox)
                     else:
-                        ent.point = self._bbox_to_point(ent.bbox)
-                else:
-                    ent.state = "lost"
-                    ent.tracker = None
-                    ent.point = None
-                    ent.bbox3d = None
+                        ent.state = "lost"
+                        ent.tracker = None
+                        ent.mask = ent.mask_bbox = None
+                        ent.point = None
+                        ent.bbox3d = None
 
         self._publish(stamp)
         if self.debug_on:
@@ -641,11 +758,20 @@ class PerceptionNode(Node):
         cx, cy = x + w // 2, y + h // 2
         return self._pixel_to_point(cx, cy, 5)
 
-    def _bbox_to_3d(self, bbox):
+    def _entity_mask(self, ent):
+        if ent.mask is None or ent.mask_bbox is None or ent.bbox is None:
+            return None
+        with self.frame_lock:
+            image = self.depth
+        return (mask_for_bbox(ent.mask, ent.mask_bbox, ent.bbox, image.shape)
+                if image is not None else None)
+
+    def _bbox_to_3d(self, bbox, mask=None):
         with self.frame_lock:
             depth, intr, xyz = self.depth, self.intr, self.points_xyz
         return estimate_bbox3d(
-            depth, intr, self.depth_scale, bbox, points_xyz=xyz, **self.bbox3d_options)
+            depth, intr, self.depth_scale, bbox, mask=mask, points_xyz=xyz,
+            **self.bbox3d_options)
 
     def _pixel_to_point(self, cx, cy, radius):
         with self.frame_lock:
@@ -691,20 +817,54 @@ class PerceptionNode(Node):
         self.ee.state = "tracking"
 
     # ------------------------------------------------------- YOLO (detect)
-    def _acquire(self, ent, rgb, epoch):
+    def _acquire(self, ent, rgb, epoch, generation=None):
+        if generation is None:
+            generation = ent.generation
+        with self.frame_lock:
+            if epoch != self.camera_epoch or generation != ent.generation:
+                return
+            class_name = ent.class_name
+            reference_bbox = (ent.bbox if ent.tracker is not None
+                              and ent.state == "tracking" else None)
+            prompts = [class_name]
+            if getattr(self, "open_vocabulary", False):
+                prompts = [self.target.class_name]
+                if self.ee_mode == "yolo" and self.ee.class_name:
+                    prompts.append(self.ee.class_name)
+                prompts = list(dict.fromkeys(name for name in prompts if name))
         bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-        reference_bbox = (ent.bbox if ent.tracker is not None
-                          and ent.state == "tracking" else None)
-        with self.detection_lock:
-            detections = self.yolo.detect(bgr)
-        if self.stop_event.is_set() or epoch != self.camera_epoch:
+        try:
+            with self.detection_lock:
+                if getattr(self, "open_vocabulary", False):
+                    self.yolo.set_classes(prompts)
+                    self.yoloe_classes = self.yolo.classes
+                if generation != ent.generation:
+                    return
+                self.prompt_update_pending = False
+                inference_started = time.monotonic()
+                detections = self.yolo.detect(bgr)
+        except Exception as error:
+            with self.frame_lock:
+                if generation == ent.generation and epoch == self.camera_epoch:
+                    self.detector_error = str(error)
+                    self.prompt_update_pending = False
+                    ent.state = "error"
+            self.get_logger().error(f"{ent.name} inference failed: {error}", throttle_duration_sec=5.0)
             return
+        self.last_inference_ms = (time.monotonic() - inference_started) * 1000.0
+        if (self.stop_event.is_set() or epoch != self.camera_epoch
+                or generation != ent.generation):
+            return
+        self.detector_error = None
         detection = associated_detection(
-            detections, ent.class_name, reference_bbox)
+            detections, class_name, reference_bbox)
         if detection is None:
-            if ent.tracker is None:
-                ent.state = "lost"
-            elif reference_bbox is not None:
+            with self.frame_lock:
+                if generation != ent.generation:
+                    return
+                if ent.tracker is None:
+                    ent.state = "lost"
+            if reference_bbox is not None:
                 self.get_logger().warn(
                     f"{ent.name} YOLO refresh rejected: no overlapping "
                     "same-object detection; keeping CSRT lock",
@@ -713,16 +873,20 @@ class PerceptionNode(Node):
             return
         x, y, w, h = detection.bbox
         with self.frame_lock:
-            if self.rgb is None or epoch != self.camera_epoch:
+            if (self.rgb is None or epoch != self.camera_epoch
+                    or generation != ent.generation):
                 return
             cur = cv2.cvtColor(self.rgb, cv2.COLOR_RGB2BGR)
         tracker = cv2.TrackerCSRT_create()
         tracker.init(cur, (x, y, w, h))
         with self.frame_lock:
-            if epoch != self.camera_epoch or self.stop_event.is_set():
+            if (epoch != self.camera_epoch or self.stop_event.is_set()
+                    or generation != ent.generation):
                 return
             ent.tracker = tracker
             ent.bbox = detection.bbox
+            ent.mask = getattr(detection, "mask", None)
+            ent.mask_bbox = detection.bbox if ent.mask is not None else None
             ent.confidence = detection.score
             ent.state = "tracking"
         self.get_logger().info(
@@ -758,10 +922,22 @@ class PerceptionNode(Node):
             self.pub_target_bbox3d.publish(Float64MultiArray(
                 data=[*box["center"], *box["size"]]))
 
+        detector_backend = getattr(self, "detector_backend", "yolox")
         self.pub_status.publish(String(data=json.dumps({
             "model_version": self.camera_profile.version,
             "camera_model": self.camera_profile.camera_model,
             "camera_frame": self.camera_frame,
+            "detector": {
+                "backend": detector_backend,
+                "model_path": getattr(self, "model_path", None),
+                "segmentation_enabled": detector_backend == "yoloe",
+                "configured_classes": list(getattr(self, "yoloe_classes", ())),
+                "open_vocabulary": getattr(self, "open_vocabulary", False),
+                "prompt_update_pending": getattr(self, "prompt_update_pending", False),
+                "error": getattr(self, "detector_error", None),
+                "requested_segmentation_hz": getattr(self, "segmentation_rate", None),
+                "last_inference_ms": getattr(self, "last_inference_ms", None),
+            },
             "camera": self.camera_metadata,
             "stamp_source": "ros_host_frame_receipt",
             "arm_extrinsics": ("urdf_cad_nominal_not_hand_eye_calibrated"
@@ -771,6 +947,7 @@ class PerceptionNode(Node):
                        "desc": self.target.description,
                        "class": self.target.class_name,
                        "confidence": self.target.confidence,
+                       "has_instance_mask": self.target.mask is not None,
                        "point": self.target.point,
                        "bbox3d": self.target.bbox3d},
             "ee": {"state": self.ee.state, "class": self.ee.class_name,
@@ -914,6 +1091,7 @@ class PerceptionNode(Node):
     def destroy_node(self):
         self.stop_event.set()
         self.camera_thread.join(timeout=3.0)
+        self.detector_worker.shutdown(wait=True, cancel_futures=True)
         return super().destroy_node()
 
 

@@ -35,6 +35,8 @@ def test_operation_mode_aliases_and_cycle():
     assert next_motion_mode(MODE_CYLINDRICAL) == MODE_SEMI_CYLINDRICAL
     assert next_motion_mode(MODE_SEMI_CYLINDRICAL) == MODE_JOINT
     assert normalize_operation_mode("semi") == MODE_SEMI_CYLINDRICAL
+    assert normalize_operation_mode("CUSTOM") == "CUSTOM"
+    assert normalize_operation_mode("SEMI_CYLINDRICAL") == "CUSTOM"
     with pytest.raises(ValueError):
         normalize_operation_mode("twist")
 

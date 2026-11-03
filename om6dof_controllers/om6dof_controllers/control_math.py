@@ -12,11 +12,16 @@ MODE_AUTONOMOUS = "AUTONOMOUS"
 MODE_JOINT = "JOINT"
 MODE_CARTESIAN = "CARTESIAN"
 MODE_CYLINDRICAL = "CYLINDRICAL"
+# Direct Cartesian wrench command for the separate current/effort stack.  It
+# is intentionally not a MOTION_MODE: the normal position-offset controller
+# must not turn a wrench direction into a position jog.
+MODE_FORCE = "FORCE"
 # Cylindrical position, but the wrist is held at absolute angles instead of
 # drifting: yaw rides along with theta so the tool keeps its heading
 # relative to the radial direction, while pitch and roll stay referenced
 # to zero in the base frame.
-MODE_SEMI_CYLINDRICAL = "SEMI_CYLINDRICAL"
+MODE_CUSTOM = "CUSTOM"
+MODE_SEMI_CYLINDRICAL = MODE_CUSTOM  # Backwards-compatible Python name.
 # Pitch is held clear of +/-90 degrees, where the Z-Y-X decomposition stops
 # separating roll from yaw and the wrist target would become ambiguous.
 SEMI_PITCH_LIMIT = math.pi / 2 - 0.05
@@ -48,6 +53,7 @@ OPERATION_MODES = (
     MODE_STARTUP,
     MODE_REST,
     MODE_FLOAT,
+    MODE_FORCE,
 )
 
 
@@ -68,11 +74,15 @@ def normalize_operation_mode(value: str) -> str:
         "CYLINDRICAL": MODE_CYLINDRICAL,
         "SILINDER": MODE_CYLINDRICAL,
         "SILINDRIS": MODE_CYLINDRICAL,
+        "CUSTOM": MODE_CUSTOM,
         "SEMI": MODE_SEMI_CYLINDRICAL,
         "SEMI_CYL": MODE_SEMI_CYLINDRICAL,
         "SEMI_CYLINDER": MODE_SEMI_CYLINDRICAL,
         "SEMI_CYLINDRICAL": MODE_SEMI_CYLINDRICAL,
         "SEMI_SILINDER": MODE_SEMI_CYLINDRICAL,
+        "FORCE": MODE_FORCE,
+        "WRENCH": MODE_FORCE,
+        "CARTESIAN_FORCE": MODE_FORCE,
         "READY": MODE_READY,
         "STARTUP": MODE_STARTUP,
         "REST": MODE_REST,

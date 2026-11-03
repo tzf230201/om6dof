@@ -3,18 +3,33 @@
   <xacro:arg name="port_name" default="/dev/ttyUSB0"/>
   <xacro:arg name="baud_rate" default="1000000"/>
   <xacro:arg name="use_fake_hardware" default="false"/>
-  <!-- Off by default. True swaps in the description that exposes an effort
-       command interface and puts the servos in current-based position mode,
-       which is what gravity compensation needs to reach a motor. The arm
-       becomes softer the moment it is loaded, so switch it deliberately. -->
+  <!-- Off by default: position command interface, arm Mode 5 with stored current limits.
+       True selects the separate description exposing effort;
+       teaching/impedance explicitly select Mode 0 with zero initial current. -->
   <xacro:arg name="current_control" default="false"/>
-  <!-- Passed through only when current_control is true.  5 retains the
-       Dynamixel position loop; 0 makes Goal Current a signed torque command. -->
+  <!-- 5 retains the Dynamixel position loop; supervised READY preparation uses 3.
+       Mode 0 requires current_control=true to expose the effort interface. -->
   <xacro:arg name="arm_operating_mode" default="5"/>
+  <xacro:arg name="gravity_current_budget" default="false"/>
   <!-- Internal fail-closed profile used only by torque_off_diagnostic.launch.py.
        The driver treats this as an invariant: it forces torque off and rejects
        every ROS path that could turn it back on. -->
   <xacro:arg name="torque_off_diagnostic_mode" default="false"/>
+
+  <xacro:if value="$(arg gravity_current_budget)">
+    <xacro:if value="$(arg current_control)">
+      <xacro:property name="invalid_budget_profile" lazy_eval="false"
+        value="${xacro.fatal('gravity_current_budget requires current_control=false; preserve existing PID')}"/>
+    </xacro:if>
+    <xacro:unless value="${int('$(arg arm_operating_mode)') == 5}">
+      <xacro:property name="invalid_budget_mode" lazy_eval="false"
+        value="${xacro.fatal('gravity_current_budget requires Mode 5')}"/>
+    </xacro:unless>
+    <xacro:if value="$(arg torque_off_diagnostic_mode)">
+      <xacro:property name="invalid_budget_diagnostic" lazy_eval="false"
+        value="${xacro.fatal('gravity_current_budget cannot be used in diagnostic mode')}"/>
+    </xacro:if>
+  </xacro:if>
 
   <!-- Runtime communication fail-safe settings are kept in one editable file. -->
   <xacro:property name="hardware_safety"
@@ -41,6 +56,7 @@
     read_packet_timeout_ms="${hardware_safety['read_packet_timeout_ms']}"
     read_transport_mode="${hardware_safety['read_transport_mode']}"
     use_fake_hardware="$(arg use_fake_hardware)"
+    gravity_current_budget="$(arg gravity_current_budget)"
     arm_operating_mode="$(arg arm_operating_mode)"
     torque_off_diagnostic_mode="$(arg torque_off_diagnostic_mode)"/>
 </robot>

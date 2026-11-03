@@ -1,4 +1,18 @@
 <library path="om6dof_controllers">
+  <class name="om6dof_controllers/GravityCurrentBudgetController"
+         type="om6dof_controllers::GravityCurrentBudgetController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>Mode-5 gravity-only current ceilings; leaves position and PID untouched.</description>
+  </class>
+
+  <class name="om6dof_controllers/PositionImpedanceController"
+         type="om6dof_controllers::PositionImpedanceController"
+         base_class_type="controller_interface::ControllerInterface">
+    <description>
+      Mode-0 position impedance with URDF gravity, pose-dependent residual torque
+      bounds, bounded reference, command watchdog, and latched health faults.
+    </description>
+  </class>
 
   <class name="om6dof_controllers/TrajectoryController"
          type="om6dof_controllers::TrajectoryController"

@@ -5,7 +5,8 @@
   <version>0.1.0</version>
   <description>
     OM6DOF command conversion, kinematics, teleop targets and ros2_control
-    plugins for trajectory following, gravity compensation and virtual springs.
+    plugins for trajectory following, gravity compensation, virtual springs
+    and bounded position impedance.
   </description>
   <maintainer email="biancanobelia@gmail.com">unitree</maintainer>
   <license>Apache-2.0</license>
@@ -16,6 +17,7 @@
   <depend>angles</depend>
   <depend>control_msgs</depend>
   <depend>controller_interface</depend>
+  <depend>diagnostic_msgs</depend>
   <depend>hardware_interface</depend>
   <depend>kdl_parser</depend>
   <depend>lifecycle_msgs</depend>
@@ -35,6 +37,7 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>om6dof_description</exec_depend>
+  <exec_depend>om6dof_bringup</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>action_msgs</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
@@ -51,6 +54,7 @@
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>python3-pytest</test_depend>
+  <test_depend>om6dof_bringup</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
