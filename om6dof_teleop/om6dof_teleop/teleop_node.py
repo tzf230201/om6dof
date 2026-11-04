@@ -1038,28 +1038,20 @@ class TeleopNode(Node):
             def trigger(index: int) -> float:
                 return max(0.0, min(1.0, (axes[index] + 1.0) / 2.0))
 
-            if self.control_mode == MODE_FORCE:
-                sign = lambda value: float((value > 0.0) - (value < 0.0))
-                pitch = float((1 if 0 in buttons else 0) - (1 if 3 in buttons else 0))
-                return [
-                    -sign(self._deadzone(axes[1])),
-                    -sign(self._deadzone(axes[0])),
-                    -sign(self._deadzone(axes[4])),
-                    sign(self._deadzone(axes[3])), pitch,
-                    sign(trigger(5) - trigger(2)),
-                ], operation, gripper
-
             second = 0.20 if self.control_mode in (MODE_CYLINDRICAL, MODE_SEMI_CYLINDRICAL) else 0.03
-            if self.control_mode == MODE_SEMI_CYLINDRICAL:
+            if self.control_mode in (MODE_SEMI_CYLINDRICAL, MODE_FORCE):
                 # F710 X=2 and B=1; right-stick horizontal no longer drives roll.
                 roll = float((1 in buttons) - (2 in buttons)) * 0.35
                 pitch = float((0 in buttons) - (3 in buttons)) * 0.35
-                return [
+                values = [
                     -self._deadzone(axes[4]) * 0.03,
                     -self._deadzone(axes[3]) * second,
                     -self._deadzone(axes[1]) * 0.03,
                     roll, pitch, 0.0,
-                ], operation, gripper
+                ]
+                if self.control_mode == MODE_FORCE:
+                    values = [float((v > 0.0) - (v < 0.0)) for v in values]
+                return values, operation, gripper
             pitch = float((1 if 0 in buttons else 0) -
                           (1 if 3 in buttons else 0))
             values = [

@@ -447,8 +447,7 @@ class OM6DOFController(AdmittanceTargetMixin, Node):
 
         self._initialize_ik()
         if self.ik is not None:
-            # The per-tick joint-4 guard still holds motion until feedback and
-            # the commanded joint position are near zero.
+            # Jog from the current pose; READY is a pose request, not an unlock.
             self.motion_mode = MODE_SEMI_CYLINDRICAL
         self._initialize_admittance()
         self.create_timer(self.nominal_dt, self._tick)
@@ -749,13 +748,6 @@ class OM6DOFController(AdmittanceTargetMixin, Node):
         try:
             if self.motion_mode == MODE_SEMI_CYLINDRICAL:
                 q = np.asarray(feedback, dtype=float)
-                reference = self._autonomous_reference_locked(feedback)
-                if abs(q[3]) > 0.01 or abs(reference[3] + self.offset[3]) > 0.01:
-                    self._custom_z_target = None
-                    self.get_logger().warn(
-                        'CUSTOM held: joint 4 or its command is not near zero',
-                        throttle_duration_sec=2.0)
-                    return np.zeros(6)
                 coordinates = self.ik.semi_cylindrical_fk(q, self.cylindrical_origin_xy)
                 if coordinates[0] < self.cylindrical_min_radius:
                     self._custom_z_target = None
@@ -795,8 +787,9 @@ class OM6DOFController(AdmittanceTargetMixin, Node):
                 if peak > self.max_joint_velocity:
                     joint_velocity *= self.max_joint_velocity / peak
                 delta = joint_velocity * dt
-                delta[3] = np.clip(-reference[3] - self.offset[3],
-                                   -self.max_joint_velocity * dt, self.max_joint_velocity * dt)
+                # Leave joint 4's existing command unchanged. Only an explicit
+                # pose request (such as READY) may reposition this fixed joint.
+                delta[3] = 0.0
                 return delta
             linear, angular = self._cartesian_twist_locked(feedback, velocity)
             q = np.asarray(feedback, dtype=float)
@@ -908,11 +901,9 @@ class OM6DOFController(AdmittanceTargetMixin, Node):
             return False
         if mode == MODE_SEMI_CYLINDRICAL:
             feedback = self._joint_vector_locked()
-            if (feedback is None or not self._joint_state_fresh_locked(time.monotonic())
-                    or abs(feedback[3]) > 0.01
-                    or abs(self._autonomous_reference_locked(feedback)[3] + self.offset[3]) > 0.01):
+            if feedback is None or not self._joint_state_fresh_locked(time.monotonic()):
                 self.get_logger().warn(
-                    'CUSTOM rejected: set joint 4 and its command near zero first')
+                    'CUSTOM rejected: fresh joint feedback is required')
                 return False
         self.motion_mode = mode
         self._custom_z_target = None

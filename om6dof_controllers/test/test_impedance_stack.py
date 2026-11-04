@@ -31,6 +31,37 @@ def test_trial_preserves_all_tuning_and_original_yaml():
         stack.trial_config(saved, ready)
 
 
+def test_force_start_sets_one_newton_limits_and_native_current_ceiling():
+    original = yaml.safe_load((Path(__file__).parents[1] / 'config/position_impedance.yaml').read_text())
+    before = original['/**'][stack.CONTROLLER]['ros__parameters']
+    trial = stack.trial_config(original, [0.] * 6, auto_force=True)
+    after = trial['/**'][stack.CONTROLLER]['ros__parameters']
+    assert after['max_cartesian_wrench'][:3] == [1., 1., 1.]
+    assert after['joint_limit_margin'] == 0.0
+    assert after['force_native_current_limits'] is True
+    assert before.get('force_native_current_limits', False) is False
+    assert before['joint_limit_margin'] == .05
+    for key in ('gravity', 'effort_scale', 'max_effort', 'extra_torque_base',
+                'extra_torque_ratio', 'extra_torque_max', 'damping'):
+        assert after[key] == before[key]
+    before['max_cartesian_wrench'][0] = .5
+    with pytest.raises(ValueError, match='1 N'):
+        stack.trial_config(original, [0.] * 6, auto_force=True)
+
+
+def test_force_activation_uses_force_readiness_not_position_target_margin(monkeypatch):
+    n = object.__new__(stack.ImpedanceStack)
+    n.auto_force = True
+    n.get_clock = lambda: NS(now=lambda: NS(nanoseconds=1_000_000_000))
+    n.on_bridge(NS(data='{"stamp_ns":1000000000,"ready":false,"force_ready":true}'))
+    assert n.bridge_ready
+    n.on_bridge(NS(data='{"stamp_ns":1000000000,"ready":true,"force_ready":false}'))
+    assert not n.bridge_ready
+    n.auto_force = False
+    n.on_bridge(NS(data='{"stamp_ns":1000000000,"ready":true,"force_ready":false}'))
+    assert n.bridge_ready
+
+
 def message(q=0., v=0., ns=1_000_000_000):
     return NS(name=stack.JOINTS, position=[q] * 6, velocity=[v] * 6,
               header=NS(stamp=NS(sec=ns // 1_000_000_000, nanosec=ns % 1_000_000_000)))
@@ -78,6 +109,7 @@ def test_prepare_observes_transition_then_settled_ready_and_requires_matching_co
     monkeypatch.setattr(stack.secrets, 'token_hex', lambda _: 'proof')
     monkeypatch.setattr(stack.time, 'monotonic', lambda: 10.)
     n = object.__new__(stack.ImpedanceStack)
+    n.auto_force = False
     n.children = []
     events = []
     def spawn(command):
@@ -109,6 +141,7 @@ def test_prepare_observes_transition_then_settled_ready_and_requires_matching_co
 def test_mode0_is_never_started_until_owned_position_stack_has_stopped_and_port_is_free(monkeypatch):
     events = []
     n = object.__new__(stack.ImpedanceStack)
+    n.auto_force = False
     child = NS(poll=lambda: None)
     n.children = [child]
     n.phase = lambda *a: None
@@ -138,6 +171,7 @@ def test_mode0_activation_is_single_guarded_request_after_rechecking_ready(monke
     monkeypatch.setattr(stack, 'stop_owned', lambda _: events.append('position_stopped'))
     monkeypatch.setattr(stack.time, 'monotonic', lambda: 10.)
     n = object.__new__(stack.ImpedanceStack)
+    n.auto_force = False
     position = NS(poll=lambda: None)
     n.children = [position]
     n.bridge_ready, n.bridge_at = True, 10.
@@ -185,6 +219,7 @@ def support_node(monkeypatch):
     tokens = iter(['old', 'new'])
     monkeypatch.setattr(stack.secrets, 'token_hex', lambda _: next(tokens))
     n = object.__new__(stack.ImpedanceStack)
+    n.auto_force = False
     n.pose = stack.PoseWatch()
     n.pose.update(message(), 10., 1_000_000_000)
     n.phase = Mock()
@@ -269,6 +304,7 @@ def test_expired_confirmation_cannot_switch_mode(monkeypatch):
 
 def test_post_switch_pose_failure_never_activates_and_process_fault_is_not_recoverable(monkeypatch):
     n = object.__new__(stack.ImpedanceStack)
+    n.auto_force = False
     n.children = []
     n.phase = Mock()
     n.spawn = Mock()
@@ -376,7 +412,7 @@ def test_ready_timeout_diagnoses_joint_and_does_not_convert_process_failure(monk
 @pytest.mark.parametrize('recoverable', [True, False, 'active_limit'])
 def test_main_repeats_canonical_preparation_only_after_explicit_recovery(monkeypatch, recoverable):
     events = []
-    node = NS(children=[], phase=Mock(), destroy_node=Mock(), pump=Mock(side_effect=KeyboardInterrupt))
+    node = NS(children=[], auto_force=False, phase=Mock(), destroy_node=Mock(), pump=Mock(side_effect=KeyboardInterrupt))
     def prepare():
         events.append('transition_ready_new_support_consent')
         return [], [0.] * 6
@@ -392,7 +428,7 @@ def test_main_repeats_canonical_preparation_only_after_explicit_recovery(monkeyp
         assert kwargs == ({'active_limit_fault': True} if recoverable == 'active_limit' else {})
         events.append('explicit_recovery')
     node.recover_position = recover
-    monkeypatch.setattr(stack, 'ImpedanceStack', lambda: node)
+    monkeypatch.setattr(stack, 'ImpedanceStack', lambda **kwargs: node)
     monkeypatch.setattr(stack.rclpy, 'init', Mock())
     monkeypatch.setattr(stack.rclpy, 'ok', lambda: False)
     monkeypatch.setattr(stack, 'get_package_share_directory', lambda _: str(Path(__file__).parents[1]))
@@ -501,6 +537,8 @@ def test_active_limit_recovery_cannot_bypass_safety_checks(monkeypatch, problem)
         n.recover_position('limit fault', active_limit_fault=True)
     if not terminal:
         assert n.phase.call_args.args[0] == 'recovery_pose_blocked'
+        assert 'limit fault' in n.phase.call_args.args[1]
+        assert 'Recovery check:' in n.phase.call_args.args[1]
         assert 'READY did not settle' not in n.phase.call_args.args[1]
     stop.assert_not_called()
     n.spawn.assert_not_called()
@@ -660,6 +698,7 @@ def test_confirmed_pose_parameter_gate_is_atomic_and_rechecks_live_state(monkeyp
     (1, False, False, False), (1, True, True, False), (2, True, False, False)])
 def test_old_plugin_or_open_gate_cannot_enter_supported_pose_protocol(version, required, enabled, accepted):
     n = object.__new__(stack.ImpedanceStack)
+    n.auto_force = False
     n.call = Mock(return_value=NS(values=[
         NS(type=0 if version is None else stack.ParameterType.PARAMETER_INTEGER, integer_value=version),
         NS(type=stack.ParameterType.PARAMETER_BOOL, bool_value=required),

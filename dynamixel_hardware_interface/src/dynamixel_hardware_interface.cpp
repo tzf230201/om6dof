@@ -681,10 +681,10 @@ std::vector<hardware_interface::StateInterface>
 DynamixelHardware::export_state_interfaces()
 {
   std::vector<hardware_interface::StateInterface> state_interfaces;
+  for (auto & entry : gravity_current_limits_) {
+    state_interfaces.emplace_back(entry.first, "stored_current_limit", &entry.second);
+  }
   if (gravity_current_budget_) {
-    for (auto & entry : gravity_current_limits_) {
-      state_interfaces.emplace_back(entry.first, "stored_current_limit", &entry.second);
-    }
     state_interfaces.emplace_back("gravity_budget", "read_ok", &gravity_budget_read_ok_);
   }
 
@@ -1842,6 +1842,21 @@ bool DynamixelHardware::InitItem(const hardware_interface::ComponentInfo & gpio)
       return false;
     }
     gravity_current_limits_[gpio.name] = static_cast<double>(limit);
+  }
+  // Mode-0 FORCE uses the existing EEPROM ceiling, never an invented torque
+  // budget or a write to Current Limit. Read while torque is off at startup.
+  if (operating_mode != gpio.parameters.end() && operating_mode->second == "0") {
+    uint32_t limit = 0;
+    if (!read_stored_current_limit(
+        [&](const char * item, uint32_t & value) {
+          return dxl_comm_->ReadItem(comm_id, id, item, value) == DxlError::OK;
+        }, 0, limit))
+    {
+      RCLCPP_ERROR(logger_, "Cannot verify Mode 0 / stored Current Limit for FORCE");
+      return false;
+    }
+    gravity_current_limits_[gpio.name] = static_cast<double>(limit);
+    RCLCPP_INFO(logger_, "ID %u: FORCE reads stored Current Limit %u raw (EEPROM unchanged)", id, limit);
   }
   return true;
 }

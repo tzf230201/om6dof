@@ -71,11 +71,15 @@ protected:
   std::atomic<bool> activation_attempted_{false};
   double activation_pose_tolerance_{0.03};
   std::vector<size_t> position_indices_, velocity_indices_, effort_indices_;
+  std::vector<size_t> native_limit_indices_;
+  std::vector<std::string> native_limit_names_;
   std::vector<FrictionParameters> friction_;
   GravityModel model_;
   bool use_friction_{false}, require_health_{true}, fault_{false}, hard_fault_{false};
   bool cartesian_wrench_enabled_{false};
+  bool force_native_current_limits_{false};
   std::array<double, 6> max_cartesian_wrench_{{0, 0, 0, 0, 0, 0}};
+  double wrench_speed_start_{0.4}, wrench_speed_stop_{0.7};
   double timeout_{0.25}, health_timeout_{0.15}, clean_window_{1.0}, max_period_{0.05};
   double margin_{0.05}, ramp_seconds_{1.0}, ramp_{0.0};
   Status status_{WAITING};
@@ -103,6 +107,9 @@ protected:
   using Publisher = realtime_tools::RealtimePublisher<std_msgs::msg::Float64MultiArray>;
   std::unique_ptr<Publisher> telemetry_;
   std::unique_ptr<Publisher> limit_telemetry_;
+  // tracking, combined scale, requested[6], limited[6], ramp, version, torque scale, speed scale.
+  std::array<double, 18> wrench_status_{};
+  std::unique_ptr<Publisher> wrench_telemetry_;
 };
 }  // namespace om6dof_controllers
 #endif

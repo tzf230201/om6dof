@@ -208,7 +208,7 @@ class IKSolver:
         return out
 
     def semi_cylindrical_fk(self, q: np.ndarray, origin_xy=(0.012, 0.0)) -> np.ndarray:
-        """Return [radius, theta, z, roll, pitch] with joint 4 fixed at zero.
+        """Return [radius, theta, z, roll, pitch] at the supplied joint pose.
 
         Roll and pitch describe the gripper-forward frame: its X axis follows
         the gripper (tip-link +Z). Yaw is not a target coordinate. Angles are
@@ -219,7 +219,6 @@ class IKSolver:
         if joints.shape != (6,) or origin.shape != (2,) or not (
                 np.all(np.isfinite(joints)) and np.all(np.isfinite(origin))):
             raise ValueError('expected finite six-joint pose and two-value origin')
-        joints[3] = 0.0
         xyz, rotation = self.fk_pose(joints)
         rpy = tip_rotation_to_cartesian_rpy(rotation)
         dx, dy = xyz[:2] - origin

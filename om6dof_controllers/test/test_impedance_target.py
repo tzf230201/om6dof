@@ -83,6 +83,7 @@ def node(monkeypatch):
     n = object.__new__(ImpedanceTargetNode)
     n.session = TargetSession()
     n.ik = NS(self_collides=lambda *_: False,
+              q_min=np.full(6, -2.05), q_max=np.full(6, 2.05),
               fk_pose=lambda _: (np.array([.15, 0., .3]), np.eye(3)))
     n.model_changed = False
     n.lower, n.upper = np.full(6, -2.), np.full(6, 2.)
@@ -108,6 +109,25 @@ def test_specific_limit_detail_is_reported_without_enabling_target(node):
     assert 'joint2 speed -0.4500 rad/s' in node.session.message
     assert 'Latched fault 32' in node.session.message
     assert not node.ready()
+
+
+def test_force_readiness_does_not_inherit_position_target_margin(node):
+    node.q[1] = -2.02
+    assert not node.ready()
+    assert node.force_ready()
+    node.publish_status()
+    data = json.loads(node.statuses[-1].data)
+    assert data['ready'] is False
+    assert data['force_ready'] is True
+    node.q[1] = -2.06
+    assert not node.force_ready()
+
+
+@pytest.mark.parametrize('field,value', [('fault', 32), ('controller_status', 4),
+                                       ('controller_ok', False), ('state_at', 0.)])
+def test_force_readiness_still_requires_fault_free_live_exclusive_controller(node, field, value):
+    setattr(node, field, value)
+    assert not node.force_ready()
     assert not node.session.active
     node.tick()
     assert node.sent == []

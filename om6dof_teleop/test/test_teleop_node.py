@@ -438,6 +438,30 @@ def test_custom_gamepad_drone_mode_two_stick_mapping():
     assert node._stick_velocity_locked()[0][:3] == pytest.approx([.03, 0, 0])
 
 
+@pytest.mark.parametrize('axis,value,buttons', [
+    (1, -1., set()), (4, -1., set()), (3, -1., set()),
+    (3, 1., set()), (0, -1., set()), (2, 1., set()),
+    (5, 1., set()), (0, 0., {2}), (0, 0., {1}),
+    (0, 0., {3}), (0, 0., {0}), (0, 0., {0, 3, 1, 2}),
+])
+def test_force_f710_matches_custom_direction_for_every_control(axis, value, buttons):
+    class Stick:
+        axes = [0.] * 8
+        def snapshot(self):
+            return True, self.axes.copy(), buttons
+    node = _adapter(remote_enabled=True)
+    node.input_source = 'gamepad'
+    node.gamepad = Stick()
+    node.control_mode = teleop_node.MODE_SEMI_CYLINDRICAL
+    node._stick_velocity_locked()
+    node.gamepad.axes[axis] = value
+    custom = node._stick_velocity_locked()[0]
+    node.control_mode = MODE_FORCE
+    force = node._stick_velocity_locked()[0]
+    assert force == [float((v > 0.) - (v < 0.)) for v in custom]
+    assert force[5] == 0.
+
+
 def test_keyboard_uses_canonical_mode_and_velocity_commands(monkeypatch):
     monkeypatch.setattr(teleop_node.time, "monotonic", lambda: 100.0)
     node = _adapter(remote_enabled=False)

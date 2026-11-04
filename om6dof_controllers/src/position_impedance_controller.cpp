@@ -54,6 +54,9 @@ controller_interface::CallbackReturn PositionImpedanceController::on_init()
     // A commanded wrench is opt-in.  It is expressed in the KDL chain base
     // frame as [Fx, Fy, Fz, Mx, My, Mz] (N, N, N, Nm, Nm, Nm).
     auto_declare<bool>("enable_cartesian_wrench", false);
+    auto_declare<bool>("force_native_current_limits", false);
+    auto_declare<double>("wrench_speed_start_ratio", 0.4);
+    auto_declare<double>("wrench_speed_stop_ratio", 0.7);
     auto_declare<std::vector<double>>("max_cartesian_wrench", {0, 0, 0, 0, 0, 0});
     auto_declare<double>("command_timeout", 0.25);
     auto_declare<double>("health_timeout", 0.15);
@@ -91,6 +94,9 @@ PositionImpedanceController::state_interface_configuration() const
   c.type = controller_interface::interface_configuration_type::INDIVIDUAL;
   for (const auto & j : joints_) {
     c.names.push_back(j + "/position"); c.names.push_back(j + "/velocity");
+  }
+  if (force_native_current_limits_) {
+    c.names.insert(c.names.end(), native_limit_names_.begin(), native_limit_names_.end());
   }
   return c;
 }
@@ -133,11 +139,26 @@ controller_interface::CallbackReturn PositionImpedanceController::on_configure(
     margin_ = node->get_parameter("joint_limit_margin").as_double();
     ramp_seconds_ = node->get_parameter("ramp_seconds").as_double();
     if (!positive(timeout_) || !positive(health_timeout_) || !positive(clean_window_) ||
-      !positive(max_period_) || max_period_ > 0.1 || !positive(margin_) ||
+      !positive(max_period_) || max_period_ > 0.1 || !nonnegative(margin_) ||
       !positive(ramp_seconds_)) {throw std::runtime_error("invalid timeout, margin, or ramp");}
     require_health_ = node->get_parameter("require_bus_health").as_bool();
     use_friction_ = node->get_parameter("friction_compensation").as_bool();
     cartesian_wrench_enabled_ = node->get_parameter("enable_cartesian_wrench").as_bool();
+    force_native_current_limits_ = node->get_parameter("force_native_current_limits").as_bool();
+    if (force_native_current_limits_ && !cartesian_wrench_enabled_) {
+      throw std::runtime_error("native current limits require Cartesian FORCE");
+    }
+    native_limit_names_.clear();
+    for (const auto & joint : joints_) {
+      const auto motor = joint.size() == 6 && joint.substr(0, 5) == "joint" &&
+        joint[5] >= '1' && joint[5] <= '6' ? "dxl" + joint.substr(5) : joint;
+      native_limit_names_.push_back(motor + "/stored_current_limit");
+    }
+    wrench_speed_start_ = node->get_parameter("wrench_speed_start_ratio").as_double();
+    wrench_speed_stop_ = node->get_parameter("wrench_speed_stop_ratio").as_double();
+    if (!nonnegative(wrench_speed_start_) || !positive(wrench_speed_stop_) ||
+      wrench_speed_start_ >= wrench_speed_stop_ || wrench_speed_stop_ >= 1.0)
+    {throw std::runtime_error("wrench speed ratios require 0 <= start < stop < 1");}
     const auto max_wrench = node->get_parameter("max_cartesian_wrench").as_double_array();
     if (max_wrench.size() != max_cartesian_wrench_.size() ||
       !std::all_of(max_wrench.begin(), max_wrench.end(), nonnegative))
@@ -194,7 +215,10 @@ controller_interface::CallbackReturn PositionImpedanceController::on_configure(
       }
       const auto & limits = *joint->limits;
       lower_[i] = limits.lower + margin_; upper_[i] = limits.upper - margin_;
-      total_max_[i] = std::min(max_raw_[i] / scale_[i], limits.effort);
+      // Native FORCE replaces these provisional values with verified motor
+      // Current Limit at activation. Position impedance keeps its old caps.
+      total_max_[i] = force_native_current_limits_ ? max_raw_[i] / scale_[i] :
+        std::min(max_raw_[i] / scale_[i], limits.effort);
       if (!std::isfinite(lower_[i]) || !std::isfinite(upper_[i]) || lower_[i] >= upper_[i] ||
         !positive(limits.effort) || !positive(total_max_[i]) || !positive(limits.velocity) ||
         velocity_limit_[i] > limits.velocity || reference_rate_[i] > velocity_limit_[i])
@@ -233,9 +257,34 @@ controller_interface::CallbackReturn PositionImpedanceController::on_configure(
     limit_telemetry_ = std::make_unique<Publisher>(node->create_publisher<std_msgs::msg::Float64MultiArray>(
       "~/limit_event", rclcpp::QoS(1)));
     limit_telemetry_->msg_.data.resize(limit_event_.size() + 1);
+    wrench_telemetry_ = std::make_unique<Publisher>(node->create_publisher<std_msgs::msg::Float64MultiArray>(
+      "~/wrench_status", rclcpp::QoS(1)));
+    wrench_telemetry_->msg_.data.resize(wrench_status_.size());
     // Never acknowledge gain/model/limit changes that the configured RT loop
     // would not use. Reconfigure from YAML with the arm supported instead.
     activation_attempted_.store(false);
+    parameter_guard_ = node->add_on_set_parameters_callback(
+      [this, n](const std::vector<rclcpp::Parameter> & parameters) {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        for (const auto & parameter : parameters) {
+          const auto & name = parameter.get_name();
+          bool allowed = !active_.load() &&
+            ((name == "enable_on_activation" && parameter.get_type() == rclcpp::ParameterType::PARAMETER_BOOL) ||
+            (name == "activation_pose" && parameter.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY));
+          if (allowed && name == "activation_pose") {
+            const auto & pose = parameter.as_double_array();
+            allowed = pose.size() == n && std::all_of(pose.begin(), pose.end(),
+              [](double value) {return std::isfinite(value);});
+          }
+          if (!allowed) {
+            result.successful = false;
+            result.reason = "Configured gains, model and limits require reconfiguration; only inactive activation consent may change";
+            break;
+          }
+        }
+        return result;
+      });
   } catch (const std::exception & e) {
     RCLCPP_ERROR(get_node()->get_logger(), "position impedance: %s", e.what());
     return controller_interface::CallbackReturn::ERROR;
@@ -248,6 +297,7 @@ void PositionImpedanceController::receiveGoal(const sensor_msgs::msg::JointState
   if (!active_.load()) {return;}
   const uint64_t epoch = epoch_.load();
   try {
+    if (force_native_current_limits_) {throw std::runtime_error("native-current FORCE rejects position targets");}
     const int64_t stamp = rclcpp::Time(msg.header.stamp).nanoseconds();
     const double age = (get_node()->now().nanoseconds() - stamp) * 1e-9;
     if (stamp <= last_goal_stamp_ns_ || age < 0.0 || age > timeout_ ||
@@ -390,7 +440,8 @@ controller_interface::CallbackReturn PositionImpedanceController::on_activate(
       [](double q) {return std::isfinite(q);}))))
   {return fail("invalid or missing confirmed activation pose");}
   activation_pose_ = confirmed_pose;
-  if (command_interfaces_.size() != n || state_interfaces_.size() != 2 * n) {
+  if (command_interfaces_.size() != n ||
+    state_interfaces_.size() != (force_native_current_limits_ ? 3 : 2) * n) {
     return fail("wrong number of claimed effort/state interfaces");
   }
   if (!healthReady(steadyNow())) {return fail("bus health missing, stale, unhealthy, or clean window incomplete");}
@@ -410,14 +461,43 @@ controller_interface::CallbackReturn PositionImpedanceController::on_activate(
       }
     }
   }
+  native_limit_indices_.clear();
+  if (force_native_current_limits_) {
+    for (size_t i = 0; i < n; ++i) {
+      size_t index = 0;
+      while (index < state_interfaces_.size() &&
+        state_interfaces_[index].get_name() != native_limit_names_[i]) {++index;}
+      if (index == state_interfaces_.size()) {return fail("missing motor Current Limit readback");}
+      const double limit = state_interfaces_[index].get_value();
+      if (!positive(limit) || limit > 32767 || std::floor(limit) != limit) {
+        return fail("invalid motor Current Limit readback");
+      }
+      native_limit_indices_.push_back(index);
+      max_raw_[i] = limit;
+      total_max_[i] = limit / scale_[i];
+    }
+  }
   if (!readState() || !model_.computeChecked(q_, gravity_)) {return fail("invalid measured state or gravity solver failure");}
   for (size_t i = 0; i < n; ++i) {
     if (!activation_pose_.empty() && std::abs(q_[i] - activation_pose_[i]) > activation_pose_tolerance_) {
       return fail("measured pose moved away from the explicitly confirmed supported pose");
     }
-    if (q_[i] < lower_[i] || q_[i] > upper_[i] ||
-      std::abs(v_[i]) > std::min(velocity_limit_[i], 0.05) ||
-      std::abs(gravity_[i]) > total_max_[i]) {return fail("pose/speed outside limits or insufficient gravity torque capacity");}
+    if (q_[i] < lower_[i] || q_[i] > upper_[i]) {
+      RCLCPP_ERROR(get_node()->get_logger(), "%s position %.6f rad outside [%.6f, %.6f] rad",
+        joints_[i].c_str(), q_[i], lower_[i], upper_[i]);
+      return fail("joint position outside force-mode soft limits");
+    }
+    const double speed_limit = std::min(velocity_limit_[i], 0.05);
+    if (std::abs(v_[i]) > speed_limit) {
+      RCLCPP_ERROR(get_node()->get_logger(), "%s speed %.6f rad/s exceeds activation limit %.6f rad/s",
+        joints_[i].c_str(), v_[i], speed_limit);
+      return fail("joint speed too high for activation");
+    }
+    if (std::abs(gravity_[i]) > total_max_[i]) {
+      RCLCPP_ERROR(get_node()->get_logger(), "%s needs %.6f Nm gravity torque; capacity %.6f Nm",
+        joints_[i].c_str(), gravity_[i], total_max_[i]);
+      return fail("insufficient modeled gravity torque capacity");
+    }
   }
   target_ = reference_ = q_;
   std::fill(residual_.begin(), residual_.end(), 0.0);
@@ -447,6 +527,8 @@ bool PositionImpedanceController::readState()
     q_[i] = state_interfaces_[position_indices_[i]].get_value();
     v_[i] = state_interfaces_[velocity_indices_[i]].get_value();
     if (!std::isfinite(q_[i]) || !std::isfinite(v_[i])) {return false;}
+    if (force_native_current_limits_ &&
+      state_interfaces_[native_limit_indices_[i]].get_value() != max_raw_[i]) {return false;}
   }
   return true;
 }
@@ -458,10 +540,16 @@ void PositionImpedanceController::zeroCommands()
   std::fill(residual_.begin(), residual_.end(), 0.0);
   std::fill(idle_damping_.begin(), idle_damping_.end(), 0.0);
   std::fill(joint_wrench_.begin(), joint_wrench_.end(), 0.0);
+  wrench_status_.fill(0.0);
+  wrench_status_[15] = 2.0;
 }
 
 void PositionImpedanceController::publish()
 {
+  if (wrench_telemetry_ && wrench_telemetry_->trylock()) {
+    std::copy(wrench_status_.begin(), wrench_status_.end(), wrench_telemetry_->msg_.data.begin());
+    wrench_telemetry_->unlockAndPublish();
+  }
   if (limit_telemetry_ && limit_telemetry_->trylock()) {
     std::copy(limit_event_.begin(), limit_event_.end(), limit_telemetry_->msg_.data.begin());
     limit_telemetry_->msg_.data[6] = current_limits_ok_ ? 1.0 : 0.0;
@@ -481,6 +569,8 @@ void PositionImpedanceController::publish()
 controller_interface::return_type PositionImpedanceController::update(
   const rclcpp::Time &, const rclcpp::Duration & period)
 {
+  wrench_status_.fill(0.0);
+  wrench_status_[15] = 2.0;
   current_limits_ok_ = false;
   if (!active_.load()) {zeroCommands(); return controller_interface::return_type::OK;}
   if (hard_fault_) {status_ = FAULT; zeroCommands(); publish(); return controller_interface::return_type::OK;}
@@ -536,9 +626,11 @@ controller_interface::return_type PositionImpedanceController::update(
   status_ = fault_ ? FAULT : ramp_ < 1.0 ? RAMPING : tracking ? TRACKING :
     ((goal && goal->epoch == active_epoch) || (wrench && wrench->epoch == active_epoch) ? TIMEOUT : WAITING);
   for (size_t i = 0; i < joints_.size(); ++i) {
-    budget_[i] = impedanceBudget(gravity_[i], base_[i], ratio_[i], extra_max_[i], total_max_[i]);
+    budget_[i] = force_native_current_limits_ ? std::max(0.0, total_max_[i] - std::abs(gravity_[i])) :
+      impedanceBudget(gravity_[i], base_[i], ratio_[i], extra_max_[i], total_max_[i]);
   }
   double wrench_scale = 1.0;
+  double speed_scale = 1.0;
   if (wrench_tracking && !fault_) {
     for (size_t i = 0; i < joints_.size(); ++i) {
       joint_wrench_[i] = 0.0;
@@ -549,21 +641,56 @@ controller_interface::return_type PositionImpedanceController::update(
       if (std::abs(joint_wrench_[i]) > 1e-12) {
         wrench_scale = std::min(wrench_scale, budget_[i] / std::abs(joint_wrench_[i]));
       }
+      // Reduce the entire wrench if it would accelerate a fast joint further.
+      // A reversed command remains available to oppose the measured motion.
+      if (joint_wrench_[i] * v_[i] > 0.0) {
+        const double ratio = std::abs(v_[i]) / velocity_limit_[i];
+        speed_scale = std::min(speed_scale, std::clamp(
+          (wrench_speed_stop_ - ratio) / (wrench_speed_stop_ - wrench_speed_start_), 0.0, 1.0));
+      }
     }
     wrench_scale = std::clamp(wrench_scale, 0.0, 1.0);
     if (fault_flags_ & 128) {fault_ = hard_fault_ = true; status_ = FAULT;}
   }
   if (hard_fault_) {zeroCommands(); publish(); return controller_interface::return_type::OK;}
+  const double torque_scale = wrench_scale;
+  wrench_scale *= speed_scale;
+  wrench_status_[14] = ramp_;
+  if (fresh_wrench) {
+    std::copy(wrench->value.begin(), wrench->value.end(), wrench_status_.begin() + 2);
+  }
+  if (status_ == TRACKING && wrench_tracking) {
+    wrench_status_[0] = 1.0;
+    wrench_status_[1] = wrench_scale;
+    wrench_status_[16] = torque_scale;
+    wrench_status_[17] = speed_scale;
+    for (size_t row = 0; row < wrench->value.size(); ++row) {
+      wrench_status_[8 + row] = wrench_scale * wrench->value[row];
+    }
+  }
   for (size_t i = 0; i < joints_.size(); ++i) {
-    budget_[i] = impedanceBudget(gravity_[i], base_[i], ratio_[i], extra_max_[i], total_max_[i]);
+    budget_[i] = force_native_current_limits_ ? std::max(0.0, total_max_[i] - std::abs(gravity_[i])) :
+      impedanceBudget(gravity_[i], base_[i], ratio_[i], extra_max_[i], total_max_[i]);
+    const double cap = ramp_ * budget_[i];
+    double damping_torque = ramp_ * damping_[i] * v_[i];
+    if (cartesian_wrench_enabled_ && (wrench_tracking || !tracking)) {
+      // An external push may oppose the requested wrench, so tapering drive
+      // alone cannot govern its speed. Progressively use the existing residual
+      // budget for damping in either direction, including zero/stale input.
+      // This is not a measured-force threshold or an increase in current caps.
+      const double ratio = std::abs(v_[i]) / velocity_limit_[i];
+      const double brake_fraction = std::clamp(
+        (ratio - wrench_speed_start_) / (wrench_speed_stop_ - wrench_speed_start_), 0.0, 1.0);
+      damping_torque = std::copysign(
+        std::max(std::abs(damping_torque), cap * brake_fraction), v_[i]);
+    }
     if (status_ == TRACKING && wrench_tracking) {
       // Virtual work: tau = J^T w.  One common scale preserves wrench
       // direction whenever a joint's residual-torque budget is exhausted.
       reference_[i] = target_[i] = q_[i];
       idle_damping_[i] = 0.0;
-      const double cap = ramp_ * budget_[i];
       const double request = std::clamp(
-        wrench_scale * joint_wrench_[i] - ramp_ * damping_[i] * v_[i], -cap, cap);
+        wrench_scale * joint_wrench_[i] - damping_torque, -cap, cap);
       // Build authority at the configured torque slew rate, but never keep a
       // stale-sign force while an operator releases or reverses an axis.
       if (request == 0.0 || residual_[i] * request <= 0.0 ||
@@ -588,8 +715,7 @@ controller_interface::return_type PositionImpedanceController::update(
       // feedforward, only bounded damping opposing measured velocity. The
       // previous tracking residual must be discarded immediately on timeout.
       reference_[i] = q_[i];
-      const double cap = ramp_ * budget_[i];
-      const double request = std::clamp(-ramp_ * damping_[i] * v_[i], -cap, cap);
+      const double request = std::clamp(-damping_torque, -cap, cap);
       // Drop stale-sign torque immediately on reversal/zero speed, or when
       // the requested magnitude/budget shrinks. These bounds take precedence
       // over slew: idle torque must never assist measured motion.

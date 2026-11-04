@@ -27,9 +27,11 @@ from rcl_interfaces.srv import GetParameters, SetParametersAtomically
 from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
 from controller_manager_msgs.srv import ListControllers
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String, Float64MultiArray
 from .impedance_faults import fault_message, limit_description
+from .force_preflight import force_pose_problem, load_force_limits, FORCE_JOINT_LIMIT_MARGIN
 from .impedance_target import exclusive_controller
 
 JOINTS = [f'joint{i}' for i in range(1, 7)]
@@ -82,7 +84,7 @@ def stop_owned(process):
 
 
 def trial_config(original, ready, auto_force=False):
-    """Preserve every tuning value; change only explicit activation gates."""
+    """Build an activation profile, with FORCE's 1 N and zero-margin overrides."""
     result = copy.deepcopy(original)
     params = result['/**'][CONTROLLER]['ros__parameters']
     if params.get('joints') != JOINTS or params.get('allow_mock_hardware') is not False:
@@ -96,6 +98,14 @@ def trial_config(original, ready, auto_force=False):
     params['require_activation_pose'] = True
     params['activation_pose'] = [float(v) for v in ready]
     params['activation_pose_tolerance'] = 0.03
+    if auto_force:
+        params['joint_limit_margin'] = FORCE_JOINT_LIMIT_MARGIN
+        params['force_native_current_limits'] = True
+        limits = params.get('max_cartesian_wrench', [])
+        if (params.get('enable_cartesian_wrench') is not True or len(limits) != 6
+                or any(not math.isfinite(v) or v < 1.0 for v in limits[:3])):
+            raise ValueError('Force start requires a configured 1 N Cartesian force capability.')
+        params['max_cartesian_wrench'] = [1.0, 1.0, 1.0] + list(limits[3:])
     return result
 
 
@@ -166,7 +176,10 @@ class ImpedanceStack(Node):
         self.create_subscription(Float64MultiArray, '/' + CONTROLLER + '/state', self.on_state, 1)
         self.create_subscription(Float64MultiArray, '/' + CONTROLLER + '/limit_event', self.on_limit, 1)
         self.force_mode_pub = self.create_publisher(String, '/om6dof/operation_mode', 1)
-        self.force_mode_state_pub = self.create_publisher(String, '/om6dof/operation_mode/state', 1)
+        self.force_mode_state_pub = self.create_publisher(
+            String, '/om6dof/operation_mode/state', QoSProfile(
+                depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL))
 
     def phase(self, phase, message, token=''):
         print(PREFIX + json.dumps(dict(phase=phase, message=message, token=token)), flush=True)
@@ -178,7 +191,8 @@ class ImpedanceStack(Node):
         try:
             data = json.loads(msg.data)
             age = self.get_clock().now().nanoseconds - data['stamp_ns']
-            self.bridge_ready = data.get('ready') is True and 0 <= age < 200_000_000
+            key = 'force_ready' if getattr(self, 'auto_force', False) else 'ready'
+            self.bridge_ready = data.get(key) is True and 0 <= age < 200_000_000
             self.bridge_at = time.monotonic()
         except (ValueError, KeyError, TypeError):
             self.bridge_ready = False
@@ -313,6 +327,10 @@ class ImpedanceStack(Node):
             self.wait(lambda: self.pose.q is not None and time.monotonic() - self.pose.received < .2,
                       10., 'Current force-start pose unavailable.')
             current_pose = list(self.pose.q)
+            self._force_start_limits = load_force_limits()
+            problem = force_pose_problem(current_pose, self.pose.v, self._force_start_limits)
+            if problem:
+                raise RuntimeError('Force start refused before Mode 0: ' + problem + ' Position stack retained.')
             self.phase('preparing', 'Force mode: holding the current pose; READY is skipped.')
             self.stable_ready(current_pose, 5.)
             return position, current_pose
@@ -394,6 +412,9 @@ class ImpedanceStack(Node):
                     anchor[0], since[0] = list(self.pose.q), now
                 return now - since[0] >= 1.
             self.wait(settled, 60., 'Mode-0 pose did not settle for force start.')
+            problem = force_pose_problem(self.pose.q, self.pose.v, self._force_start_limits)
+            if problem:
+                raise RuntimeError('Mode-0 activation refused: ' + problem + ' Keep supporting the arm and Stop.')
             return list(self.pose.q), self.pose.epoch, time.monotonic() + 5.
         while True:
             self.phase('capturing_pose', 'Mode 0: no gravity support yet. Keep supporting at a stable pose; '
@@ -522,7 +543,8 @@ class ImpedanceStack(Node):
         if self.auto_force:
             self.force_mode_pub.publish(String(data='FORCE'))
             self.force_mode_state_pub.publish(String(data='FORCE'))
-            self.phase('active', 'Force mode ready. Web joystick now commands configured Cartesian wrench directions.')
+            self.phase('active', 'Gravity compensation + damping ready. Joystick requests a 1 N resultant force; '
+                       'joint torque budgets may reduce it. Check force telemetry.')
         else:
             self.phase('active', 'Position impedance ready. Use Target mode → Run impedance target; no target sent yet.')
         while True:
@@ -636,7 +658,7 @@ class ImpedanceStack(Node):
                     self.check_recovery_pose(pose, epoch, deadline)
                     return
             except RecoveryPoseInvalid as exc:
-                self.phase('recovery_pose_blocked', str(exc) + ' No restart or motion requested. '
+                self.phase('recovery_pose_blocked', reason + ' Recovery check: ' + str(exc) + ' No restart or motion requested. '
                            'Keep supporting; Capture recovery pose again, then give NEW support and motion consent.')
                 while True:
                     line = self.pump()

@@ -22,6 +22,29 @@
 
 using dynamixel_hardware_interface::apply_stored_current_limit;
 using dynamixel_hardware_interface::bounded_mode5_current;
+using dynamixel_hardware_interface::read_stored_current_limit;
+
+TEST(Mode0CurrentLimit, ReadsExistingCeilingAndFailsClosedWithoutEEPROMWrites)
+{
+  for (const uint32_t mode : {0u, 3u, 5u}) {
+    for (const uint32_t stored : {0u, 93u, 1193u, 32768u}) {
+      uint32_t result = 9999;
+      std::vector<std::string> reads;
+      const bool ok = read_stored_current_limit(
+        [&](const char * item, uint32_t & value) {
+          reads.emplace_back(item);
+          value = std::string(item) == "Operating Mode" ? mode : stored;
+          return true;
+        }, 0, result);
+      EXPECT_EQ(mode == 0 && stored > 0 && stored <= 32767, ok);
+      EXPECT_EQ(ok ? stored : 0u, result);
+      EXPECT_EQ("Operating Mode", reads.front());
+    }
+  }
+  uint32_t result = 100;
+  EXPECT_FALSE(read_stored_current_limit([](const char *, uint32_t &) {return false;}, 0, result));
+  EXPECT_EQ(0u, result);
+}
 
 TEST(Mode5Budget, ClampRawCeilingsAndFailClosed)
 {

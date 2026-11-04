@@ -27,6 +27,8 @@ class Inspectable : public om6dof_controllers::PositionImpedanceController
 public:
   using PositionImpedanceController::receiveGoal;
   using PositionImpedanceController::receiveHealth;
+  using PositionImpedanceController::receiveWrench;
+  std::array<double, 18> wrenchStatus() const {return wrench_status_;}
   double g() const {return gravity_[0];}
   double residual() const {return residual_[0];}
   double budget() const {return budget_[0];}
@@ -85,12 +87,13 @@ protected:
       rclcpp::NodeOptions().context(context).parameter_overrides(p)));
     return controller->on_configure(rclcpp_lifecycle::State());
   }
-  CallbackReturn activate() {
+  CallbackReturn activate(bool native = false) {
     std::vector<hardware_interface::LoanedCommandInterface> cmds;
     std::vector<hardware_interface::LoanedStateInterface> states;
     cmds.emplace_back(effort);
     // Deliberately reverse requested ordering: controller must match by name.
     states.emplace_back(velocity); states.emplace_back(position);
+    if (native) {states.emplace_back(native_current_limit);}
     controller->assign_interfaces(std::move(cmds), std::move(states));
     return controller->on_activate(rclcpp_lifecycle::State());
   }
@@ -124,9 +127,11 @@ protected:
   std::shared_ptr<rclcpp::Context> context;
   std::unique_ptr<Inspectable> controller;
   double q{0.0}, v{0.0}, command{0.0};
+  double native_limit{500.0};
   hardware_interface::CommandInterface effort{"hinge", "effort", &command};
   hardware_interface::StateInterface position{"hinge", "position", &q};
   hardware_interface::StateInterface velocity{"hinge", "velocity", &v};
+  hardware_interface::StateInterface native_current_limit{"hinge", "stored_current_limit", &native_limit};
 };
 }
 
@@ -142,6 +147,163 @@ TEST(ImpedanceBudget, SignIndependentPoseDependentAndAbsolutelyBounded) {
   EXPECT_DOUBLE_EQ(0, impedanceBudget(NAN, .03, .1, .2, 1.5));
 }
 
+TEST_F(Impedance, WrenchBudgetTelemetryReportsReductionAndRetainsGravity) {
+  std::string xml = kUrdf;
+  const auto insertion = xml.find("<ros2_control");
+  xml.insert(insertion, "<link name=\"tcp\"/><joint name=\"tcp_fixed\" type=\"fixed\">"
+    "<parent link=\"arm\"/><child link=\"tcp\"/><origin xyz=\"0.4 0 0\"/></joint>");
+  ASSERT_EQ(CallbackReturn::SUCCESS, configure({
+    rclcpp::Parameter("tip_link", "tcp"),
+    rclcpp::Parameter("enable_cartesian_wrench", true),
+    rclcpp::Parameter("max_cartesian_wrench", std::vector<double>{2, 2, 2, 0, 0, 0})}, xml));
+  ASSERT_EQ(CallbackReturn::SUCCESS, activate());
+  ramp();
+  const double gravity = controller->g();
+  std_msgs::msg::Float64MultiArray wrench;
+  wrench.data = {0, 0, 2, 0, 0, 0};
+  controller->receiveWrench(wrench);
+  for (int i = 0; i < 30; ++i) {step();}
+  const auto state = controller->wrenchStatus();
+  EXPECT_DOUBLE_EQ(1, state[0]);
+  EXPECT_DOUBLE_EQ(2, state[15]);
+  EXPECT_DOUBLE_EQ(2, state[4]);
+  EXPECT_GT(state[1], 0);
+  EXPECT_LT(state[1], 1);
+  EXPECT_NEAR(2 * state[1], state[10], 1e-12);
+  EXPECT_NEAR(gravity, controller->g(), 1e-12);
+  EXPECT_NEAR((gravity + controller->residual()) * 100, command, 1e-9);
+  EXPECT_LE(std::abs(controller->residual()), controller->budget() + 1e-12);
+  wrench.data.assign(6, 0);
+  controller->receiveWrench(wrench);
+  step();
+  EXPECT_DOUBLE_EQ(0, controller->residual());
+  EXPECT_NEAR(gravity * 100, command, 1e-9);
+}
+
+TEST_F(Impedance, WrenchSpeedGovernorTapersDrivePreservesBrakingAndGravity) {
+  ASSERT_EQ(CallbackReturn::SUCCESS, configure({
+    rclcpp::Parameter("enable_cartesian_wrench", true),
+    rclcpp::Parameter("max_cartesian_wrench", std::vector<double>{0, 0, 0, 0, .2, 0})}));
+  ASSERT_EQ(CallbackReturn::SUCCESS, activate()); ramp();
+  std_msgs::msg::Float64MultiArray wrench;
+  wrench.data = {0, 0, 0, 0, .2, 0};
+  controller->receiveWrench(wrench);
+  v = .10; step();
+  EXPECT_DOUBLE_EQ(1, controller->wrenchStatus()[17]);
+  v = .22; step();
+  auto state = controller->wrenchStatus();
+  EXPECT_NEAR(.5, state[17], 1e-12);
+  EXPECT_NEAR(state[16] * .5, state[1], 1e-12);
+  EXPECT_NEAR(.2 * state[1], state[12], 1e-12);
+  v = .29; step();
+  EXPECT_DOUBLE_EQ(0, controller->wrenchStatus()[17]);
+  EXPECT_LT(controller->residual(), 0);
+  EXPECT_NEAR((controller->g() + controller->residual()) * 100, command, 1e-9);
+  EXPECT_FALSE(controller->fault());
+  wrench.data[4] = -.2;
+  controller->receiveWrench(wrench); step();
+  EXPECT_DOUBLE_EQ(1, controller->wrenchStatus()[17]);
+  EXPECT_LT(controller->residual(), 0);
+  v = .41; step();
+  EXPECT_TRUE(controller->fault());
+  EXPECT_DOUBLE_EQ(0, controller->residual());
+}
+
+TEST_F(Impedance, WrenchSpeedGovernorRejectsThresholdAtHardLimit) {
+  EXPECT_EQ(CallbackReturn::ERROR, configure({
+    rclcpp::Parameter("wrench_speed_stop_ratio", 1.0)}));
+}
+
+TEST_F(Impedance, WrenchOpposesSlowExternalMotionAndBrakesFasterPushWithoutFault) {
+  ASSERT_EQ(CallbackReturn::SUCCESS, configure({
+    rclcpp::Parameter("enable_cartesian_wrench", true),
+    rclcpp::Parameter("max_cartesian_wrench", std::vector<double>{0, 0, 0, 0, .2, 0})}));
+  ASSERT_EQ(CallbackReturn::SUCCESS, activate()); ramp();
+  const double gravity = controller->g();
+  std_msgs::msg::Float64MultiArray wrench;
+  wrench.data = {0, 0, 0, 0, .04, 0};
+  controller->receiveWrench(wrench);
+  v = -.02;
+  for (int i = 0; i < 20; ++i) {step();}
+  EXPECT_NEAR(.044, controller->residual(), 1e-12);
+  EXPECT_FALSE(controller->fault());
+  v = -.29;
+  for (int i = 0; i < 20; ++i) {step();}
+  EXPECT_DOUBLE_EQ(1, controller->wrenchStatus()[17]);
+  EXPECT_NEAR(controller->budget(), controller->residual(), 1e-12);
+  EXPECT_NEAR((gravity + controller->residual()) * 100, command, 1e-9);
+  EXPECT_FALSE(controller->fault());
+}
+
+TEST_F(Impedance, WrenchIdleDampingBrakesBothDirectionsWithinExistingBudget) {
+  ASSERT_EQ(CallbackReturn::SUCCESS, configure({
+    rclcpp::Parameter("enable_cartesian_wrench", true),
+    rclcpp::Parameter("max_cartesian_wrench", std::vector<double>{0, 0, 0, 0, .2, 0})}));
+  ASSERT_EQ(CallbackReturn::SUCCESS, activate()); ramp();
+  const double gravity = controller->g();
+  for (const double speed : {-.29, .29, 0.}) {
+    v = speed;
+    for (int i = 0; i < 20; ++i) {step();}
+    const double expected = speed == 0. ? 0. : -std::copysign(controller->budget(), speed);
+    EXPECT_NEAR(expected, controller->residual(), 1e-12);
+    EXPECT_LE(controller->residual() * v, 0.);
+    EXPECT_NEAR((gravity + controller->residual()) * 100, command, 1e-9);
+    EXPECT_FALSE(controller->fault());
+  }
+}
+
+TEST_F(Impedance, NativeForceUsesMotorCeilingWithoutExperimentalOrUrdfTorqueBudget) {
+  ASSERT_EQ(CallbackReturn::SUCCESS, configure({
+    rclcpp::Parameter("enable_cartesian_wrench", true),
+    rclcpp::Parameter("force_native_current_limits", true),
+    rclcpp::Parameter("max_cartesian_wrench", std::vector<double>{0,0,0,0,4,0})}));
+  // Stored motor limit 500 raw / 100 raw per Nm = 5 Nm. URDF says 2 Nm,
+  // old max_effort says 1.5 Nm and extra_torque_max says 0.2 Nm.
+  ASSERT_EQ(CallbackReturn::SUCCESS, activate(true)); ramp();
+  EXPECT_NEAR(5. - std::abs(controller->g()), controller->budget(), 1e-12);
+  std_msgs::msg::Float64MultiArray wrench; wrench.data = {0,0,0,0,4,0};
+  controller->receiveWrench(wrench);
+  for (int i = 0; i < 450; ++i) {step();}
+  EXPECT_DOUBLE_EQ(1., controller->wrenchStatus()[1]);
+  EXPECT_NEAR(4., controller->residual(), 1e-12);
+  EXPECT_GT(command, 150.);
+  EXPECT_LE(std::abs(command), native_limit);
+  controller->receiveGoal(message(.5)); step();
+  EXPECT_TRUE(controller->fault());
+  EXPECT_TRUE(controller->flags() & 8);
+  EXPECT_DOUBLE_EQ(0., controller->residual());
+  // A changed/invalid motor ceiling cannot leave stale authority running.
+  native_limit = 100.; step();
+  EXPECT_TRUE(controller->fault()); EXPECT_DOUBLE_EQ(0., command);
+}
+
+TEST_F(Impedance, NativeForceStillScalesRequestAtVerifiedMotorCurrentCeiling) {
+  ASSERT_EQ(CallbackReturn::SUCCESS, configure({
+    rclcpp::Parameter("enable_cartesian_wrench", true),
+    rclcpp::Parameter("force_native_current_limits", true),
+    rclcpp::Parameter("max_cartesian_wrench", std::vector<double>{0,0,0,0,10,0})}));
+  native_limit = 200.;
+  ASSERT_EQ(CallbackReturn::SUCCESS, activate(true)); ramp();
+  std_msgs::msg::Float64MultiArray wrench; wrench.data = {0,0,0,0,-10,0};
+  controller->receiveWrench(wrench);
+  for (int i = 0; i < 200; ++i) {step();}
+  EXPECT_LT(controller->wrenchStatus()[1], 1.);
+  EXPECT_NEAR(-native_limit, command, 1e-9);
+  EXPECT_FALSE(controller->fault());
+}
+
+TEST_F(Impedance, NativeForceCannotActivateWithoutVerifiedMotorCeiling) {
+  ASSERT_EQ(CallbackReturn::SUCCESS, configure({
+    rclcpp::Parameter("enable_cartesian_wrench", true),
+    rclcpp::Parameter("force_native_current_limits", true),
+    rclcpp::Parameter("max_cartesian_wrench", std::vector<double>{0,0,0,0,1,0})}));
+  EXPECT_EQ(CallbackReturn::ERROR, activate());
+  for (const double invalid : {0., -1., 1.5, 32768., std::numeric_limits<double>::quiet_NaN()}) {
+    native_limit = invalid;
+    EXPECT_EQ(CallbackReturn::ERROR, activate(true));
+  }
+}
+
 TEST_F(Impedance, ActivationCapturesMeasuredPoseAndIgnoresOldTargets) {
   ASSERT_EQ(CallbackReturn::SUCCESS, configure()); q = .2;
   controller->receiveGoal(message(1));
@@ -149,6 +311,20 @@ TEST_F(Impedance, ActivationCapturesMeasuredPoseAndIgnoresOldTargets) {
   EXPECT_DOUBLE_EQ(.2, controller->target()); EXPECT_DOUBLE_EQ(.2, controller->reference());
   EXPECT_NEAR(controller->g() * 100, command, 1e-9);
   EXPECT_EQ(0, controller->residual());
+}
+
+TEST_F(Impedance, ZeroExtraMarginAllowsPoseInsideUrdfLimit) {
+  ASSERT_EQ(CallbackReturn::SUCCESS, configure({rclcpp::Parameter("joint_limit_margin", 0.0)}));
+  q = -1.99;
+  ASSERT_EQ(CallbackReturn::SUCCESS, activate());
+  ramp();
+  EXPECT_FALSE(controller->fault());
+}
+
+TEST_F(Impedance, ZeroExtraMarginStillRejectsPoseOutsideUrdfLimit) {
+  ASSERT_EQ(CallbackReturn::SUCCESS, configure({rclcpp::Parameter("joint_limit_margin", 0.0)}));
+  q = -2.01;
+  EXPECT_EQ(CallbackReturn::ERROR, activate());
 }
 
 TEST_F(Impedance, FirstSpeedTripReportsMeasuredValueAndDoesNotAutoClear) {

@@ -1,6 +1,13 @@
 om6dof_cartesian_force_bridge:
   ros__parameters:
     # Must match max_cartesian_wrench in position_impedance.yaml.
-    wrench_limits: [4.0, 4.0, 4.0, 0.2, 0.2, 0.2]
+    wrench_limits: [1.0, 1.0, 1.0, 0.2, 0.2, 0.2]
+    # Resultant translation force, including diagonal directions.
+    force_newtons: 1.0
+    # Same R/theta/Z and gripper roll/pitch directions as CUSTOM teleoperation.
+    input_frame: custom
+    base_link: link1
+    tip_link: end_effector_link
+    cylindrical_origin_xy: [0.012, 0.0]
     input_timeout_seconds: 0.20
     publish_rate_hz: 50.0

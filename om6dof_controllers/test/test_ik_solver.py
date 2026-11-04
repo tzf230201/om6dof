@@ -29,6 +29,22 @@ def test_semi_cylindrical_pitch_rate_is_controllable_and_neutral_holds():
     assert positive[3] == 0.0
 
 
+def test_custom_fk_uses_actual_fixed_joint4_before_ready():
+    solver = IKSolver.__new__(IKSolver)
+    seen = []
+    def fk(q):
+        seen.append(q.copy())
+        return np.array([.3, 0., q[3]]), cartesian_rpy_to_tip_rotation(0., 0., 0.)
+    solver.fk_pose = fk
+    q = np.array([0., 0., 0., .25, 0., 0.])
+    result = solver.semi_cylindrical_fk(q)
+    jac = solver.semi_cylindrical_jacobian(q)
+    assert result[2] == .25
+    assert all(pose[3] == .25 for pose in seen)
+    assert jac.shape == (5, 5)
+    assert q[3] == .25
+
+
 def _rotation_from_rotvec(rotvec: np.ndarray) -> np.ndarray:
     """Small Rodrigues helper kept local so this test only exercises IK code."""
     vector = np.asarray(rotvec, dtype=float)

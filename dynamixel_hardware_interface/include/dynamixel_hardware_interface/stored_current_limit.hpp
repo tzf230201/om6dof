@@ -21,6 +21,19 @@
 
 namespace dynamixel_hardware_interface
 {
+// Torque-off initialization only. Reads existing EEPROM; never changes it.
+template<typename Read>
+bool read_stored_current_limit(Read read, uint32_t expected_mode, uint32_t & limit)
+{
+  uint32_t mode = 0, value = 0;
+  limit = 0;
+  if ((expected_mode != 0 && expected_mode != 5) ||
+    !read("Operating Mode", mode) || mode != expected_mode ||
+    !read("Current Limit", value) || value == 0 || value > 32767) {return false;}
+  limit = value;
+  return true;
+}
+
 inline double bounded_mode5_current(double command, double stored_limit, bool fresh)
 {
   if (!fresh || !std::isfinite(command) || !std::isfinite(stored_limit) ||

@@ -228,13 +228,22 @@ class ImpedanceTargetNode(Node):
         if not self.controller_ok:
             self.session.stop('blocked', 'Impedance must be active and the only arm command owner.')
 
-    def ready(self):
+    def controller_ready(self):
         now = time.monotonic()
         return bool(self.ik is not None and self.q is not None
                     and self.controller_ok and now - self.manager_at < MANAGER_SECONDS
                     and now - self.state_at < FEEDBACK_SECONDS and self.fault == 0
-                    and self.controller_status in (0, 1, 2)
+                    and self.controller_status in (0, 1, 2))
+
+    def ready(self):
+        return bool(self.controller_ready()
                     and np.all(self.q >= self.lower) and np.all(self.q <= self.upper))
+
+    def force_ready(self):
+        # FORCE uses URDF bounds directly. The position target planner keeps
+        # its separate 0.05 rad inward margin and must not gate wrench input.
+        return bool(self.controller_ready()
+                    and np.all(self.q >= self.ik.q_min) and np.all(self.q <= self.ik.q_max))
 
     def plan(self, mode, values):
         values = np.asarray(values, dtype=float)
@@ -354,6 +363,7 @@ class ImpedanceTargetNode(Node):
                 self.session.stop('blocked', 'FK feedback unavailable.')
                 ready = False
         payload = dict(backend='position_impedance', ready=ready,
+                       force_ready=self.force_ready() and bool(current),
                        stamp_ns=self.get_clock().now().nanoseconds,
                        state=self.session.state, active=self.session.active,
                        request_id=self.session.request_id, mode=self.mode,

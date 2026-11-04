@@ -428,11 +428,48 @@ def test_semi_cylindrical_jog_uses_five_coordinate_solver():
     assert node.offset[5] == pytest.approx(0.03)
 
 
-def test_semi_cylindrical_rejects_nonzero_joint4():
+def test_custom_accepts_nonzero_joint4_without_ready_and_holds_its_command():
     node = _controller()
     node._on_operation_mode(String(data=MODE_SEMI_CYLINDRICAL))
+    assert node.motion_mode == MODE_SEMI_CYLINDRICAL
+    assert abs(node.joint_positions['joint4']) > .01
+    seen = []
+    node.ik.semi_cylindrical_fk = lambda q, origin: [0.2, 0, .2, 0, 0]
+    def solve(q, rates, origin):
+        seen.append(q.copy())
+        return np.array([rates[0], 0, 0, 99, 0, 0])
+    node.ik.semi_cylindrical_velocity_ik = solve
+    node.offset[3] = .02
+    _jog(node, [.1, 0, 0, 0, 0, 0], dt=.1)
+    assert seen[0][3] == node.joint_positions['joint4']
+    assert node.offset[0] > 0
+    assert node.offset[3] == pytest.approx(.02)
+    assert not node.arm_client.goals
+
+
+def test_custom_still_requires_fresh_feedback():
+    node = _controller()
+    node.last_joint_state = 0.
+    node._on_operation_mode(String(data=MODE_SEMI_CYLINDRICAL))
     assert node.motion_mode == MODE_JOINT
-    assert any('joint 4' in msg for msg in node._logger.warnings)
+
+
+def test_custom_remote_works_directly_from_stack_start_pose_without_pose_buttons():
+    node = _controller(mode=MODE_SEMI_CYLINDRICAL)
+    node.startup_pose = None
+    node.arm_reference = list(INITIAL)
+    node._on_joint_state(JointState(name=node.joint_names, position=list(INITIAL)))
+    node._tick()
+    assert node.offset_pub.messages[-1].data == pytest.approx([0.] * 6)
+    node.ik.semi_cylindrical_fk = lambda q, origin: [.2, 0., .2, 0., 0.]
+    node.ik.semi_cylindrical_velocity_ik = lambda q, rates, origin: np.array([
+        rates[0], 0., 0., 0., rates[4], rates[3]])
+    _jog(node, [.1, 0., 0., 0., 0., 0.], dt=.1)
+    assert node.offset[0] > 0.
+    assert node.offset[3] == 0.
+    assert node.startup_pose == INITIAL
+    assert node.motion_mode == MODE_SEMI_CYLINDRICAL
+    assert not node.arm_client.goals
 
 
 def test_custom_height_hold_tracks_vertical_jog_and_bounds_correction():

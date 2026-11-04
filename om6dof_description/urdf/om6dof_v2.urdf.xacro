@@ -263,7 +263,7 @@
          mounting rotation is expressed on link4, not on the joint frame. -->
     <origin xyz="${link3_v2_joint3_x + link3_v2_link4_forward_x_offset} 0 ${link3_v2_joint3_z}" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <limit velocity="4.8" effort="1" lower="${-pi*0.5}" upper="${pi*0.47}" />
+    <limit velocity="4.8" effort="1" lower="${-pi*0.5}" upper="${pi*0.5}" />
     <dynamics damping="${joint3_damping}" friction="${joint3_friction}"/>
   </joint>
   <!--  Link 4 -->
@@ -322,7 +322,8 @@
          not the horn that belongs to link4. -->
     <origin xyz="0.045 0.0 0.0" rpy="0 0 0"/>
     <axis xyz="1 0 0"/>
-    <limit velocity="4.8" effort="1" lower="${-pi*0.4}" upper="${pi*0.4}" />
+    <!-- XM430-W210 factory Velocity Limit: 330 * 0.229 rpm, in rad/s. -->
+    <limit velocity="7.91367189439269" effort="1" lower="${-pi*0.4}" upper="${pi*0.4}" />
     <dynamics damping="${joint4_damping}" friction="${joint4_friction}"/>
   </joint>
   <!--  Link 5 -->
@@ -426,7 +427,8 @@
     <child link="link7"/>
     <origin xyz="${0.0475 * 1.0} 0.0 0.0" rpy="0 0 0"/>
     <axis xyz="1 0 0"/>
-    <limit velocity="4.8" effort="1" lower="${-pi*0.5}" upper="${pi*0.5}" />
+    <!-- XM430-W210 factory Velocity Limit: 330 * 0.229 rpm, in rad/s. -->
+    <limit velocity="7.91367189439269" effort="1" lower="${-pi*0.5}" upper="${pi*0.5}" />
     <dynamics damping="${joint6_damping}" friction="${joint6_friction}"/>
   </joint>
   <!--  Link 7 -->
